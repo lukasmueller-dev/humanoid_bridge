@@ -1,0 +1,39 @@
+.vscode/
+
+# ROS build and development files
+build/
+devel/
+install/
+
+# Logs
+log/
+
+# ROS-specific files
+*.bag
+*.pyc
+*.swp
+*.bak
+
+# IDE and editor files
+.vscode/
+.idea/
+*.iml
+*.suo
+*.user
+*.userosscache
+*.userprefs
+*.db
+*.DS_Store
+*.directory
+
+# CMake and build system files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# Other
+*.out
+*.log
+*.tmp
+*.~*
