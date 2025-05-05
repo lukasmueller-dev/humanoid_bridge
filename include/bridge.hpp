@@ -47,15 +47,12 @@ public:
     std::shared_ptr<rclcpp::Node> nh;
 
 private:
-    bool releaseRobot();
+
     void lowStateHandler_(unitree_go::msg::LowState::SharedPtr message);
     void readyPositionControl_();
+    void A_PositionControl_();
     double clamp(double value, double low, double high);
-    bool setMotionRelease_();
-    int queryMotionStatus_();
-    std::string queryServiceName_(std::string form, std::string name);
 
-    std::shared_ptr<unitree::robot::b2::MotionSwitcherClient> motionSwitcherClient;
 
     rclcpp::Subscription<unitree_go::msg::LowState>::SharedPtr lowstateSubscriber_;
     rclcpp::Publisher<unitree_go::msg::LowCmd>::SharedPtr lowcmdPublisher_; 
@@ -64,7 +61,6 @@ private:
     unitree_go::msg::LowCmd lowCommand_;
     unitree_go::msg::LowState currentState_;
     unitree_go::msg::IMUState imu_;
-    unitree_go::msg::MotorState motor_[H1_JointIndex::NumJoint];
     
     double controlDt_;                                                      // 2ms
     int timerDt_;

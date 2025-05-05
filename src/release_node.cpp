@@ -20,8 +20,7 @@ int main(int argc, char **argv) {
     } else {
         std::cout << "ReleaseMode failed. Error code: " << ret << std::endl;
     }
-    // std::string form, name;
-    // motion_switch_client.CheckMode(form, name);
+
     std::cout << "form: " << robotForm << std::endl;
     std::cout << "name: " << motionName << std::endl;
     return 0;

@@ -72,29 +72,36 @@ target_include_directories(unitree_sdk2 INTERFACE
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>)
 
-# ament_target_dependencies(unitree_ros2_test
-#   ${DEPENDENCY_LIST}
-# )
 
-add_executable(unitree_sdk2_test src/unitree_sdk2_test.cpp)
-target_link_libraries(unitree_sdk2_test unitree_sdk2)
-target_include_directories(unitree_sdk2_test PRIVATE ${UNITREE_SDK_PATH}/include)
 
-# ament_target_dependencies(robot_bridge
-#   rclcpp
-#   unitree_go
-#   unitree_sdk2
-#   cyclone_dds
-# )
+add_executable(release_node src/release_node.cpp)
+target_link_libraries(release_node unitree_sdk2)
+target_include_directories(release_node PRIVATE ${UNITREE_SDK_PATH}/include)
 
 # target_include_directories(robot_bridge PRIVATE ${UNITREE_SDK_PATH}/include)
-
-# 安装规则
 install(TARGETS
-  # unitree_ros2_test 
-  unitree_sdk2_test
+  release_node
   DESTINATION lib/${PROJECT_NAME}
 )
+
+
+add_executable(bridge src/bridge.cpp src/common/motor_crc.cpp)
+target_link_libraries(bridge unitree_sdk2)
+target_include_directories(bridge PRIVATE ${UNITREE_SDK_PATH}/include)
+ament_target_dependencies(bridge
+  rclcpp
+  std_msgs
+  unitree_go
+  unitree_hg
+  unitree_api
+)
+
+install(TARGETS
+  bridge
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
