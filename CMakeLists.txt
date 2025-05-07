@@ -28,6 +28,8 @@ find_package(unitree_go REQUIRED)
 find_package(unitree_hg REQUIRED)
 find_package(unitree_api REQUIRED)
 find_package(Threads REQUIRED)
+find_package(std_srvs REQUIRED)
+
 
 set(UNITREE_SDK_PATH $ENV{HOME}/library)
 
@@ -91,6 +93,7 @@ target_include_directories(bridge PRIVATE ${UNITREE_SDK_PATH}/include)
 ament_target_dependencies(bridge
   rclcpp
   std_msgs
+  std_srvs
   unitree_go
   unitree_hg
   unitree_api
@@ -101,6 +104,24 @@ install(TARGETS
   DESTINATION lib/${PROJECT_NAME}
 )
 
+
+
+
+# test node cmake-----------------------------------------------------------
+add_executable(test_node src/test.cpp)
+target_include_directories(test_node PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+ament_target_dependencies(test_node
+ rclcpp 
+ std_msgs
+ )
+
+install(TARGETS
+  test_node
+  DESTINATION lib/${PROJECT_NAME}
+)
+# -----------------------------------------------------------
 
 
 if(BUILD_TESTING)
