@@ -56,44 +56,47 @@ private:
     void readyPositionControl_();
     void zeroPositionControl_();
     double clamp(double value, double low, double high);
-    bool startControl();
-    bool stopControl();
-    bool update();
-    bool initControl();
+    bool startControl_();
+    bool initControl_();
+    void update_();
     void publishLowCommand_();
+    void checkForExternalPublisherAndRelease_();
+    bool checkState_();
+    bool checkCommand_();
 
     // Service callback functions
-    void startControlService_(
+    void startControlServiceCB_(
         const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
         std::shared_ptr<std_srvs::srv::SetBool::Response> response);
 
-    void stopControlService_(
+    void stopControlServiceCB_(
         const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
         std::shared_ptr<std_srvs::srv::SetBool::Response> response);
 
-    void readyPositionControlService_(
+    void readyPositionControlServiceCB_(
         const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
         std::shared_ptr<std_srvs::srv::SetBool::Response> response);
 
-    void zeroPositionControlService_(
+    void zeroPositionControlServiceCB_(
         const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
         std::shared_ptr<std_srvs::srv::SetBool::Response> response);
 
 
 
     // Service objects
-    rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr start_control_service_;
-    rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr stop_control_service_;
-    rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr ready_position_service_;
-    rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr zero_position_service_;
+    rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr startControlService_;
+    rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr stopControlService_;
+    rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr readyPositionService_;
+    rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr zeroPositionService_;
 
 
 
-    rclcpp::Subscription<unitree_go::msg::LowState>::SharedPtr lowstateSubscriber_;
-    rclcpp::Publisher<unitree_go::msg::LowCmd>::SharedPtr lowcmdPublisher_; 
+    rclcpp::Subscription<unitree_go::msg::LowState>::SharedPtr lowStateSubscriber_;
+    rclcpp::Publisher<unitree_go::msg::LowCmd>::SharedPtr lowCmdPublisher_; 
     rclcpp::TimerBase::SharedPtr timer_;
+ 
     
-    unitree_go::msg::LowCmd lowCommanddesired_;
+    unitree_go::msg::LowCmd lowCommandDesired_;
     unitree_go::msg::LowCmd lowCommand_;
     unitree_go::msg::LowState currentState_;
     unitree_go::msg::IMUState imu_;
@@ -104,15 +107,17 @@ private:
     std::vector<double> b0 = std::vector<double>(20, 0);
     std::vector<double> b1 = std::vector<double>(20, 0);
     double inf = std::numeric_limits<double>::infinity();
-    double t_start = 0;
-    double t_final = 0;
-  
+    double tStart = 0;
+    double tFinal = 0;
+    double dt_ = 0;
+
+    bool controlStarted_ = false;
+    bool releaseOtherNode_ = false;
 
 
     double controlDt_;                                                      // 2ms
     int timerDt_;
     double time_;                                                                    // Running time count
-    double duration_;
     PRorAB mode_ = PRorAB::PR;
     
 };
