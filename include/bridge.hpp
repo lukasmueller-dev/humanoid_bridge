@@ -9,6 +9,7 @@
 #include <limits>
 #include <iostream>
 #include <chrono>
+#include <array>
 
 #define INFO_IMU 1        // Set 1 to print IMU states
 #define INFO_MOTOR 1      // Set 1 to print motor states
@@ -16,32 +17,81 @@
 
 enum PRorAB { PR = 0, AB = 1 };
 
-enum H1_JointIndex {
-    // legs
-    RightHipRoll = 0,
-    RightHipPitch = 1,
-    RightKnee = 2,
-    LeftHipRoll = 3,
-    LeftHipPitch = 4,
-    LeftKnee = 5,
-    Torso = 6,
-    LeftHipYaw = 7,
-    RightHipYaw = 8,
-    EmptyJoint = 9,
-    LeftAnkle = 10,
-    RightAnkle = 11,
-    RightShoulderPitch = 12,
-    RightShoulderRoll = 13,
-    RightShoulderYaw = 14,
-    RightElbow = 15,
-    LeftShoulderPitch = 16,
-    LeftShoulderRoll = 17,
-    LeftShoulderYaw = 18,
-    LeftElbow = 19,
-    NumJoint = 20,
-  };
+// enum H1_JointIndex {            //  angle range       velocity range         torque range
+//     RightHipRoll = 0,           //-0.43~+0.43 rad     -23 ~ 23 rad/s        -200 ~ 200 N/m        
+//     RightHipPitch = 1,          //-3.14~+2.53 rad     -23 ~ 23 rad/s        -200 ~ 200 N/m
+//     RightKnee = 2,              //-0.26~+2.05 rad     -14 ~ 14 rad/s        -300 ~ 300 N/m
+//     LeftHipRoll = 3,            //-0.43~+0.43 rad     -23 ~ 23 rad/s        -200 ~ 200 N/m
+//     LeftHipPitch = 4,           //-3.14~+2.53 rad     -23 ~ 23 rad/s        -200 ~ 200 N/m
+//     LeftKnee = 5,               //-0.26~+2.05 rad     -14 ~ 14 rad/s        -300 ~ 300 N/m
+//     Torso = 6,                  //-2.35~+2.35 rad     -23 ~ 23 rad/s        -200 ~ 200 N/m
+//     LeftHipYaw = 7,             //-0.43~+0.43 rad     -23 ~ 23 rad/s        -200 ~ 200 N/m
+//     RightHipYaw = 8,            //-0.43~+0.43 rad     -23 ~ 23 rad/s        -200 ~ 200 N/m
+//     EmptyJoint = 9,
+//     LeftAnkle = 10,             //-0.87~+0.52 rad     -9  ~ 9  rad/s        -40  ~ 40  N/m
+//     RightAnkle = 11,            //-0.87~+0.52 rad     -9  ~ 9  rad/s        -40  ~ 40  N/m
+//     RightShoulderPitch = 12,    //-2.87~+2.87 rad     -9  ~ 9  rad/s        -40  ~ 40  N/m
+//     RightShoulderRoll = 13,     //-3.11~+0.34 rad     -9  ~ 9  rad/s        -40  ~ 40  N/m
+//     RightShoulderYaw = 14,      //-4.45~+1.3 rad      -20 ~ 20 rad/s        -18  ~ 18  N/m
+//     RightElbow = 15,            //-1.25~+2.61 rad     -20 ~ 20 rad/s        -18  ~ 18  N/m  
+//     LeftShoulderPitch = 16,     //-2.87~+2.87 rad     -9  ~ 9  rad/s        -40  ~ 40  N/m
+//     LeftShoulderRoll = 17,      //-0.34~+3.11 rad     -9  ~ 9  rad/s        -40  ~ 40  N/m
+//     LeftShoulderYaw = 18,       //-1.3~+4.45 rad      -20 ~ 20 rad/s        -18  ~ 18  N/m
+//     LeftElbow = 19,             //-1.25~+2.61 rad     -20 ~ 20 rad/s        -18  ~ 18  N/m
+//     NumJoint = 20,
+//   };
+
+//   namespace CommandLimits {
+
+//     constexpr double KP_MIN = 25.0;
+//     constexpr double KD_MIN = 1.0;
+//     constexpr double KP_MAX = 200.0;
+//     constexpr double KD_MAX = 1.0;
+//     struct Limit {
+//         double q_min;
+//         double q_max;
+//         double dq_min;
+//         double dq_max;
+//         double tau_min;
+//         double tau_max;
+//     };
+
+//     constexpr std::array<Limit, NumJoint> JOINT_LIMITS = {{
+//         {-0.43, 0.43,   -23.0, 23.0,   -200.0, 200.0}, // RightHipRoll
+//         {-3.14, 2.53,   -23.0, 23.0,   -200.0, 200.0}, // RightHipPitch
+//         {-0.26, 2.05,   -14.0, 14.0,   -300.0, 300.0}, // RightKnee
+//         {-0.43, 0.43,   -23.0, 23.0,   -200.0, 200.0}, // LeftHipRoll
+//         {-3.14, 2.53,   -23.0, 23.0,   -200.0, 200.0}, // LeftHipPitch
+//         {-0.26, 2.05,   -14.0, 14.0,   -300.0, 300.0}, // LeftKnee
+//         {-2.35, 2.35,   -23.0, 23.0,   -200.0, 200.0}, // Torso
+//         {-0.43, 0.43,   -23.0, 23.0,   -200.0, 200.0}, // LeftHipYaw
+//         {-0.43, 0.43,   -23.0, 23.0,   -200.0, 200.0}, // RightHipYaw
+//         {-1e6, 1e6,     -1e6, 1e6,     -1e6, 1e6},     // EmptyJoint (disabled or placeholder)
+//         {-0.87, 0.52,   -9.0,  9.0,    -40.0,  40.0},  // LeftAnkle
+//         {-0.87, 0.52,   -9.0,  9.0,    -40.0,  40.0},  // RightAnkle
+//         {-2.87, 2.87,   -9.0,  9.0,    -40.0,  40.0},  // RightShoulderPitch
+//         {-3.11, 0.34,   -9.0,  9.0,    -40.0,  40.0},  // RightShoulderRoll
+//         {-4.45, 1.3,    -20.0, 20.0,   -18.0,  18.0},  // RightShoulderYaw
+//         {-1.25, 2.61,   -20.0, 20.0,   -18.0,  18.0},  // RightElbow
+//         {-2.87, 2.87,   -9.0,  9.0,    -40.0,  40.0},  // LeftShoulderPitch
+//         {-0.34, 3.11,   -9.0,  9.0,    -40.0,  40.0},  // LeftShoulderRoll
+//         {-1.3, 4.45,    -20.0, 20.0,   -18.0,  18.0},  // LeftShoulderYaw
+//         {-1.25, 2.61,   -20.0, 20.0,   -18.0,  18.0},  // LeftElbow
+//     }};
+// }
 
 
+struct Joint {
+    int idx;
+    double q_min;
+    double q_max;
+    double dq_min;
+    double dq_max;
+    double tau_min;
+    double tau_max;
+    double kp;  
+    double kd;  
+};
 
 class RobotBridge{ 
 public:
@@ -55,14 +105,15 @@ private:
     void lowStateHandler_(unitree_go::msg::LowState::SharedPtr message);
     void readyPositionControl_();
     void zeroPositionControl_();
+    void calculateInterpolationParams_();
     double clamp(double value, double low, double high);
-    bool startControl_();
     bool initControl_();
     void update_();
     void publishLowCommand_();
     void checkForExternalPublisherAndRelease_();
     bool checkState_();
     bool checkCommand_();
+    void load_parameters_();
 
     // Service callback functions
     void startControlServiceCB_(
@@ -93,8 +144,11 @@ private:
 
     rclcpp::Subscription<unitree_go::msg::LowState>::SharedPtr lowStateSubscriber_;
     rclcpp::Publisher<unitree_go::msg::LowCmd>::SharedPtr lowCmdPublisher_; 
-    rclcpp::TimerBase::SharedPtr timer_;
- 
+    // rclcpp::TimerBase::SharedPtr timer_;
+    rclcpp::Time last_state_time_;
+
+    std::thread controlThread_;
+    std::mutex mutex_;
     
     unitree_go::msg::LowCmd lowCommandDesired_;
     unitree_go::msg::LowCmd lowCommand_;
@@ -109,15 +163,28 @@ private:
     double inf = std::numeric_limits<double>::infinity();
     double tStart = 0;
     double tFinal = 0;
-    double dt_ = 0;
+
+    double upper_limbs_kp_min_;
+    double upper_limbs_kp_max_;
+    double upper_limbs_kd_min_;
+    double upper_limbs_kd_max_;
+
+    double lower_limbs_kp_min_;
+    double lower_limbs_kp_max_;
+    double lower_limbs_kd_min_;
+    double lower_limbs_kd_max_;
 
     bool controlStarted_ = false;
     bool releaseOtherNode_ = false;
-
-
-    double controlDt_;                                                      // 2ms
+    
+    int numJoint_; // Number of joints
+    int emptyJointIndex_; // Index of empty joint
+    double duration_; // Duration for ready position control
+    double controlDt_ ;                                                      // 2ms
     int timerDt_;
-    double time_;                                                                    // Running time count
+    std::vector<Joint> joints_;                                                            // Running time count
     PRorAB mode_ = PRorAB::PR;
+
+
     
 };
