@@ -5,15 +5,33 @@ using namespace std::chrono_literals;
 
 SignalPublisher::SignalPublisher()
 : Node("signal_publisher") {
-    publisher_ = this->create_publisher<std_msgs::msg::Float64>("test_signal", 10);
-    timer_ = this->create_wall_timer(20ms, std::bind(&SignalPublisher::publish_signal, this));
+    signalPublisher_ = this->create_publisher<unitree_go::msg::LowCmd>("/test_signal", 10);
+    timer_ = this->create_wall_timer(20ms, std::bind(&SignalPublisher::publish_signal, this));//50hz
+}
+
+SignalPublisher::~SignalPublisher(){
+    // Destructor implementation (if needed)
 }
 
 void SignalPublisher::publish_signal() {
-    auto message = std_msgs::msg::Float64();
-    message.data = 1.23;
-    publisher_->publish(message);
-    RCLCPP_INFO(this->get_logger(), "Published: '%f'", message.data);
+    static double t = 0.0;
+    double freq = 0.2;  // Hz，频率
+    double amp = 0.2;   // 振幅
+    double dt = 0.02;   // 每次调用时间间隔 = 20ms
+    double omega = 2 * M_PI * freq;
+
+    double q12 = amp * std::sin(omega * t);
+    double q16 = amp * std::sin(omega * t + M_PI);
+
+    lowCommand_.motor_cmd[12].q = q12;
+    lowCommand_.motor_cmd[16].q = q16;
+
+    // 发布消息
+    signalPublisher_->publish(lowCommand_);
+
+    // 时间推进
+    t += dt;
+
 }
 
 int main(int argc, char * argv[]) {

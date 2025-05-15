@@ -103,9 +103,10 @@ public:
 private:
 
     void lowStateHandler_(unitree_go::msg::LowState::SharedPtr message);
+    void lowcmdCallBack_(unitree_go::msg::LowCmd::SharedPtr message);
     void readyPositionControl_();
     void zeroPositionControl_();
-    void calculateInterpolationParams_();
+    void calculateInterpolationParams_(double process_time);
     double clamp(double value, double low, double high);
     bool initControl_();
     void update_();
@@ -132,6 +133,10 @@ private:
         const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
         std::shared_ptr<std_srvs::srv::SetBool::Response> response);
 
+    void recievedMessageControlServiceCB_(
+        const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
+        std::shared_ptr<std_srvs::srv::SetBool::Response> response);
+
 
 
     // Service objects
@@ -139,10 +144,12 @@ private:
     rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr stopControlService_;
     rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr readyPositionService_;
     rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr zeroPositionService_;
+    rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr recievedMessageService_;
 
 
 
     rclcpp::Subscription<unitree_go::msg::LowState>::SharedPtr lowStateSubscriber_;
+    rclcpp::Subscription<unitree_go::msg::LowCmd>::SharedPtr desiredSubscriber_;
     rclcpp::Publisher<unitree_go::msg::LowCmd>::SharedPtr lowCmdPublisher_; 
     // rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::Time last_state_time_;
@@ -152,6 +159,7 @@ private:
     
     unitree_go::msg::LowCmd lowCommandDesired_;
     unitree_go::msg::LowCmd lowCommand_;
+ 
     unitree_go::msg::LowState currentState_;
     unitree_go::msg::IMUState imu_;
     
@@ -163,6 +171,7 @@ private:
     double inf = std::numeric_limits<double>::infinity();
     double tStart = 0;
     double tFinal = 0;
+    double tValid = 0;
 
     double upper_limbs_kp_min_;
     double upper_limbs_kp_max_;
@@ -176,6 +185,9 @@ private:
 
     bool controlStarted_ = false;
     bool releaseOtherNode_ = false;
+    bool if_recieve_message_ = false;
+    bool if_ready_position_ = false;
+    bool if_zero_position_ = false;
     
     int numJoint_; // Number of joints
     int emptyJointIndex_; // Index of empty joint

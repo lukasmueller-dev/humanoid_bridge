@@ -22,6 +22,11 @@ RobotBridge::RobotBridge(){
         topic_name, 10, std::bind(&RobotBridge::lowStateHandler_, this, _1));
     
 
+    //////////////////////////////////////////////test
+    desiredSubscriber_ = nh->create_subscription<unitree_go::msg::LowCmd>(
+        "/test_signal", 10, std::bind(&RobotBridge::lowcmdCallBack_, this, _1));
+    //////////////////////////////////////////////
+
     lowCmdPublisher_ = nh->create_publisher<unitree_go::msg::LowCmd>("/lowcmd", 10);
 
 
@@ -37,6 +42,9 @@ RobotBridge::RobotBridge(){
     
     zeroPositionService_ = nh->create_service<std_srvs::srv::SetBool>(
         "zero_position_control", std::bind(&RobotBridge::zeroPositionControlServiceCB_, this, _1, _2));
+    
+    recievedMessageService_ = nh->create_service<std_srvs::srv::SetBool>(
+        "recieved_message_control", std::bind(&RobotBridge::recievedMessageControlServiceCB_, this, _1, _2));
     
 
     // Check and close any redundant publishers that may exist
@@ -126,11 +134,28 @@ void RobotBridge::load_parameters_() {
 }
 
 
+void RobotBridge::lowcmdCallBack_(unitree_go::msg::LowCmd::SharedPtr message){
+    rclcpp::Time now = nh->get_clock()->now();
+    lowCommandDesired_.motor_cmd = message->motor_cmd;
+    
+    if(if_recieve_message_) {
+        if_ready_position_ = false;
+        if_zero_position_= false;
+    
+        calculateInterpolationParams_(0.02);
+        
+    }
+
+   
+}
+
+
 void RobotBridge::lowStateHandler_(unitree_go::msg::LowState::SharedPtr message){
     imu_ = message->imu_state;
     currentState_.motor_state = message->motor_state;
 
     last_state_time_ = nh->get_clock()->now();
+    
     
     if (INFO_IMU)
     {
@@ -223,6 +248,10 @@ void RobotBridge::readyPositionControl_(){
 
 
 bool RobotBridge::initControl_() {
+    
+    if_recieve_message_ = false;
+    if_ready_position_ = false;
+    if_zero_position_ = false;
 
     for (int i = 0; i < numJoint_; i++)
     {
@@ -468,9 +497,14 @@ void RobotBridge::readyPositionControlServiceCB_(
 
         if (!controlStarted_) initControl_();
         
+        if_recieve_message_ = false;
+        if_zero_position_ = false;
+
         readyPositionControl_();
 
-        calculateInterpolationParams_();
+        calculateInterpolationParams_(duration_);
+
+        if_ready_position_ = true;
 
         response->success = true;
         response->message = "Ready position control activated";
@@ -489,23 +523,47 @@ void RobotBridge::zeroPositionControlServiceCB_(
     if (request->data) {
 
         if (!controlStarted_) initControl_();
+
+        if_recieve_message_ = false;
+        if_ready_position_ = false;
         
         zeroPositionControl_();
 
-        calculateInterpolationParams_();
+        calculateInterpolationParams_(duration_);
 
+        if_zero_position_ = true;
+        
         response->success = true;
-        response->message = "Ready position control activated";
+        response->message = "Zero position control activated";
     } else {
         response->success = false;
         response->message = "Request data was false";
     }
 }
 
-void RobotBridge::calculateInterpolationParams_() {
+
+void RobotBridge::recievedMessageControlServiceCB_(
+    const std::shared_ptr<std_srvs::srv::SetBool::Request> request,
+    std::shared_ptr<std_srvs::srv::SetBool::Response> response) {
+
+    if (request->data) {
+
+        if (!controlStarted_) initControl_();
+
+        if ((if_zero_position_) && ((nh->get_clock()->now()).seconds()> tFinal + 1.0)) if_recieve_message_ = true; 
+            
+        response->success = true;
+        response->message = "Recieved message control activated";
+    } else {
+        if_recieve_message_ = false;
+        response->success = false;
+        response->message = "Request data was false";
+    }
+}
+
+
+void RobotBridge::calculateInterpolationParams_(double process_time) {
     
-    RCLCPP_INFO(nh->get_logger(), "lowCommand_1= %.3f", a0[0]);
-    RCLCPP_INFO(nh->get_logger(), "lowCommand_= %.3f", lowCommand_.motor_cmd[0].q);
     std::unique_lock<std::mutex> lock(mutex_);
     for (int i = 0; i < numJoint_; i++)
     {
@@ -518,7 +576,8 @@ void RobotBridge::calculateInterpolationParams_() {
 
     rclcpp::Time now = nh->get_clock()->now();
     tStart = now.seconds();  
-    tFinal = tStart + duration_; //duration_ = 3.0s
+    tFinal = tStart + process_time;
+    
 }
 
 

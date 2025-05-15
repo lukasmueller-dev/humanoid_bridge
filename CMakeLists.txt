@@ -115,6 +115,7 @@ target_include_directories(test_node PUBLIC
 ament_target_dependencies(test_node
  rclcpp 
  std_msgs
+ unitree_go
  )
 
 install(TARGETS
