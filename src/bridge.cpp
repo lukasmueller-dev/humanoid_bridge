@@ -1,6 +1,7 @@
 #include "bridge.hpp"
 
 
+
 using std::placeholders::_1;
 using std::placeholders::_2;  
 
@@ -23,8 +24,9 @@ RobotBridge::RobotBridge(){
     
 
     //////////////////////////////////////////////test
-    desiredSubscriber_ = nh->create_subscription<unitree_go::msg::LowCmd>(
+    desiredSubscriber_ = nh->create_subscription<bridge_interface::msg::TestSignal>(
         "/test_signal", 10, std::bind(&RobotBridge::lowcmdCallBack_, this, _1));
+    
     //////////////////////////////////////////////
 
     lowCmdPublisher_ = nh->create_publisher<unitree_go::msg::LowCmd>("/lowcmd", 10);
@@ -84,6 +86,13 @@ void RobotBridge::load_parameters_() {
     // nh->declare_parameter<std::vector<std::string>>("joint_names", std::vector<std::string>());
     
     nh->get_parameter("num_joint", numJoint_);
+    a0 = std::vector<double>(numJoint_, 0.0);
+    a1 = std::vector<double>(numJoint_, 0.0);
+    b0 = std::vector<double>(numJoint_, 0.0);
+    b1 = std::vector<double>(numJoint_, 0.0);
+    c0 = std::vector<double>(numJoint_, 0.0);
+    c1 = std::vector<double>(numJoint_, 0.0);
+
     nh->get_parameter("duration", duration_);
     
     nh->get_parameter("control_dt", controlDt_);
@@ -134,16 +143,23 @@ void RobotBridge::load_parameters_() {
 }
 
 
-void RobotBridge::lowcmdCallBack_(unitree_go::msg::LowCmd::SharedPtr message){
-    rclcpp::Time now = nh->get_clock()->now();
+void RobotBridge::lowcmdCallBack_(bridge_interface::msg::TestSignal::SharedPtr message){
+
     lowCommandDesired_.motor_cmd = message->motor_cmd;
-    
-    if(if_recieve_message_) {
+    auto process_duration = message->process_duration;
+    auto interpolation_order = message->interpolation_order;
+    auto hold_position = message->hold_position;
+
+    if(if_recieve_message_ && checkCommand_()) {
         if_ready_position_ = false;
         if_zero_position_= false;
     
-        calculateInterpolationParams_(0.02);
+        calculateInterpolationParams_(process_duration, interpolation_order, hold_position);
         
+    }
+    else if(!checkCommand_()){
+        RCLCPP_ERROR(nh->get_logger(), "Command check failed. Please inspect the command message.");
+        return; 
     }
 
    
@@ -183,16 +199,70 @@ void RobotBridge::lowStateHandler_(unitree_go::msg::LowState::SharedPtr message)
 }
 
 
-void RobotBridge::publishLowCommand_(){
+// void RobotBridge::publishLowCommand_(){
+//     // TODO: Hard clip without warning
+//     rclcpp::Time current = nh->get_clock()->now();
+//     double phase = clamp((current.seconds() - tStart)/(tFinal-tStart), 0.0, 1.0);
+//     for (int i = 0; i < numJoint_; ++i) {
+//         lowCommand_.motor_cmd[i].mode = (i < emptyJointIndex_) ? 0x0A : 0x01;
+//         lowCommand_.motor_cmd[i].q = a0[i] + a1[i] * phase;
+//         lowCommand_.motor_cmd[i].tau = b0[i] + b1[i] * phase;
+//         lowCommand_.motor_cmd[i].dq = c0[i] + c1[i] * phase;
+//         lowCommand_.motor_cmd[i].kp = joints_[i].kp;
+//         lowCommand_.motor_cmd[i].kd = joints_[i].kd;
+//     }
+//     clipCommand_();
+//     get_crc(lowCommand_);
+//     lowCmdPublisher_->publish(lowCommand_);
+// }
 
+
+void RobotBridge::publishLowCommand_() {
     rclcpp::Time current = nh->get_clock()->now();
     double phase = clamp((current.seconds() - tStart)/(tFinal-tStart), 0.0, 1.0);
+    bool any_value_clipped = false;
+
     for (int i = 0; i < numJoint_; ++i) {
+        // Set motor command mode and initial values
         lowCommand_.motor_cmd[i].mode = (i < emptyJointIndex_) ? 0x0A : 0x01;
         lowCommand_.motor_cmd[i].q = a0[i] + a1[i] * phase;
-        lowCommand_.motor_cmd[i].tau = 0.0;
-        lowCommand_.motor_cmd[i].dq = 0.0;
+        lowCommand_.motor_cmd[i].tau = b0[i] + b1[i] * phase;
+        lowCommand_.motor_cmd[i].dq = c0[i] + c1[i] * phase;
+        lowCommand_.motor_cmd[i].kp = joints_[i].kp;
+        lowCommand_.motor_cmd[i].kd = joints_[i].kd;
+
+        // Clip values to safety limits
+        auto& cmd = lowCommand_.motor_cmd[i];
+        auto& limit = joints_[i];
+        
+        // Clip gains based on joint type
+        if (i < emptyJointIndex_) {
+            cmd.kp = clamp(cmd.kp, lower_limbs_kp_min_, lower_limbs_kp_max_);
+            cmd.kd = clamp(cmd.kd, lower_limbs_kd_min_, lower_limbs_kd_max_);
+        } else {
+            cmd.kp = clamp(cmd.kp, upper_limbs_kp_min_, upper_limbs_kp_max_);
+            cmd.kd = clamp(cmd.kd, upper_limbs_kd_min_, upper_limbs_kd_max_);
+        }
+
+        // Clip position, velocity, and torque
+        cmd.q = clamp(cmd.q, limit.q_min, limit.q_max);
+        cmd.dq = clamp(cmd.dq, limit.dq_min, limit.dq_max);
+        cmd.tau = clamp(cmd.tau, limit.tau_min, limit.tau_max);
+
+        // Check if any value was actually changed by clamping
+        if (!any_value_clipped && (
+            cmd.kp != joints_[i].kp || cmd.kd != joints_[i].kd ||
+            cmd.q != (a0[i] + a1[i] * phase) ||
+            cmd.dq != (c0[i] + c1[i] * phase) ||
+            cmd.tau != (b0[i] + b1[i] * phase))) {
+            any_value_clipped = true;
+        }
     }
+
+    if (any_value_clipped) {
+        RCLCPP_WARN_ONCE(nh->get_logger(), "Some Joints were clipped to stay within safety limits!");
+    }
+
     get_crc(lowCommand_);
     lowCmdPublisher_->publish(lowCommand_);
 }
@@ -213,10 +283,8 @@ void RobotBridge::zeroPositionControl_(){
         lowCommandDesired_.motor_cmd[i].q = 0.0;
         lowCommandDesired_.motor_cmd[i].tau = 0.0;
         lowCommandDesired_.motor_cmd[i].dq = 0.0;
-        lowCommand_.motor_cmd[i].kp = joints_[i].kp;
-        lowCommand_.motor_cmd[i].kd = joints_[i].kd;
     }
-
+    checkCommand_();
 }
 
 
@@ -241,9 +309,8 @@ void RobotBridge::readyPositionControl_(){
             target_q = 1.6;
         }
         lowCommandDesired_.motor_cmd[i].q = target_q;
-        lowCommand_.motor_cmd[i].kp = joints_[i].kp;
-        lowCommand_.motor_cmd[i].kd = joints_[i].kd;
     }
+    checkCommand_();
 }
 
 
@@ -253,16 +320,16 @@ bool RobotBridge::initControl_() {
     if_ready_position_ = false;
     if_zero_position_ = false;
 
+        
     for (int i = 0; i < numJoint_; i++)
     {
-         a0[i] = currentState_.motor_state[i].q;
-         a1[i] = 0.0;
-         b0[i] = 0.0; //currentState_.motor_state[i].dq;
-         b1[i] = 0.0;
+         lowCommandDesired_.motor_cmd[i].q = currentState_.motor_state[i].q;
+
+         
     }
-    rclcpp::Time now = nh->get_clock()->now();
-    tStart = now.seconds();  
-    tFinal = inf;
+    checkCommand_();
+    calculateInterpolationParams_(0.0, 1, true);
+
     controlStarted_ = true;
     
     rclcpp::Rate rate(10);
@@ -283,12 +350,13 @@ void RobotBridge::update_() {
             RCLCPP_ERROR(nh->get_logger(), "Robot state check failed. Please inspect the robot carefully.");
             return; 
         }
-
-        if (controlStarted_  && checkCommand_()) {
+        
+        if (controlStarted_ ) {         
             std::unique_lock<std::mutex> lock(mutex_);
             // Update the low command
             publishLowCommand_();
             lock.unlock();
+            controlStarted_ = (nh->get_clock()->now()).seconds() < tValid;
         }
         rate.sleep();
     }
@@ -369,9 +437,67 @@ bool RobotBridge::checkState_() {
 }
 
 
+// void RobotBridge::clipCommand_() {
+
+//     int any_value_clipped = -1;
+
+//     for (size_t i = 0; i < numJoint_; ++i) {
+//         auto& cmd = lowCommand_.motor_cmd[i];
+//         auto& limit = joints_[i];
+//         // Check gains
+//         if(i < emptyJointIndex_){
+
+//             if (limit.kp < lower_limbs_kp_min_ || limit.kp > lower_limbs_kp_max_) {
+//                 cmd.kp = clamp(limit.kp, lower_limbs_kp_min_, lower_limbs_kp_max_);
+//                 any_value_clipped = i;
+//             }
+    
+//             if (limit.kd < lower_limbs_kd_min_ || limit.kd > lower_limbs_kd_max_) {
+//                 cmd.kd = clamp(limit.kd, lower_limbs_kd_min_, lower_limbs_kd_max_);
+//                 any_value_clipped = i;
+//             }
+//         }
+//         else{
+
+//             if (limit.kp < upper_limbs_kp_min_ || limit.kp > upper_limbs_kp_max_) {
+//                 cmd.kp = clamp(limit.kp, upper_limbs_kp_min_, upper_limbs_kp_max_);
+//                 any_value_clipped = i;
+//             }
+    
+//             if (limit.kd < upper_limbs_kd_min_ || limit.kd > upper_limbs_kd_max_) {
+//                 cmd.kd = clamp(limit.kd, upper_limbs_kd_min_, upper_limbs_kd_max_);
+//                 any_value_clipped = i;
+//             }
+
+//         }
+//         // Clip position
+//         if (cmd.q < limit.q_min || cmd.q > limit.q_max) {
+//             cmd.q = clamp(cmd.q, limit.q_min, limit.q_max);
+//             any_value_clipped = i;
+//         }
+
+//         // Clip velocity
+//         if (cmd.dq < limit.dq_min || cmd.dq > limit.dq_max) {
+//             cmd.dq = clamp(cmd.dq, limit.dq_min, limit.dq_max);
+//             any_value_clipped = i;
+//         }
+
+//         // Clip torque
+//         if (cmd.tau < limit.tau_min || cmd.tau > limit.tau_max) {
+//             cmd.tau = clamp(cmd.tau, limit.tau_min, limit.tau_max);
+//             any_value_clipped = i;
+//         }
+//         if (any_value_clipped > 0){
+//             RCLCPP_WARN_ONCE(nh->get_logger(), "Some Joints were clipped to stay within safety limits! ");
+//         }
+//     }
+
+// }
+
+
 bool RobotBridge::checkCommand_() {
     // Check if the command message has valid data
-    if (lowCommand_.motor_cmd.size() != numJoint_) {
+    if (lowCommandDesired_.motor_cmd.size() != numJoint_) {
         RCLCPP_ERROR(nh->get_logger(),
                     "Command check failed: motor_cmd size mismatch. Expected %ld, got %ld.",
                     joints_.size(), lowCommand_.motor_cmd.size());
@@ -381,7 +507,7 @@ bool RobotBridge::checkCommand_() {
     int any_value_clipped = -1;
 
     for (size_t i = 0; i < numJoint_; ++i) {
-        auto& cmd = lowCommand_.motor_cmd[i];
+        auto& cmd = lowCommandDesired_.motor_cmd[i];
         auto& limit = joints_[i];
 
         // Check for invalid numbers
@@ -502,7 +628,7 @@ void RobotBridge::readyPositionControlServiceCB_(
 
         readyPositionControl_();
 
-        calculateInterpolationParams_(duration_);
+        calculateInterpolationParams_(duration_, 1,true);
 
         if_ready_position_ = true;
 
@@ -529,7 +655,7 @@ void RobotBridge::zeroPositionControlServiceCB_(
         
         zeroPositionControl_();
 
-        calculateInterpolationParams_(duration_);
+        calculateInterpolationParams_(duration_, 1, true);
 
         if_zero_position_ = true;
         
@@ -562,21 +688,43 @@ void RobotBridge::recievedMessageControlServiceCB_(
 }
 
 
-void RobotBridge::calculateInterpolationParams_(double process_time) {
+void RobotBridge::calculateInterpolationParams_(double process_duration, int interpolation_order, bool hold_position ) {
     
     std::unique_lock<std::mutex> lock(mutex_);
     for (int i = 0; i < numJoint_; i++)
-    {
-        a0[i] = lowCommand_.motor_cmd[i].q; // currentState_.motor_state[i].q;
-        a1[i] = lowCommandDesired_.motor_cmd[i].q - a0[i];
-        b0[i] = 0.0; //currentState_.motor_state[i].dq;
-        b1[i] = 0.0;
+    {   
+        if(interpolation_order == 0){
+            a0[i] = lowCommandDesired_.motor_cmd[i].q; 
+            a1[i] = 0.0;
+            b0[i] = lowCommandDesired_.motor_cmd[i].tau; 
+            b1[i] = 0.0;
+            c0[i] = lowCommandDesired_.motor_cmd[i].dq; 
+            c1[i] = 0.0;
+
+        }
+        else if(interpolation_order == 1){
+            a0[i] = lowCommand_.motor_cmd[i].q; // currentState_.motor_state[i].q;
+            a1[i] = lowCommandDesired_.motor_cmd[i].q - a0[i];
+            b0[i] = lowCommand_.motor_cmd[i].tau; //currentState_.motor_state[i].tau;
+            b1[i] = lowCommandDesired_.motor_cmd[i].tau - b0[i];
+            c0[i] = lowCommand_.motor_cmd[i].dq; //currentState_.motor_state[i].dq;
+            c1[i] = lowCommandDesired_.motor_cmd[i].dq - c0[i];
+
+        }
+
+
     }
     lock.unlock();
 
     rclcpp::Time now = nh->get_clock()->now();
     tStart = now.seconds();  
-    tFinal = tStart + process_time;
+    tFinal = tStart + process_duration;
+
+    if (hold_position) {
+        tValid = inf;
+    } else {
+        tValid = tFinal + 1.0;
+    }
     
 }
 

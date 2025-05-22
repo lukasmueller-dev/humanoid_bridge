@@ -10,6 +10,11 @@
 #include <iostream>
 #include <chrono>
 #include <array>
+#include "bridge_interface/msg/test_signal.hpp"
+
+
+
+
 
 #define INFO_IMU 1        // Set 1 to print IMU states
 #define INFO_MOTOR 1      // Set 1 to print motor states
@@ -103,10 +108,12 @@ public:
 private:
 
     void lowStateHandler_(unitree_go::msg::LowState::SharedPtr message);
-    void lowcmdCallBack_(unitree_go::msg::LowCmd::SharedPtr message);
+
+    void lowcmdCallBack_(bridge_interface::msg::TestSignal::SharedPtr message);
+
     void readyPositionControl_();
     void zeroPositionControl_();
-    void calculateInterpolationParams_(double process_time);
+    void calculateInterpolationParams_(double process_duration, int interpolation_order, bool hold_position =false);
     double clamp(double value, double low, double high);
     bool initControl_();
     void update_();
@@ -114,6 +121,7 @@ private:
     void checkForExternalPublisherAndRelease_();
     bool checkState_();
     bool checkCommand_();
+    void clipCommand_();
     void load_parameters_();
 
     // Service callback functions
@@ -146,28 +154,34 @@ private:
     rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr zeroPositionService_;
     rclcpp::Service<std_srvs::srv::SetBool>::SharedPtr recievedMessageService_;
 
-
-
     rclcpp::Subscription<unitree_go::msg::LowState>::SharedPtr lowStateSubscriber_;
-    rclcpp::Subscription<unitree_go::msg::LowCmd>::SharedPtr desiredSubscriber_;
+
+    rclcpp::Subscription<bridge_interface::msg::TestSignal>::SharedPtr desiredSubscriber_;
+
     rclcpp::Publisher<unitree_go::msg::LowCmd>::SharedPtr lowCmdPublisher_; 
-    // rclcpp::TimerBase::SharedPtr timer_;
+
     rclcpp::Time last_state_time_;
 
     std::thread controlThread_;
     std::mutex mutex_;
     
-    unitree_go::msg::LowCmd lowCommandDesired_;
+    bridge_interface::msg::TestSignal lowCommandDesired_;
+    // unitree_go::msg::LowCmd lowCommandDesired_;
+    
+
     unitree_go::msg::LowCmd lowCommand_;
  
     unitree_go::msg::LowState currentState_;
     unitree_go::msg::IMUState imu_;
     
     //Interpolation parameters
-    std::vector<double> a0 = std::vector<double>(20, 0);
-    std::vector<double> a1 = std::vector<double>(20, 0);
-    std::vector<double> b0 = std::vector<double>(20, 0);
-    std::vector<double> b1 = std::vector<double>(20, 0);
+    std::vector<double> a0 ;
+    std::vector<double> a1 ;
+    std::vector<double> b0 ;
+    std::vector<double> b1 ;
+    std::vector<double> c0 ;
+    std::vector<double> c1 ;
+
     double inf = std::numeric_limits<double>::infinity();
     double tStart = 0;
     double tFinal = 0;

@@ -29,6 +29,8 @@ find_package(unitree_hg REQUIRED)
 find_package(unitree_api REQUIRED)
 find_package(Threads REQUIRED)
 find_package(std_srvs REQUIRED)
+find_package(bridge_interface REQUIRED)
+
 
 
 set(UNITREE_SDK_PATH $ENV{HOME}/library)
@@ -97,6 +99,7 @@ ament_target_dependencies(bridge
   unitree_go
   unitree_hg
   unitree_api
+  bridge_interface
 )
 
 install(TARGETS
@@ -115,7 +118,9 @@ target_include_directories(test_node PUBLIC
 ament_target_dependencies(test_node
  rclcpp 
  std_msgs
+ std_srvs
  unitree_go
+ bridge_interface
  )
 
 install(TARGETS

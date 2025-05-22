@@ -13,7 +13,7 @@
 #include <iostream>
 #include <chrono>
 #include <array>
-
+#include "bridge_interface/msg/test_signal.hpp"
 
 class SignalPublisher : public rclcpp::Node {
 public:
@@ -23,9 +23,9 @@ public:
 private:
     void publish_signal();
 
-    rclcpp::Publisher<unitree_go::msg::LowCmd>::SharedPtr signalPublisher_;
+    rclcpp::Publisher<bridge_interface::msg::TestSignal>::SharedPtr signalPublisher_;
     rclcpp::TimerBase::SharedPtr timer_;
 
 
-    unitree_go::msg::LowCmd lowCommand_;
+    bridge_interface::msg::TestSignal lowCommand_;
 };

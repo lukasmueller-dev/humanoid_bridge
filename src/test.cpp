@@ -5,7 +5,7 @@ using namespace std::chrono_literals;
 
 SignalPublisher::SignalPublisher()
 : Node("signal_publisher") {
-    signalPublisher_ = this->create_publisher<unitree_go::msg::LowCmd>("/test_signal", 10);
+    signalPublisher_ = this->create_publisher<bridge_interface::msg::TestSignal>("/test_signal", 10);
     timer_ = this->create_wall_timer(20ms, std::bind(&SignalPublisher::publish_signal, this));//50hz
 }
 
@@ -15,9 +15,9 @@ SignalPublisher::~SignalPublisher(){
 
 void SignalPublisher::publish_signal() {
     static double t = 0.0;
-    double freq = 0.2;  // Hz，频率
-    double amp = 0.2;   // 振幅
-    double dt = 0.02;   // 每次调用时间间隔 = 20ms
+    double freq = 0.3;  // Hz，frequency
+    double amp = 0.3;   // ampitude
+    double dt = 0.02;   // call interval = 20ms
     double omega = 2 * M_PI * freq;
 
     double q12 = amp * std::sin(omega * t);
@@ -25,11 +25,13 @@ void SignalPublisher::publish_signal() {
 
     lowCommand_.motor_cmd[12].q = q12;
     lowCommand_.motor_cmd[16].q = q16;
-
-    // 发布消息
+    lowCommand_.interpolation_order = 1;
+    lowCommand_.hold_position = false;
+    lowCommand_.process_duration = 0.02;
+    
     signalPublisher_->publish(lowCommand_);
 
-    // 时间推进
+    
     t += dt;
 
 }
