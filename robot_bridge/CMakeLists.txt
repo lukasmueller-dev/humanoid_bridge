@@ -107,9 +107,6 @@ install(TARGETS
   DESTINATION lib/${PROJECT_NAME}
 )
 
-
-
-
 # test node cmake-----------------------------------------------------------
 add_executable(test_node src/test.cpp)
 target_include_directories(test_node PUBLIC
