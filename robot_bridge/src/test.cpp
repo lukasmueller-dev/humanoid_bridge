@@ -5,8 +5,17 @@ using namespace std::chrono_literals;
 
 SignalPublisher::SignalPublisher()
 : Node("signal_publisher") {
-    signalPublisher_ = this->create_publisher<bridge_interface::msg::TestSignal>("/test_signal", 10);
+    signalPublisher_ = this->create_publisher<bridge_interface::msg::RobotCmd>("/robot_cmd", 10);
     timer_ = this->create_wall_timer(20ms, std::bind(&SignalPublisher::publish_signal, this));//50hz
+    lowCommand_.motor_cmd.resize(20);
+
+    // for (int i = 0; i < 20; ++i) {
+    //     lowCommand_.motor_cmd[i].q = 0.0;
+    //     lowCommand_.motor_cmd[i].dq = 0.0;
+    //     lowCommand_.motor_cmd[i].tau = 0.0;
+    //     lowCommand_.motor_cmd[i].kp = i<9 ? 100.0 : 50.0;
+    //     lowCommand_.motor_cmd[i].kd = 1.0;
+    // }
 }
 
 SignalPublisher::~SignalPublisher(){
@@ -27,7 +36,7 @@ void SignalPublisher::publish_signal() {
     lowCommand_.motor_cmd[16].q = q16;
     lowCommand_.interpolation_order = 1;
     lowCommand_.hold_position = false;
-    lowCommand_.process_duration = 0.02;
+    lowCommand_.duration = 0.02;
     
     signalPublisher_->publish(lowCommand_);
 

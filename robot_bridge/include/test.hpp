@@ -13,7 +13,7 @@
 #include <iostream>
 #include <chrono>
 #include <array>
-#include "bridge_interface/msg/test_signal.hpp"
+#include "bridge_interface/msg/robot_cmd.hpp"
 
 class SignalPublisher : public rclcpp::Node {
 public:
@@ -23,9 +23,9 @@ public:
 private:
     void publish_signal();
 
-    rclcpp::Publisher<bridge_interface::msg::TestSignal>::SharedPtr signalPublisher_;
+    rclcpp::Publisher<bridge_interface::msg::RobotCmd>::SharedPtr signalPublisher_;
     rclcpp::TimerBase::SharedPtr timer_;
 
 
-    bridge_interface::msg::TestSignal lowCommand_;
+    bridge_interface::msg::RobotCmd lowCommand_;
 };
