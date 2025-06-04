@@ -10,7 +10,7 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 
-rosidl_generate_interfaces(${PROJECT_NAME}   "msg/MotorCmd.msg" "msg/RobotCmd.msg")
+rosidl_generate_interfaces(${PROJECT_NAME}   "msg/BmsCmd.msg" "msg/MotorCmd.msg" "msg/LowCmd.msg" "msg/RobotCmd.msg" "msg/TestSignal.msg")
 
 
 if(BUILD_TESTING)

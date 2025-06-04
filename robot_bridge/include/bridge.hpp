@@ -10,8 +10,10 @@
 #include <iostream>
 #include <chrono>
 #include <array>
+#include <deque>
 #include "bridge_interface/msg/robot_cmd.hpp"
-
+#include "unitree_go/msg//wireless_controller.hpp"
+#include "key_event_handler.hpp"
 namespace sairol_h1
 {
 
@@ -86,6 +88,7 @@ double INF = std::numeric_limits<double>::infinity();
     private:
         void lowStateHandler_(unitree_go::msg::LowState::SharedPtr message);
         void robotCmdCallBack_(bridge_interface::msg::RobotCmd::SharedPtr message);
+        void wireless_callback(unitree_go::msg::WirelessController::SharedPtr data);
         void readyPositionControl_();
         void zeroPositionControl_();
         void calculateInterpolationParams_(double process_duration, int interpolation_order, bool hold_position = false);
@@ -96,8 +99,12 @@ double INF = std::numeric_limits<double>::infinity();
         void checkExternalPublisher_();
         bool checkState_();
         bool checkCommand_();
-        void clipCommand_();
         bool loadParameters_();
+
+        using prepareCmdOp = void (RobotBridge::*)(double phase, int idx);
+
+        void prepareCmdInterpolation_(double phase, int idx);
+        void prepareCmdTorque_(double phase, int idx);
 
         // Service callback functions
         void startControlServiceCB_(
@@ -124,11 +131,13 @@ double INF = std::numeric_limits<double>::infinity();
         rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr zeroPositionService_;
         rclcpp::Subscription<unitree_go::msg::LowState>::SharedPtr lowStateSubscriber_;
         rclcpp::Subscription<bridge_interface::msg::RobotCmd>::SharedPtr desiredSubscriber_;
+        rclcpp::Subscription<unitree_go::msg::WirelessController>::SharedPtr remoteControlSubscriber_;
         rclcpp::Publisher<unitree_go::msg::LowCmd>::SharedPtr lowCmdPublisher_;
         rclcpp::Time last_state_time_;
 
         std::thread controlThread_;
         std::mutex mutex_;
+        prepareCmdOp  prepareCmd_;
 
         bridge_interface::msg::RobotCmd lowCommandDesired_;
 
@@ -151,7 +160,9 @@ double INF = std::numeric_limits<double>::infinity();
         double lower_limbs_kd_min_;
         double lower_limbs_kd_max_;
         bool controlStarted_ = false;
+        bool torqueControl_;
 
+        int i = 0;               // Running time count
         int numJoint_;              // Number of joints
         int emptyJointIndex_;       // Index of empty joint
         double duration_;           // Duration for ready position control

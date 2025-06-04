@@ -15,6 +15,10 @@
 #include <array>
 #include "bridge_interface/msg/robot_cmd.hpp"
 
+#include "std_msgs/msg/float64.hpp" 
+#include "bridge_interface/msg/low_cmd.hpp"
+#include "bridge_interface/msg/test_signal.hpp"
+
 class SignalPublisher : public rclcpp::Node {
 public:
     SignalPublisher();
@@ -26,6 +30,13 @@ private:
     rclcpp::Publisher<bridge_interface::msg::RobotCmd>::SharedPtr signalPublisher_;
     rclcpp::TimerBase::SharedPtr timer_;
 
+    //test
+    // rclcpp::Publisher<bridge_interface::msg::TestSignal>::SharedPtr testPublisher_;
+    // rclcpp::TimerBase::SharedPtr testTimer_;
+    // void topic_callback(const bridge_interface::msg::TestSignal::SharedPtr msg);
+    // rclcpp::Subscription<bridge_interface::msg::TestSignal>::SharedPtr relayscription_;
+    // bridge_interface::msg::LowCmd info;
 
+    int i = 0; // Counter for logging
     bridge_interface::msg::RobotCmd lowCommand_;
 };

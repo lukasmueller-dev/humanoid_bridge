@@ -32,6 +32,15 @@ find_package(std_srvs REQUIRED)
 find_package(bridge_interface REQUIRED)
 
 
+include_directories(
+  include
+)
+
+add_library(key_event_handler
+  src/key_event_handler.cpp
+)
+
+ament_target_dependencies(key_event_handler rclcpp unitree_go)
 
 set(UNITREE_SDK_PATH $ENV{HOME}/library)
 
@@ -89,8 +98,9 @@ install(TARGETS
 )
 
 
-add_executable(bridge src/bridge.cpp src/common/motor_crc.cpp)
+add_executable(bridge src/bridge.cpp src/common/motor_crc.cpp )
 target_link_libraries(bridge unitree_sdk2)
+target_link_libraries(bridge key_event_handler)
 target_include_directories(bridge PRIVATE ${UNITREE_SDK_PATH}/include)
 ament_target_dependencies(bridge
   rclcpp
@@ -125,6 +135,11 @@ install(TARGETS
   DESTINATION lib/${PROJECT_NAME}
 )
 # -----------------------------------------------------------
+
+
+
+
+
 
 
 if(BUILD_TESTING)

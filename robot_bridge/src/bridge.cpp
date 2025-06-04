@@ -5,7 +5,7 @@ using std::placeholders::_2;
 
 using namespace sairol_h1;
 
-RobotBridge::RobotBridge()
+RobotBridge::RobotBridge(): prepareCmd_(&RobotBridge::prepareCmdInterpolation_)
 {
     auto topic_name = "lowstate";
 
@@ -20,7 +20,9 @@ RobotBridge::RobotBridge()
     lowStateSubscriber_ = nh->create_subscription<unitree_go::msg::LowState>(
         topic_name, 10, std::bind(&RobotBridge::lowStateHandler_, this, _1));
 
-    // TODO: MSG type
+    remoteControlSubscriber_ = nh->create_subscription<unitree_go::msg::WirelessController>(
+        "/wirelesscontroller", 10, std::bind(&RobotBridge::wireless_callback, this, _1));
+
     desiredSubscriber_ = nh->create_subscription<bridge_interface::msg::RobotCmd>(
         "/robot_cmd", 10, std::bind(&RobotBridge::robotCmdCallBack_, this, _1));
 
@@ -47,6 +49,18 @@ RobotBridge::RobotBridge()
         rclcpp::shutdown();
     }
 
+    if (torqueControl_)
+    {
+        throw std::runtime_error("Torque control mode is not supported yet.");
+        prepareCmd_ = &RobotBridge::prepareCmdTorque_;
+        RCLCPP_INFO(nh->get_logger(), "Torque control mode enabled.");
+    }
+    else
+    {
+        prepareCmd_ = &RobotBridge::prepareCmdInterpolation_;
+        RCLCPP_INFO(nh->get_logger(), "Interpolation control mode enabled.");
+    }
+
     // Waiting for publisher on topic /lowstate
     RCLCPP_INFO(nh->get_logger(), "Waiting for publisher on topic /lowstate...");
     while (nh->count_publishers(topic_name) == 0)
@@ -70,6 +84,17 @@ sairol_h1::RobotBridge::~RobotBridge()
     {
         controlThread_.join();
     }
+
+    for (int i = 0; i < numJoint_; i++)
+    {
+        lowCommand_.motor_cmd[i].q = currentState_.motor_state[i].q;
+        lowCommand_.motor_cmd[i].dq = 0.0;
+        lowCommand_.motor_cmd[i].tau = 0.0;
+        lowCommand_.motor_cmd[i].kp = 0.0;
+        lowCommand_.motor_cmd[i].kd = 0.0;
+    }
+    get_crc(lowCommand_);
+    lowCmdPublisher_->publish(lowCommand_);
 }
 
 void RobotBridge::checkExternalPublisher_()
@@ -92,6 +117,11 @@ bool RobotBridge::loadParameters_()
 
     cmdParams_ = std::vector<CmdParams>(numJoint_);
 
+    if (!nh->get_parameter("torque_control", torqueControl_))
+    {
+        RCLCPP_ERROR(nh->get_logger(), "Failed to get 'torque_control' from parameters");
+        return false;
+    }
     if (!nh->get_parameter("duration", duration_))
     {
         RCLCPP_ERROR(nh->get_logger(), "Failed to get 'duration' from parameters");
@@ -193,14 +223,31 @@ bool RobotBridge::loadParameters_()
     return true;
 }
 
+void RobotBridge::wireless_callback(unitree_go::msg::WirelessController::SharedPtr data)
+{
+    // RCLCPP_INFO(nh->get_logger(), "Wireless controller -- lx: %f; ly: %f; rx: %f; ry: %f; key value: %d",
+    //             data->lx, data->ly, data->rx, data->ry, data->keys);
+
+    handle_key_event(
+    data->keys, nh, controlStarted_, lowCommand_, currentState_, lowCmdPublisher_,
+    numJoint_, duration_,
+    std::bind(&RobotBridge::initControl_, this),
+    std::bind(&RobotBridge::readyPositionControl_, this),
+    std::bind(&RobotBridge::zeroPositionControl_, this),
+    std::bind(&RobotBridge::calculateInterpolationParams_, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3),
+    get_crc
+    );
+}
+
 void RobotBridge::robotCmdCallBack_(bridge_interface::msg::RobotCmd::SharedPtr message)
 {
     lowCommandDesired_.motor_cmd = message->motor_cmd;
-    // TODO Change to duration
     auto duration = message->duration;
     auto interpolation_order = message->interpolation_order;
     auto hold_position = message->hold_position;
-    if (not controlStarted_) 
+
+
+    if (not controlStarted_)
     {
         RCLCPP_WARN_ONCE(nh->get_logger(), "Control not started. Please start control first.");
         return;
@@ -227,20 +274,42 @@ void RobotBridge::lowStateHandler_(unitree_go::msg::LowState::SharedPtr message)
 void RobotBridge::publishLowCommand_()
 {
     rclcpp::Time current = nh->get_clock()->now();
+
     double phase = clamp((current.seconds() - tStart) / (tFinal - tStart), 0.0, 1.0);
     for (int i = 0; i < numJoint_; ++i)
     {
-        // Set motor command mode and initial values
-        lowCommand_.motor_cmd[i].mode = (i < emptyJointIndex_) ? 0x0A : 0x01;
-        lowCommand_.motor_cmd[i].q = cmdParams_[i].q_0 + cmdParams_[i].q_1 * phase;
-        lowCommand_.motor_cmd[i].tau = cmdParams_[i].tau_0 + cmdParams_[i].tau_1 * phase;
-        lowCommand_.motor_cmd[i].dq = cmdParams_[i].dq_0 + cmdParams_[i].dq_1 * phase;
-        lowCommand_.motor_cmd[i].kp = cmdParams_[i].kp_0 + cmdParams_[i].kp_1 * phase;
-        lowCommand_.motor_cmd[i].kd = cmdParams_[i].kd_0 + cmdParams_[i].kd_1 * phase;
-        // Clip values to safety limits
         auto &cmd = lowCommand_.motor_cmd[i];
         auto &joint_info = joints_[i];
-        // Clip gains based on joint type
+
+        // Set motor command mode and initial values
+        cmd.mode = (i < emptyJointIndex_) ? 0x0A : 0x01;
+        cmd.q = clamp(cmdParams_[i].q_0 + cmdParams_[i].q_1 * phase, joint_info.q_min, joint_info.q_max);
+        cmd.dq = clamp(cmdParams_[i].dq_0 + cmdParams_[i].dq_1 * phase, -joint_info.dq_limit, joint_info.dq_limit);
+        
+        // (this->*prepareCmd_)(phase, i);
+        if (torqueControl_)
+        {
+            auto kp = cmdParams_[i].kp_0 + cmdParams_[i].kp_1 * phase;
+            auto kd = cmdParams_[i].kd_0 + cmdParams_[i].kd_1 * phase;
+            auto tau_set = cmdParams_[i].tau_1; 
+
+            cmd.tau = kp * (cmd.q - currentState_.motor_state[i].q) + kd * (cmd.dq - currentState_.motor_state[i].dq) + tau_set;
+            cmd.kp = 0.0;
+            cmd.kd = 0.0;
+        }
+        else
+        {
+            cmd.kp = cmdParams_[i].kp_0 + cmdParams_[i].kp_1 * phase;
+            cmd.kd = cmdParams_[i].kd_0 + cmdParams_[i].kd_1 * phase;
+
+            // double max_delta_q = joint_info.dq_limit * controlDt_;
+            // double delta_q_l = currentState_.motor_state[i].q - max_delta_q;
+            // double delta_q_u = currentState_.motor_state[i].q + max_delta_q;
+            // double q_min = std::max(joint_info.q_min, delta_q_l);
+            // double q_max = std::min(joint_info.q_max, delta_q_u);
+            // cmd.q = clamp(cmd.q, q_min, q_max);
+        }
+
         if (i < emptyJointIndex_)
         {
             cmd.kp = clamp(cmd.kp, lower_limbs_kp_min_, lower_limbs_kp_max_);
@@ -251,14 +320,41 @@ void RobotBridge::publishLowCommand_()
             cmd.kp = clamp(cmd.kp, upper_limbs_kp_min_, upper_limbs_kp_max_);
             cmd.kd = clamp(cmd.kd, upper_limbs_kd_min_, upper_limbs_kd_max_);
         }
-        // Clip position, velocity, and torque
-        cmd.q = clamp(cmd.q, joint_info.q_min, joint_info.q_max);
-        cmd.dq = clamp(cmd.dq, -joint_info.dq_limit, joint_info.dq_limit);
+
         cmd.tau = clamp(cmd.tau, -joint_info.tau_limit, joint_info.tau_limit);
     }
 
     get_crc(lowCommand_);
     lowCmdPublisher_->publish(lowCommand_);
+}
+
+void RobotBridge::prepareCmdInterpolation_(double phase, int i)
+{
+    auto &cmd = lowCommand_.motor_cmd[i];
+    auto &joint_info = joints_[i];
+    cmd.tau = cmdParams_[i].tau_0 + cmdParams_[i].tau_1 * phase;
+    cmd.kp = cmdParams_[i].kp_0 + cmdParams_[i].kp_1 * phase;
+    cmd.kd = cmdParams_[i].kd_0 + cmdParams_[i].kd_1 * phase;
+
+    // double max_delta_q = joint_info.dq_limit * controlDt_;
+    // double delta_q_l = currentState_.motor_state[i].q - max_delta_q;
+    // double delta_q_u = currentState_.motor_state[i].q + max_delta_q;
+    // double q_min = std::max(joint_info.q_min, delta_q_l);
+    // double q_max = std::min(joint_info.q_max, delta_q_u);
+    // cmd.q = clamp(cmd.q, q_min, q_max);
+}
+
+void RobotBridge::prepareCmdTorque_(double phase, int i)
+{  
+    auto &cmd = lowCommand_.motor_cmd[i];
+    auto &joint_info = joints_[i];
+    auto kp = cmdParams_[i].kp_0 + cmdParams_[i].kp_1 * phase;
+    auto kd = cmdParams_[i].kd_0 + cmdParams_[i].kd_1 * phase;
+    auto tau_set = cmdParams_[i].tau_1; 
+
+    cmd.tau = kp * (cmd.q - currentState_.motor_state[i].q) + kd * (cmd.dq - currentState_.motor_state[i].dq) + tau_set;
+    cmd.kp = 0.0;
+    cmd.kd = 0.0;
 }
 
 double RobotBridge::clamp(double value, double low, double high)
@@ -314,7 +410,7 @@ bool RobotBridge::initControl_()
 
     calculateInterpolationParams_(0.0, 1, true);
     controlStarted_ = true;
-    rclcpp::Rate rate(10);
+    rclcpp::Rate rate(100);
     rate.sleep();
     return true;
 }
@@ -345,8 +441,9 @@ void RobotBridge::update_()
 bool RobotBridge::checkState_()
 {
     double dt_state_ = (nh->get_clock()->now() - last_state_time_).seconds();
+
     // Check if the state message is received within the expected interval
-    if (dt_state_ > 0.5)
+    if (dt_state_ > 0.1)
     {
         RCLCPP_ERROR(nh->get_logger(),
                      "Robot signal lost! No LowState message received for %.2f seconds. "
@@ -483,7 +580,8 @@ bool RobotBridge::checkCommand_()
             cmd.kp = joint_info.kp;
             cmd.kd = joint_info.kd;
             RCLCPP_WARN_ONCE(nh->get_logger(), "motor_cmd[%lu] kp and kd are both zero."
-                            "Using default gains: [%.3f, %.3f].", i, joint_info.kp, joint_info.kd);
+                                               "Using default gains: [%.3f, %.3f].",
+                             i, joint_info.kp, joint_info.kd);
         }
 
         if (any_value_clipped > 0)
@@ -524,6 +622,17 @@ void RobotBridge::stopControlServiceCB_(
     else
     {
         controlStarted_ = false;
+        for (int i = 0; i < numJoint_; i++)
+        {
+            lowCommand_.motor_cmd[i].q = currentState_.motor_state[i].q;
+            lowCommand_.motor_cmd[i].dq = 0.0;
+            lowCommand_.motor_cmd[i].tau = 0.0;
+            lowCommand_.motor_cmd[i].kp = 0.0;
+            lowCommand_.motor_cmd[i].kd = 0.0;
+        }
+        get_crc(lowCommand_);
+        lowCmdPublisher_->publish(lowCommand_);
+
         response->success = true;
         response->message = "Stop control service activated";
     }
@@ -580,8 +689,8 @@ void RobotBridge::calculateInterpolationParams_(double duration, int interpolati
         {
             cmdParams_[i].q_0 = lowCommand_.motor_cmd[i].q; // currentState_.motor_state[i].q;
             cmdParams_[i].q_1 = lowCommandDesired_.motor_cmd[i].q - cmdParams_[i].q_0;
-            cmdParams_[i].tau_0 = lowCommand_.motor_cmd[i].tau; // currentState_.motor_state[i].tau;
-            cmdParams_[i].tau_1 = lowCommandDesired_.motor_cmd[i].tau - cmdParams_[i].tau_0;
+            cmdParams_[i].tau_0 = lowCommandDesired_.motor_cmd[i].tau; // currentState_.motor_state[i].tau;
+            cmdParams_[i].tau_1 = 0.0;
             cmdParams_[i].dq_0 = lowCommand_.motor_cmd[i].dq; // currentState_.motor_state[i].dq;
             cmdParams_[i].dq_1 = lowCommandDesired_.motor_cmd[i].dq - cmdParams_[i].dq_0;
             cmdParams_[i].kp_0 = lowCommand_.motor_cmd[i].kp; // currentState_.motor_state[i].kp;
