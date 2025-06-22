@@ -298,9 +298,44 @@ void RobotBridge::publishLowCommand_()
             cmd.kd = 0.0;
         }
         else
-        {
+        {   
+            cmd.tau = 0.0; 
             cmd.kp = cmdParams_[i].kp_0 + cmdParams_[i].kp_1 * phase;
             cmd.kd = cmdParams_[i].kd_0 + cmdParams_[i].kd_1 * phase;
+
+            auto tau_predict =  cmd.kp * (cmd.q - currentState_.motor_state[i].q) + cmd.kd * (cmd.dq - currentState_.motor_state[i].dq) + cmd.tau;
+            
+            auto error_q = cmd.q - currentState_.motor_state[i].q;
+            auto error_dq = cmd.dq - currentState_.motor_state[i].dq;
+            
+            if (std::abs(tau_predict) > joint_info.tau_limit){
+                RCLCPP_WARN(nh->get_logger(), "Tau prediction exceeds limit: %f > %f", std::abs(tau_predict), joint_info.tau_limit);
+                double adjusted_factor = 1.0;
+                auto A = 1;
+                auto B = cmd.kd * error_dq / (cmd.kp * error_q);
+                double sign = (tau_predict > 0) ? 1.0 : -1.0;
+                auto C = -1 * joint_info.tau_limit *  sign / (cmd.kp * error_q);
+                auto discriminant = B * B - 4 * A * C;
+                if (discriminant >= 0) {
+                    double sqrt_dis = std::sqrt(discriminant);
+                    double x1 = (-B + sqrt_dis) / (2 * A);
+                    double x2 = (-B - sqrt_dis) / (2 * A);
+                    if (x1 > 0) adjusted_factor = x1;
+                    else if (x2 > 0) adjusted_factor = x2;
+                    else {
+                        adjusted_factor = 0.0;
+                        RCLCPP_WARN(nh->get_logger(), "No positive root found, using kp = 0.0, kd = 0.0");
+                    }
+                } else {
+                    adjusted_factor = 0.0;
+                    RCLCPP_WARN(nh->get_logger(), "Discriminant is negative, using kp = 0.0, kd = 0.0");
+                }
+                cmd.kp = cmd.kp * adjusted_factor;
+                cmd.kd = cmd.kd * sqrt(adjusted_factor);
+
+            }
+
+
 
             // double max_delta_q = joint_info.dq_limit * controlDt_;
             // double delta_q_l = currentState_.motor_state[i].q - max_delta_q;
@@ -459,7 +494,7 @@ bool RobotBridge::checkState_()
                      numJoint_, currentState_.motor_state.size());
         return false;
     }
-    // Check if the motor state values are valid (not NaN or Inf)
+    // Check if the motor state values are valid (not NaN or Inf) and within limits
     for (size_t i = 0; i < numJoint_; ++i)
     {
         const auto &motor = currentState_.motor_state[i];
@@ -470,7 +505,19 @@ bool RobotBridge::checkState_()
                          "Motor state at index %lu contains invalid (NaN/Inf) values.", i);
             return false;
         }
+
+        const auto &joint = joints_[i];
+
+        if (std::abs(motor.dq) > joint.dq_limit)
+        {
+            RCLCPP_ERROR(nh->get_logger(),
+                         "Joint [%lu] dq (%.3f) exceeds limit (%.3f). Shutting down for safety.",
+                         i, motor.dq, joint.dq_limit);
+            rclcpp::shutdown();  
+            return false;
+        }
     }
+
     // Check if the IMU state values are valid (not NaN or Inf)
     for (int i = 0; i < 3; ++i)
     {

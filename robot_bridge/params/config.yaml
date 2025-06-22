@@ -1,6 +1,6 @@
 robot_bridge:
   ros__parameters:
-    duration: 1.0
+    duration: 2.0
     control_dt: 0.002
     empty_joint_index: 9
     num_joint: 20
