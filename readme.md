@@ -73,3 +73,20 @@ NaN/Inf values are checked and blocked
 ✅ Recommended Usage
 bash
 ros2 launch robot_bridge robot_bridge_launch.py
+
+
+🎮 Wireless Controller Key Mapping
+The system supports remote control input from a wireless gamepad. The following key combinations can be used to control the robot manually:
+
+Key Combination	Action Description
+L2 + START	✅ Start the robot controller
+L2 + UP + LEFT	🛑 Stop control and clear commands
+L1	📐 Enter Ready Position
+R1	📍 Enter Zero Position
+
+Notes:
+Holding L2 acts as a modifier key for START / UP / LEFT actions.
+
+If control is not yet started, pressing L1 or R1 will automatically trigger controller initialization.
+
+After each posture switch (Ready / Zero), trajectory interpolation is triggered to smoothly transition.
