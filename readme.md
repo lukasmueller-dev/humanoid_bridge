@@ -3,8 +3,6 @@ robot_bridge is a ROS 2 node for controlling Unitree robots (e.g., H1, B2). It r
 
 🚀 Quick Start
 bash
-复制
-编辑
 ros2 launch robot_bridge robot_bridge_launch.py
 This will:
 
@@ -142,6 +140,4 @@ IMU values (roll, pitch, yaw, accel, gyro) are continuously validated
 Launch the system:
 
 bash
-复制
-编辑
 ros2 launch robot_bridge robot_bridge_launch.py
