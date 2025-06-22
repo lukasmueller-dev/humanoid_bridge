@@ -1,7 +1,8 @@
 
+markdown
 # 🤖 robot_bridge Overview
 
-`robot_bridge` is a ROS 2 node for controlling Unitree robots (e.g., H1, G2).  
+`robot_bridge` is a ROS 2 node for controlling Unitree robots (e.g., H1, G1).  
 It receives motion commands, performs trajectory interpolation, and sends real-time motor control messages via `/lowcmd`.
 
 ---
