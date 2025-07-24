@@ -1,0 +1,556 @@
+#include "bridge_core.hpp"
+#include <algorithm>
+
+using std::placeholders::_1;
+using std::placeholders::_2;
+
+namespace sairol_bridge
+{
+    BridgeCore::BridgeCore(rclcpp::Node::SharedPtr node)
+    {
+        nh = node;
+
+        rclcpp::sleep_for(std::chrono::milliseconds(100));
+
+        // Load parameters
+        if (!loadParameters_())
+        {
+            RCLCPP_FATAL(nh->get_logger(), "Failed to load parameters.");
+            rclcpp::shutdown();
+            return;
+        }
+
+        // distribute parameters
+        lowCommandDesired_.motor_cmd.resize(numJoint_);
+        lowCommand_.motor_cmd.resize(numJoint_);
+        currentState_.motor_state.resize(numJoint_);
+        cmdParams_.resize(numJoint_);
+
+        desiredSubscriber_ = nh->create_subscription<bridge_interface::msg::RobotCmd>(
+            "/robot_cmd", 10, std::bind(&BridgeCore::robotCmdCallBack_, this, _1));
+
+        startControlService_ = nh->create_service<std_srvs::srv::Trigger>(
+            "start_control", std::bind(&BridgeCore::startControlServiceCB_, this, _1, _2));
+
+        stopControlService_ = nh->create_service<std_srvs::srv::Trigger>(
+            "stop_control", std::bind(&BridgeCore::stopControlServiceCB_, this, _1, _2));
+
+        readyPositionService_ = nh->create_service<std_srvs::srv::Trigger>(
+            "ready_position_control", std::bind(&BridgeCore::readyPositionControlServiceCB_, this, _1, _2));
+
+        zeroPositionService_ = nh->create_service<std_srvs::srv::Trigger>(
+            "zero_position_control", std::bind(&BridgeCore::zeroPositionControlServiceCB_, this, _1, _2));
+
+        last_state_time_ = nh->get_clock()->now();
+
+
+                    
+    }
+
+    void BridgeCore::start(){
+        // Init Thread
+        controlThread_ = std::thread([this]()
+                                     { this->update_(); });
+    }
+
+    BridgeCore::~BridgeCore() = default;
+
+    bool BridgeCore::loadParameters_()
+    {
+        nh->get_parameter("num_joint", numJoint_);
+
+        cmdParams_ = std::vector<CmdParams>(numJoint_);
+
+        if (!nh->get_parameter("torque_control", torqueControl_))
+        {
+            RCLCPP_ERROR(nh->get_logger(), "Failed to get 'torque_control' from parameters");
+            return false;
+        }
+        if (!nh->get_parameter("duration", duration_))
+        {
+            RCLCPP_ERROR(nh->get_logger(), "Failed to get 'duration' from parameters");
+            return false;
+        }
+        if (!nh->get_parameter("control_dt", controlDt_))
+        {
+            RCLCPP_ERROR(nh->get_logger(), "Failed to get 'control_dt' from parameters");
+            return false;
+        }
+        if (!nh->get_parameter("upper_limbs_kp_min", upper_limbs_kp_min_))
+        {
+            RCLCPP_ERROR(nh->get_logger(), "Failed to get 'upper_limbs_kp_min' from parameters");
+            return false;
+        }
+        if (!nh->get_parameter("upper_limbs_kp_max", upper_limbs_kp_max_))
+        {
+            RCLCPP_ERROR(nh->get_logger(), "Failed to get 'upper_limbs_kp_max' from parameters");
+            return false;
+        }
+        if (!nh->get_parameter("upper_limbs_kd_min", upper_limbs_kd_min_))
+        {
+            RCLCPP_ERROR(nh->get_logger(), "Failed to get 'upper_limbs_kd_min' from parameters");
+            return false;
+        }
+        if (!nh->get_parameter("upper_limbs_kd_max", upper_limbs_kd_max_))
+        {
+            RCLCPP_ERROR(nh->get_logger(), "Failed to get 'upper_limbs_kd_max' from parameters");
+            return false;
+        }
+        if (!nh->get_parameter("lower_limbs_kp_min", lower_limbs_kp_min_))
+        {
+            RCLCPP_ERROR(nh->get_logger(), "Failed to get 'lower_limbs_kp_min' from parameters");
+            return false;
+        }
+        if (!nh->get_parameter("lower_limbs_kp_min", lower_limbs_kp_min_))
+        {
+            RCLCPP_ERROR(nh->get_logger(), "Failed to get 'lower_limbs_kp_min' from parameters");
+            return false;
+        }
+        if (!nh->get_parameter("lower_limbs_kp_max", lower_limbs_kp_max_))
+        {
+            RCLCPP_ERROR(nh->get_logger(), "Failed to get 'lower_limbs_kp_max' from parameters");
+            return false;
+        }
+        if (!nh->get_parameter("lower_limbs_kd_min", lower_limbs_kd_min_))
+        {
+            RCLCPP_ERROR(nh->get_logger(), "Failed to get 'lower_limbs_kd_min' from parameters");
+            return false;
+        }
+        if (!nh->get_parameter("lower_limbs_kd_max", lower_limbs_kd_max_))
+        {
+            RCLCPP_ERROR(nh->get_logger(), "Failed to get 'lower_limbs_kd_max' from parameters");
+            return false;
+        }
+        if (!nh->get_parameter("empty_joint_index", emptyJointIndex_))
+        {
+            RCLCPP_ERROR(nh->get_logger(), "Failed to get 'empty_joint_index' from parameters");
+            return false;
+        }
+
+        RCLCPP_INFO(nh->get_logger(), "Number of the joints  = %d", numJoint_);
+        RCLCPP_INFO(nh->get_logger(), "duration = %.3f", duration_);
+        RCLCPP_INFO(nh->get_logger(), "control_dt = %.3f", controlDt_);
+        RCLCPP_INFO(nh->get_logger(), "Upper limbs kp range: [%.3f, %.3f]", upper_limbs_kp_min_, upper_limbs_kp_max_);
+        RCLCPP_INFO(nh->get_logger(), "Upper limbs kd range: [%.3f, %.3f]", upper_limbs_kd_min_, upper_limbs_kd_max_);
+        RCLCPP_INFO(nh->get_logger(), "Lower limbs kp range: [%.3f, %.3f]", lower_limbs_kp_min_, lower_limbs_kp_max_);
+        RCLCPP_INFO(nh->get_logger(), "Lower limbs kd range: [%.3f, %.3f]", lower_limbs_kd_min_, lower_limbs_kd_max_);
+
+        std::vector<std::string> joint_names;
+        if (nh->get_parameter("joint_names", joint_names))
+        {
+            joints_.clear();
+            bool ret = true;
+            for (const auto &name : joint_names)
+            {
+                Joint joint_info;
+                ret = ret && nh->get_parameter(name + ".idx", joint_info.idx);
+                ret = ret && nh->get_parameter(name + ".q_min", joint_info.q_min);
+                ret = ret && nh->get_parameter(name + ".q_max", joint_info.q_max);
+                ret = ret && nh->get_parameter(name + ".dq_limit", joint_info.dq_limit);
+                ret = ret && nh->get_parameter(name + ".tau_limit", joint_info.tau_limit);
+                ret = ret && nh->get_parameter(name + ".kp", joint_info.kp);
+                ret = ret && nh->get_parameter(name + ".kd", joint_info.kd);
+                joints_.push_back(joint_info);
+            }
+            if (!ret)
+            {
+                RCLCPP_ERROR(nh->get_logger(), "Failed to get joint parameters from parameters");
+                return false;
+            }
+            RCLCPP_INFO(nh->get_logger(), "Loaded %ld joint limits", joints_.size());
+        }
+        else
+        {
+            RCLCPP_ERROR(nh->get_logger(), "Failed to get 'joint_names' from parameters");
+            return false;
+        }
+        return true;
+    }
+
+    void BridgeCore::robotCmdCallBack_(bridge_interface::msg::RobotCmd::SharedPtr message)
+    {
+        lowCommandDesired_.motor_cmd = message->motor_cmd;
+        auto duration = message->duration;
+        auto interpolation_order = message->interpolation_order;
+        auto hold_position = message->hold_position;
+
+        if (not controlStarted_)
+        {
+            RCLCPP_WARN_ONCE(nh->get_logger(), "Control not started. Please start control first.");
+            return;
+        }
+
+        if (checkCommand_())
+        {
+            calculateInterpolationParams_(duration, interpolation_order, hold_position);
+        }
+        else
+        {
+            RCLCPP_ERROR(nh->get_logger(), "Command check failed. Please inspect the command message.");
+            return;
+        }
+    }
+
+    void BridgeCore::zeroPositionControl_()
+    {
+        for (int i = 0; i < numJoint_; ++i)
+        {
+            lowCommandDesired_.motor_cmd[i].q = 0.0;
+            lowCommandDesired_.motor_cmd[i].dq = 0.0;
+            lowCommandDesired_.motor_cmd[i].tau = 0.0;
+            lowCommandDesired_.motor_cmd[i].kp = joints_[i].kp;
+            lowCommandDesired_.motor_cmd[i].kd = joints_[i].kd;
+        }
+    }
+
+    void BridgeCore::readyPositionControl_()
+    {
+        for (int i = 0; i < numJoint_; ++i)
+        {
+            lowCommandDesired_.motor_cmd[i].q = 0.0;
+            lowCommandDesired_.motor_cmd[i].dq = 0.0;
+            lowCommandDesired_.motor_cmd[i].tau = 0.0;
+            lowCommandDesired_.motor_cmd[i].kp = joints_[i].kp;
+            lowCommandDesired_.motor_cmd[i].kd = joints_[i].kd;
+        }
+        // 简单示例：抬手
+        lowCommandDesired_.motor_cmd[13].q = -1.0;
+        lowCommandDesired_.motor_cmd[15].q = 1.6;
+        lowCommandDesired_.motor_cmd[17].q = 1.0;
+        lowCommandDesired_.motor_cmd[19].q = 1.6;
+    }
+
+    bool BridgeCore::initControl_()
+    {
+        if (controlStarted_)
+            return false;
+
+        for (int i = 0; i < numJoint_; ++i)
+        {
+            lowCommandDesired_.motor_cmd[i].q = currentState_.motor_state[i].q;
+            lowCommandDesired_.motor_cmd[i].kp = joints_[i].kp;
+            lowCommandDesired_.motor_cmd[i].kd = joints_[i].kd;
+        }
+
+        calculateInterpolationParams_(0.0, 1, true);
+        controlStarted_ = true;
+        rclcpp::Rate rate(100);
+        rate.sleep();
+
+        return true;
+    }
+
+    void BridgeCore::update_()
+    {
+        auto rate = rclcpp::Rate(1.0 / controlDt_);
+        while (rclcpp::ok())
+        {
+            
+            if (controlStarted_)
+            {   
+                // Safety check
+                if (not checkState_())
+                {
+                    RCLCPP_ERROR(nh->get_logger(), "Robot state check failed. Please inspect the robot carefully.");
+                    return;
+                }
+                
+                std::unique_lock<std::mutex> lock(mutex_);
+                // Update the low command
+                publishLowCommand_();
+                lock.unlock();
+                controlStarted_ = (nh->get_clock()->now()).seconds() < tValid_;
+                if (!controlStarted_)
+                {
+                    RCLCPP_INFO(nh->get_logger(), "Control finished because the duration has elapsed.");
+                }
+            }
+            rate.sleep();
+        }
+    }
+
+    void BridgeCore::calculateInterpolationParams_(float duration,
+                                                   int interpolation_order,
+                                                   bool hold_position)
+    {
+        checkCommand_();
+        std::unique_lock<std::mutex> lock(mutex_);
+        RCLCPP_INFO(nh->get_logger(), "==========================================, %f", lowCommandDesired_.motor_cmd[3].q);
+        if (interpolation_order == 0)
+        {
+            for (int i = 0; i < numJoint_; i++)
+            {
+                cmdParams_[i].q_0 = lowCommandDesired_.motor_cmd[i].q;
+                cmdParams_[i].q_1 = 0.0;
+                cmdParams_[i].tau_0 = lowCommandDesired_.motor_cmd[i].tau;
+                cmdParams_[i].tau_1 = 0.0;
+                cmdParams_[i].dq_0 = lowCommandDesired_.motor_cmd[i].dq;
+                cmdParams_[i].dq_1 = 0.0;
+                cmdParams_[i].kp_0 = lowCommandDesired_.motor_cmd[i].kp;
+                cmdParams_[i].kp_1 = 0.0;
+                cmdParams_[i].kd_0 = lowCommandDesired_.motor_cmd[i].kd;
+                cmdParams_[i].kd_1 = 0.0;
+            }
+        }
+        else if (interpolation_order == 1)
+        {
+            for (int i = 0; i < numJoint_; i++)
+            {
+                cmdParams_[i].q_0 = lowCommand_.motor_cmd[i].q; // currentState_.motor_state[i].q;
+                cmdParams_[i].q_1 = lowCommandDesired_.motor_cmd[i].q - cmdParams_[i].q_0;
+                cmdParams_[i].tau_0 = lowCommandDesired_.motor_cmd[i].tau; // currentState_.motor_state[i].tau;
+                cmdParams_[i].tau_1 = 0.0;
+                cmdParams_[i].dq_0 = lowCommand_.motor_cmd[i].dq; // currentState_.motor_state[i].dq;
+                cmdParams_[i].dq_1 = lowCommandDesired_.motor_cmd[i].dq - cmdParams_[i].dq_0;
+                cmdParams_[i].kp_0 = lowCommand_.motor_cmd[i].kp; // currentState_.motor_state[i].kp;
+                cmdParams_[i].kp_1 = lowCommandDesired_.motor_cmd[i].kp - cmdParams_[i].kp_0;
+                cmdParams_[i].kd_0 = lowCommand_.motor_cmd[i].kd; // currentState_.motor_state[i].kd;
+                cmdParams_[i].kd_1 = lowCommandDesired_.motor_cmd[i].kd - cmdParams_[i].kd_0;
+            }
+        }
+
+        lock.unlock();
+
+        tStart_ = nh->get_clock()->now().seconds();
+        RCLCPP_INFO(nh->get_logger(), "Interpolation start time: %.3f", tStart_);
+        tFinal_ = tStart_ + duration;
+        RCLCPP_INFO(nh->get_logger(), "Interpolation parameters calculated: tStart=%.3f, tFinal=%.3f, duration=%.3f",
+                    tStart_, tFinal_, duration);
+        if (hold_position)
+        {
+            tValid_ = INF_;
+        }
+        else
+        {
+            tValid_ = tFinal_ + 1.0;
+        }
+    }
+
+    bool BridgeCore::checkState_()
+    {
+      
+        auto dt_state_ = (nh->get_clock()->now() - last_state_time_).seconds();
+        
+        // Check if the state message is received within the expected interval
+        if (dt_state_ > 0.1)
+        {
+            RCLCPP_ERROR(nh->get_logger(),
+                         "Robot signal lost! No LowState message received for %.2f seconds. "
+                         "Expected interval ~0.002s (500Hz). Shutting down the node to prevent unsafe operation.",
+                         dt_state_);
+            rclcpp::shutdown();
+        }
+        // Check if the state message has valid data
+        if (currentState_.motor_state.size() != numJoint_)
+        {
+            RCLCPP_ERROR(nh->get_logger(),
+                         "Motor state length mismatch: expected %d, got %ld",
+                         numJoint_, currentState_.motor_state.size());
+            return false;
+        }
+        // Check if the motor state values are valid (not NaN or Inf) and within limits
+        for (size_t i = 0; i < numJoint_; ++i)
+        {
+            const auto &motor = currentState_.motor_state[i];
+            if (!std::isfinite(motor.q) || !std::isfinite(motor.dq) ||
+                !std::isfinite(motor.ddq) || !std::isfinite(motor.tau_est))
+            {
+                RCLCPP_ERROR(nh->get_logger(),
+                             "Motor state at index %lu contains invalid (NaN/Inf) values.", i);
+                return false;
+            }
+
+            const auto &joint = joints_[i];
+
+            if (std::abs(motor.dq) > joint.dq_limit)
+            {
+                RCLCPP_ERROR(nh->get_logger(),
+                             "Joint [%lu] dq (%.3f) exceeds limit (%.3f). Shutting down for safety.",
+                             i, motor.dq, joint.dq_limit);
+                rclcpp::shutdown();
+                return false;
+            }
+        }
+
+        // Check if the IMU state values are valid (not NaN or Inf)
+        for (int i = 0; i < 3; ++i)
+        {
+            if (!std::isfinite(imu_.rpy[i]) ||
+                !std::isfinite(imu_.gyroscope[i]) ||
+                !std::isfinite(imu_.accelerometer[i]))
+            {
+                RCLCPP_ERROR(nh->get_logger(),
+                             "IMU state contains invalid (NaN/Inf) values at index %d.", i);
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    bool BridgeCore::checkCommand_()
+    {
+        // Check if the command message has valid data
+        if (lowCommandDesired_.motor_cmd.size() != numJoint_)
+        {
+            RCLCPP_ERROR(nh->get_logger(),
+                         "Command check failed: motor_cmd size mismatch. Expected %ld, got %ld.",
+                         joints_.size(), lowCommand_.motor_cmd.size());
+            return false;
+        }
+        int any_value_clipped = -1;
+        for (size_t i = 0; i < numJoint_; ++i)
+        {
+            auto &cmd = lowCommandDesired_.motor_cmd[i];
+            auto &joint_info = joints_[i];
+            // Check for invalid numbers
+            if (!std::isfinite(cmd.q) || !std::isfinite(cmd.dq) ||
+                !std::isfinite(cmd.tau) || !std::isfinite(cmd.kp) ||
+                !std::isfinite(cmd.kd))
+            {
+                RCLCPP_WARN_ONCE(nh->get_logger(),
+                                 "Command check failed: motor_cmd[%lu] contains invalid (NaN/Inf) values.", i);
+                return false; // Can't clip NaN/Inf, so still return false
+            }
+            // Check gains
+            if (i < emptyJointIndex_)
+            {
+                if (joint_info.kp < lower_limbs_kp_min_ || joint_info.kp > lower_limbs_kp_max_)
+                {
+                    cmd.kp = std::clamp(joint_info.kp, lower_limbs_kp_min_, lower_limbs_kp_max_);
+                    any_value_clipped = i;
+                }
+                if (joint_info.kd < lower_limbs_kd_min_ || joint_info.kd > lower_limbs_kd_max_)
+                {
+                    cmd.kd = std::clamp(joint_info.kd, lower_limbs_kd_min_, lower_limbs_kd_max_);
+                    any_value_clipped = i;
+                }
+            }
+            else
+            {
+                if (joint_info.kp < upper_limbs_kp_min_ || joint_info.kp > upper_limbs_kp_max_)
+                {
+                    cmd.kp = std::clamp(joint_info.kp, upper_limbs_kp_min_, upper_limbs_kp_max_);
+                    any_value_clipped = i;
+                }
+                if (joint_info.kd < upper_limbs_kd_min_ || joint_info.kd > upper_limbs_kd_max_)
+                {
+                    cmd.kd = std::clamp(joint_info.kd, upper_limbs_kd_min_, upper_limbs_kd_max_);
+                    any_value_clipped = i;
+                }
+            }
+            // Check position
+            if (cmd.q < joint_info.q_min || cmd.q > joint_info.q_max)
+            {
+                RCLCPP_WARN_ONCE(nh->get_logger(), "Clipping motor_cmd[%lu] q: %.3f", i, cmd.q);
+                cmd.q = std::clamp(cmd.q, joint_info.q_min, joint_info.q_max);
+                any_value_clipped = i;
+            }
+            // Check velocity
+            if (cmd.dq < -joint_info.dq_limit || cmd.dq > joint_info.dq_limit)
+            {
+                RCLCPP_WARN_ONCE(nh->get_logger(), "Clipping motor_cmd[%lu] dq: %.3f", i, cmd.dq);
+                cmd.dq = std::clamp(cmd.dq, -joint_info.dq_limit, joint_info.dq_limit);
+                any_value_clipped = i;
+            }
+            // Check torque
+            if (cmd.tau < -joint_info.tau_limit || cmd.tau > joint_info.tau_limit)
+            {
+                RCLCPP_WARN_ONCE(nh->get_logger(), "Clipping motor_cmd[%lu] tau: %.3f", i, cmd.tau);
+                cmd.tau = std::clamp(cmd.tau, -joint_info.tau_limit, joint_info.tau_limit);
+                any_value_clipped = i;
+            }
+            // Check gains
+            auto kp_max_ = (i < emptyJointIndex_) ? lower_limbs_kp_max_ : upper_limbs_kp_max_;
+            auto kp_min_ = (i < emptyJointIndex_) ? lower_limbs_kp_min_ : upper_limbs_kp_min_;
+            auto kd_max_ = (i < emptyJointIndex_) ? lower_limbs_kd_max_ : upper_limbs_kd_max_;
+            auto kd_min_ = (i < emptyJointIndex_) ? lower_limbs_kd_min_ : upper_limbs_kd_min_;
+            if (cmd.kp < kp_min_ || cmd.kp > kp_max_)
+            {
+                RCLCPP_WARN_ONCE(nh->get_logger(), "Clipping motor_cmd[%lu] kp: %.3f", i, cmd.kp);
+                cmd.kp = std::clamp(cmd.kp, kp_min_, kp_max_);
+                any_value_clipped = i;
+            }
+            if (cmd.kd < kd_min_ || cmd.kd > kd_max_)
+            {
+                RCLCPP_WARN_ONCE(nh->get_logger(), "Clipping motor_cmd[%lu] kd: %.3f", i, cmd.kd);
+                cmd.kd = std::clamp(cmd.kd, kd_min_, kd_max_);
+                any_value_clipped = i;
+            }
+            if (cmd.kp == 0.0 and cmd.kd == 0.0)
+            {
+                cmd.kp = joint_info.kp;
+                cmd.kd = joint_info.kd;
+                RCLCPP_WARN_ONCE(nh->get_logger(), "motor_cmd[%lu] kp and kd are both zero."
+                                                   "Using default gains: [%.3f, %.3f].",
+                                 i, joint_info.kp, joint_info.kd);
+            }
+
+            if (any_value_clipped > 0)
+            {
+                RCLCPP_WARN(nh->get_logger(), "Joint %d were clipped to stay within safety limits", any_value_clipped);
+            }
+        }
+
+        return true;
+    }
+
+    void BridgeCore::startControlServiceCB_(
+        const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+        std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+    {
+        if (initControl_())
+        {
+            response->success = true;
+            response->message = "Start control service activated";
+        }
+        else
+        {
+            response->success = false;
+            response->message = "Failed to start control service";
+        }
+    }
+
+    void BridgeCore::stopControlServiceCB_(
+        const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+        std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+    {
+        if (!controlStarted_)
+        {
+            response->success = false;
+            response->message = "Control service is not started";
+            return;
+        }
+        else
+        {
+            controlStarted_ = false;
+            response->success = true;
+            response->message = "Stop control service activated";
+        }
+    }
+
+    void BridgeCore::readyPositionControlServiceCB_(
+        const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+        std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+    {
+        if (!controlStarted_)
+            initControl_();
+        readyPositionControl_();
+        calculateInterpolationParams_(duration_, 1, true);
+        response->success = true;
+        response->message = "Ready position control activated";
+    }
+
+    void BridgeCore::zeroPositionControlServiceCB_(
+        const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+        std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+    {
+        if (!controlStarted_)
+            initControl_();
+        zeroPositionControl_();
+        calculateInterpolationParams_(duration_, 1, true);
+        response->success = true;
+        response->message = "Zero position control activated";
+    }
+
+}

@@ -31,17 +31,16 @@ find_package(Threads REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(bridge_interface REQUIRED)
 
+find_package(booster_interface REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
+find_package(sensor_msgs REQUIRED)
 
 include_directories(
   include
 )
 
-add_library(key_event_handler
-  src/key_event_handler.cpp
-)
 
-ament_target_dependencies(key_event_handler rclcpp unitree_go)
-
+# ==============================================================Unitree H1 and G1=============================================================
 set(UNITREE_SDK_PATH $ENV{HOME}/library)
 
 # Import Libraries for unitree_sdk2
@@ -85,8 +84,6 @@ target_include_directories(unitree_sdk2 INTERFACE
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>)
 
-
-
 add_executable(release_node src/release_node.cpp)
 target_link_libraries(release_node unitree_sdk2)
 target_include_directories(release_node PRIVATE ${UNITREE_SDK_PATH}/include)
@@ -97,10 +94,8 @@ install(TARGETS
   DESTINATION lib/${PROJECT_NAME}
 )
 
-
-add_executable(bridge src/bridge.cpp src/common/motor_crc.cpp )
+add_executable(bridge src/bridge.cpp src/common/motor_crc.cpp src/key_event_handler.cpp)
 target_link_libraries(bridge unitree_sdk2)
-target_link_libraries(bridge key_event_handler)
 target_include_directories(bridge PRIVATE ${UNITREE_SDK_PATH}/include)
 ament_target_dependencies(bridge
   rclcpp
@@ -110,6 +105,7 @@ ament_target_dependencies(bridge
   unitree_hg
   unitree_api
   bridge_interface
+  booster_interface
 )
 
 install(TARGETS
@@ -117,7 +113,46 @@ install(TARGETS
   DESTINATION lib/${PROJECT_NAME}
 )
 
-# test node cmake-----------------------------------------------------------
+# ==============================================================Booster T1===================================================================================
+
+add_executable(bridge_main
+  src/bridge_main.cpp
+  src/bridge_core.cpp
+  src/key_event_handler.cpp
+  src/T1_bridge.cpp
+)
+
+
+set(BOOSTER_INCLUDE_PATH "$ENV{HOME}/library/booster/include")
+
+target_include_directories(bridge_main
+  PUBLIC
+    ${BOOSTER_INCLUDE_PATH}
+
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+ament_target_dependencies(bridge_main
+  rclcpp
+  std_msgs
+  sensor_msgs
+  std_srvs
+  bridge_interface
+  booster_interface
+  rosidl_default_runtime
+  unitree_go
+  unitree_hg
+  unitree_api 
+)
+
+
+install(
+  TARGETS bridge_main
+  RUNTIME DESTINATION lib/${PROJECT_NAME}
+)
+
+
+# ==============================================================test node cmake==============================================================================
 add_executable(test_node src/test.cpp)
 target_include_directories(test_node PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -135,13 +170,10 @@ install(TARGETS
   DESTINATION lib/${PROJECT_NAME}
 )
 # -----------------------------------------------------------
+
 install(DIRECTORY launch/
   DESTINATION share/${PROJECT_NAME}/launch
 )
-
-
-
-
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)

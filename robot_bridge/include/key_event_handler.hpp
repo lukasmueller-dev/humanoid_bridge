@@ -2,10 +2,16 @@
 #include "rclcpp/rclcpp.hpp"
 #include "unitree_go/msg/low_cmd.hpp"
 #include "unitree_go/msg/low_state.hpp"
+#include "bridge_interface/msg/low_cmd.hpp"
+#include "bridge_interface/msg/low_state.hpp"
+#include "booster_interface/msg/low_cmd.hpp"
+#include "booster_interface/msg/low_state.hpp"
 #include <functional>
 #include <memory>
 
-enum WirelessKey : uint32_t
+
+//=======================For H1 and G1, the key mapping is the same ======================
+enum WirelessKey_H1_G1 : uint32_t
 {
     KEY_R1     = 1 << 0,    // 0b00000000 00000001 = 1
     KEY_L1     = 1 << 1,    // 0b00000000 00000010 = 2
@@ -25,7 +31,7 @@ enum WirelessKey : uint32_t
     KEY_LEFT   = 1 << 15    // 0b10000000 00000000 = 32768
 };
 
-void handle_key_event(
+void handle_key_event_unitree(
     int key,
     std::shared_ptr<rclcpp::Node> node,
     bool &control_started,
@@ -39,4 +45,39 @@ void handle_key_event(
     std::function<void()> zero_position,
     std::function<void(double, int, bool)> calculate_interpolation,
     std::function<void(unitree_go::msg::LowCmd &)> compute_crc
+);
+
+
+
+
+//=======================For T1, the key mapping is different from H1 and G1 ======================
+
+enum WirelessKey_T1 : uint32_t
+{
+    Button_X      = 0, 
+    Button_A      = 1,    
+    Button_B      = 2,    
+    Button_Y      = 3,
+    Button_LB     = 4, 
+    Button_RB     = 5,  
+    Button_LT     = 6,
+    Button_RT     = 7, 
+    Button_BACK   = 8,
+    Button_START  = 9
+};
+
+void handle_key_event_T1(
+    std::vector<int32_t> buttons,
+    std::shared_ptr<rclcpp::Node> node,
+    bool &control_started,
+    bridge_interface::msg::LowCmd &low_command,
+    const bridge_interface::msg::LowState &current_state,
+    rclcpp::Publisher<booster_interface::msg::LowCmd>::SharedPtr publisher,
+    int num_joint,
+    double duration,
+    std::function<void()> switch_to_damping_mode,
+    std::function<bool()> init_control,
+    std::function<void()> ready_position,
+    std::function<void()> zero_position,
+    std::function<void(double, int, bool)> calculate_interpolation
 );

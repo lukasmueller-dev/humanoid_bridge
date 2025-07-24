@@ -34,7 +34,7 @@ RobotBridge::RobotBridge(): prepareCmd_(&RobotBridge::prepareCmdInterpolation_)
     stopControlService_ = nh->create_service<std_srvs::srv::Trigger>(
         "stop_control", std::bind(&RobotBridge::stopControlServiceCB_, this, _1, _2));
 
-    // TODO Merge service
+
     readyPositionService_ = nh->create_service<std_srvs::srv::Trigger>(
         "ready_position_control", std::bind(&RobotBridge::readyPositionControlServiceCB_, this, _1, _2));
 
@@ -228,7 +228,7 @@ void RobotBridge::wireless_callback(unitree_go::msg::WirelessController::SharedP
     // RCLCPP_INFO(nh->get_logger(), "Wireless controller -- lx: %f; ly: %f; rx: %f; ry: %f; key value: %d",
     //             data->lx, data->ly, data->rx, data->ry, data->keys);
 
-    handle_key_event(
+    handle_key_event_unitree(
     data->keys, nh, controlStarted_, lowCommand_, currentState_, lowCmdPublisher_,
     numJoint_, duration_,
     std::bind(&RobotBridge::initControl_, this),

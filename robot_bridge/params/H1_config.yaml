@@ -1,3 +1,9 @@
+# remote control:
+# start control: L2 + START
+# stop control: L2 + UP + LEFT
+# Ready position: L1
+# Zero position: R1
+
 robot_bridge:
   ros__parameters:
     duration: 2.0

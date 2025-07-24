@@ -16,6 +16,7 @@
   <depend>rclcpp</depend>
   <depend>std_msgs</depend>
   <depend>bridge_interface</depend>
+  <depend>sensor_msgs</depend>
 
 
   <depend>unitree_go</depend>
