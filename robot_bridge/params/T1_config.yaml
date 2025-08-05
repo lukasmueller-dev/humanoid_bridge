@@ -8,7 +8,7 @@
 robot_bridge:
   ros__parameters:
     robot_name: "T1"
-    duration: 10.0
+    duration: 2.0
     control_dt: 0.002
     empty_joint_index: -1
     num_joint: 23
@@ -24,7 +24,6 @@ robot_bridge:
     lower_limbs_kd_min: 0.0
     lower_limbs_kd_max: 5000.0
 
-
     joint_names: ["HeadYaw", "HeadPitch", 
                   "LeftShoulderPitch", "LeftShoulderRoll", "LeftShoulderYaw", "LeftElbow",
                   "RightShoulderPitch", "RightShoulderRoll", "RightShoulderYaw", "RightElbow",
@@ -38,8 +37,9 @@ robot_bridge:
       q_max: 1.012
       dq_limit: 12.56
       tau_limit: 7.0
-      kp: 10.0
-      kd: 1.0
+      kp: 5.0
+      kd: 0.1
+      default_position: 0.0 
 
     HeadPitch:
       idx: 1
@@ -47,80 +47,89 @@ robot_bridge:
       q_max: 0.820
       dq_limit: 12.56
       tau_limit: 7.0      
-      kp: 10.0
-      kd: 1.0
+      kp: 5.0
+      kd: 0.1
+      default_position: 0.0
 
     LeftShoulderPitch:
       idx: 2
       q_min: -3.281
       q_max: 1.187
       dq_limit: 18.84
-      tau_limit: 18.0      
-      kp: 10.0
-      kd: 1.0
+      tau_limit: 10.0      
+      kp: 40.0
+      kd: 0.5
+      default_position: 0.2
 
     LeftShoulderRoll:
       idx: 3
       q_min: -1.640
       q_max: 1.536
       dq_limit: 18.84
-      tau_limit: 18.0      
-      kp: 10.0
-      kd: 1.0
+      tau_limit: 10.0      
+      kp: 50.0
+      kd: 1.5
+      default_position: -1.35
 
     LeftShoulderYaw:
       idx: 4
       q_min: -2.234
       q_max: 2.234
       dq_limit: 18.84
-      tau_limit: 18.0      
-      kp: 10.0
-      kd: 1.0
+      tau_limit: 10.0      
+      kp: 20.0
+      kd: 0.2
+      default_position: 0.0
 
     LeftElbow:
       idx: 5
       q_min: -2.094
       q_max: 0.035
       dq_limit: 18.84
-      tau_limit: 18.0
+      tau_limit: 10.0
       kp: 10.0
-      kd: 1.0
+      kd: 0.2
+      default_position: -0.5
 
     RightShoulderPitch:
       idx: 6
       q_min: -3.281
       q_max: 1.187
       dq_limit: 18.84
-      tau_limit: 18.0      
-      kp: 10.0
-      kd: 1.0
+      tau_limit: 10.0      
+      kp: 40.0
+      kd: 0.5
+      default_position: 0.2
 
     RightShoulderRoll:
       idx: 7
       q_min: -1.536
       q_max: 1.640
       dq_limit: 18.84
-      tau_limit: 18.0    
-      kp: 10.0
-      kd: 1.0
+      tau_limit: 10.0
+      kp: 50.0
+      kd: 1.5
+      default_position: 1.35
 
     RightShoulderYaw:
       idx: 8
       q_min: -2.234
       q_max: 2.234
       dq_limit: 18.84
-      tau_limit: 18.0      
-      kp: 10.0
-      kd: 1.0
+      tau_limit: 10.0
+      kp: 20.0
+      kd: 0.2
+      default_position: 0.0
 
     RightElbow:
       idx: 9
       q_min: 0.000
       q_max: 2.094
       dq_limit: 18.84
-      tau_limit: 18.0
+      tau_limit: 10.0
       kp: 10.0
-      kd: 1.0   
+      kd: 0.2 
+      default_position: 0.5  
 
     WaistYaw:  
       idx: 10
@@ -128,26 +137,29 @@ robot_bridge:
       q_max: 1.012
       dq_limit: 10.88
       tau_limit: 30.0      
-      kp: 10.0
-      kd: 1.0
+      kp: 100.0
+      kd: 5.0
+      default_position: 0.0
 
     LeftHipPitch:
       idx: 11
       q_min: -2.059
       q_max: 2.059
       dq_limit: 12.5
-      tau_limit: 45.0      
-      kp: 10.0
-      kd: 1.0
+      tau_limit: 60.0      
+      kp: 350.0
+      kd: 7.5
+      default_position: -0.2
 
     LeftHipRoll:  
       idx: 12
       q_min: -0.366
       q_max: 1.536
       dq_limit: 10.9
-      tau_limit: 30.0      
-      kp: 10.0
-      kd: 1.0
+      tau_limit: 25.0      
+      kp: 350.0
+      kd: 7.5
+      default_position: 0.0
 
     LeftHipYaw: 
       idx: 13
@@ -155,26 +167,29 @@ robot_bridge:
       q_max: 1.012
       dq_limit: 10.9
       tau_limit: 30.0      
-      kp: 10.0
-      kd: 1.0          
-    
+      kp: 180.0
+      kd: 3.0
+      default_position: 0.0
+
     LeftKnee:
       idx: 14
       q_min: 0.000
       q_max: 2.146
       dq_limit: 11.7
       tau_limit: 60.0
-      kp: 10.0
-      kd: 1.0 
-    
+      kp: 350.0
+      kd: 5.5
+      default_position: 0.4
+
     LeftAnkleUp:
       idx: 15
       q_min: -0.401
       q_max: 0.855
       dq_limit: 18.8
-      tau_limit: 20.0      
-      kp: 10.0
-      kd: 1.0 
+      tau_limit: 24.0      
+      kp: 450.0
+      kd: 0.5
+      default_position: -0.25 
     
     LeftAnkleDown:
       idx: 16
@@ -182,35 +197,39 @@ robot_bridge:
       q_max: 0.785
       dq_limit: 12.4
       tau_limit: 15.0      
-      kp: 10.0
-      kd: 1.0 
+      kp: 450.0
+      kd: 0.5
+      default_position: 0.0 
     
     RightHipPitch:
       idx: 17
       q_min: -2.059
       q_max: 2.059
       dq_limit: 12.5
-      tau_limit: 45.0     
-      kp: 10.0
-      kd: 1.0
+      tau_limit: 60.0     
+      kp: 350.0
+      kd: 7.5
+      default_position: -0.2
     
     RightHipRoll:
       idx: 18   
       q_min: -1.536
       q_max: 0.366
       dq_limit: 10.9  
-      tau_limit: 30.0
-      kp: 10.0
-      kd: 1.0 
-    
-    RightHipYaw:  
+      tau_limit: 25.0
+      kp: 350.0
+      kd: 7.5
+      default_position: 0.0
+
+    RightHipYaw:
       idx: 19
       q_min: -1.012
       q_max: 1.012
       dq_limit: 10.9
       tau_limit: 30.0      
-      kp: 10.0
-      kd: 1.0
+      kp: 180.0
+      kd: 3.0
+      default_position: 0.0
 
     RightKnee:
       idx: 20
@@ -218,17 +237,19 @@ robot_bridge:
       q_max: 2.146
       dq_limit: 11.7
       tau_limit: 60.0  
-      kp: 10.0
-      kd: 1.0 
-    
+      kp: 350.0
+      kd: 5.5
+      default_position: 0.4
+
     RightAnkleUp:
       idx: 21
       q_min: -0.401
       q_max: 0.855
       dq_limit: 18.8
-      tau_limit: 20.0      
-      kp: 10.0
-      kd: 1.0 
+      tau_limit: 24.0      
+      kp: 450.0
+      kd: 0.5 
+      default_position: -0.25
     
     RightAnkleDown:
       idx: 22
@@ -236,5 +257,6 @@ robot_bridge:
       q_max: 0.785
       dq_limit: 12.4
       tau_limit: 15.0  
-      kp: 10.0
-      kd: 1.0 
+      kp: 450.0
+      kd: 0.5 
+      default_position: 0.0

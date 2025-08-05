@@ -54,30 +54,25 @@ void handle_key_event_unitree(
 
 enum WirelessKey_T1 : uint32_t
 {
-    Button_X      = 0, 
-    Button_A      = 1,    
-    Button_B      = 2,    
-    Button_Y      = 3,
-    Button_LB     = 4, 
-    Button_RB     = 5,  
-    Button_LT     = 6,
-    Button_RT     = 7, 
-    Button_BACK   = 8,
-    Button_START  = 9
+    Button_X      = 1 << 0,  // 0b00000001 = 1
+    Button_A      = 1 << 1,  // 0b00000010 = 2
+    Button_B      = 1 << 2,  // 0b00000100 = 4
+    Button_Y      = 1 << 3,  // 0b00001000 = 8
+    Button_LB     = 1 << 4,  // 0b00010000 = 16
+    Button_RB     = 1 << 5,  // 0b00100000 = 32
+    Button_LT     = 1 << 6,  // 0b01000000 = 64
+    Button_RT     = 1 << 7,  // 0b10000000 = 128
+    Button_BACK   = 1 << 8,  // 0b100000000 = 256
+    Button_START  = 1 << 9   // 0b1000000000 = 512
 };
 
 void handle_key_event_T1(
-    std::vector<int32_t> buttons,
+    uint32_t key,
     std::shared_ptr<rclcpp::Node> node,
-    bool &control_started,
-    bridge_interface::msg::LowCmd &low_command,
-    const bridge_interface::msg::LowState &current_state,
-    rclcpp::Publisher<booster_interface::msg::LowCmd>::SharedPtr publisher,
-    int num_joint,
-    double duration,
     std::function<void()> switch_to_damping_mode,
     std::function<bool()> init_control,
     std::function<void()> ready_position,
     std::function<void()> zero_position,
-    std::function<void(double, int, bool)> calculate_interpolation
+    std::function<void(double, int, bool)> calculate_interpolation,
+    double duration
 );

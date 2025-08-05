@@ -6,7 +6,9 @@
 #include "bridge_interface/msg/low_cmd.hpp"
 #include "bridge_interface/msg/low_state.hpp"
 #include "bridge_interface/msg/imu_state.hpp"
+#include "bridge_interface/srv/set_default_position.hpp"
 #include "std_srvs/srv/trigger.hpp"
+#include "key_event_handler.hpp"
 
 #include <vector>
 #include <limits>
@@ -17,25 +19,28 @@
 #include <cassert>
 
 namespace sairol_bridge
-{
+{ 
+    typedef float float_t;
+
     struct Joint
     {
         int idx;
-        float q_min;
-        float q_max;
-        float dq_limit;
-        float tau_limit;
-        float kp;
-        float kd;
+        float_t q_min{0};
+        float_t q_max{0};
+        float_t dq_limit{0};
+        float_t tau_limit{0};
+        float_t kp{0};
+        float_t kd{0};
+        float_t default_position{0}; // Default weight for the joint
     };
 
     struct CmdParams
     {
-        float q_0{0}, q_1{0};
-        float dq_0{0}, dq_1{0};
-        float tau_0{0}, tau_1{0};
-        float kp_0{0}, kp_1{0};
-        float kd_0{0}, kd_1{0};
+        float_t q_0{0}, q_1{0};
+        float_t dq_0{0}, dq_1{0};
+        float_t tau_0{0}, tau_1{0};
+        float_t kp_0{0}, kp_1{0};
+        float_t kd_0{0}, kd_1{0};
     };
 
     class BridgeCore
@@ -44,13 +49,14 @@ namespace sairol_bridge
         explicit BridgeCore(rclcpp::Node::SharedPtr node);
         virtual ~BridgeCore();
 
-        std::shared_ptr<rclcpp::Node> nh;
+        rclcpp::Node::SharedPtr nh;
 
         void start();
+        virtual void stop();
 
     protected:
         bool loadParameters_();
-        void calculateInterpolationParams_(float duration,
+        void calculateInterpolationParams_(float_t duration,
                                            int interpolation_order,
                                            bool hold_position = false);
 
@@ -60,20 +66,23 @@ namespace sairol_bridge
         void zeroPositionControl_();
         void update_();
         virtual void publishLowCommand_() = 0;
-        bool initControl_();
+        virtual bool initControl_();
         bool checkCommand_();
         bool checkState_();
+        virtual void finishControl_() = 0;
 
-        rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr startControlService_;
+
         rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr stopControlService_;
         rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr readyPositionService_;
         rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr zeroPositionService_;
+        rclcpp::Service<bridge_interface::srv::SetDefaultPosition>::SharedPtr startControlService_;
         rclcpp::Subscription<bridge_interface::msg::RobotCmd>::SharedPtr desiredSubscriber_;
 
         std::vector<Joint> joints_;
         std::vector<CmdParams> cmdParams_;
 
         bridge_interface::msg::RobotCmd lowCommandDesired_;
+        bridge_interface::msg::RobotCmd lowCommandDefault_;
         bridge_interface::msg::LowCmd lowCommand_;
         bridge_interface::msg::LowState currentState_;
         bridge_interface::msg::ImuState imu_;
@@ -82,24 +91,22 @@ namespace sairol_bridge
 
         std::thread controlThread_;
         std::mutex mutex_;
-        float tStart_{0}, tFinal_{0}, tValid_{0};
-        const float INF_{std::numeric_limits<float>::infinity()};
+        double tStart_, tFinal_, tValid_;
+        const float_t INF_{std::numeric_limits<float>::infinity()};
 
         int numJoint_{0};
         int emptyJointIndex_{0};
-        float duration_{1.0};
-        float controlDt_{0.002};
+        float_t duration_{1.0};
+        float_t controlDt_{0.002};
 
-        float upper_limbs_kp_min_{0}, upper_limbs_kp_max_{0};
-        float upper_limbs_kd_min_{0}, upper_limbs_kd_max_{0};
-        float lower_limbs_kp_min_{0}, lower_limbs_kp_max_{0};
-        float lower_limbs_kd_min_{0}, lower_limbs_kd_max_{0};
+        float_t upper_limbs_kp_min_{0}, upper_limbs_kp_max_{0};
+        float_t upper_limbs_kd_min_{0}, upper_limbs_kd_max_{0};
+        float_t lower_limbs_kp_min_{0}, lower_limbs_kp_max_{0};
+        float_t lower_limbs_kd_min_{0}, lower_limbs_kd_max_{0};
 
         bool torqueControl_{false};
         bool controlStarted_{false};
 
-        void startControlServiceCB_(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
-                                    std::shared_ptr<std_srvs::srv::Trigger::Response> response);
 
         void stopControlServiceCB_(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
                                    std::shared_ptr<std_srvs::srv::Trigger::Response> response);
@@ -109,6 +116,9 @@ namespace sairol_bridge
 
         void zeroPositionControlServiceCB_(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
                                            std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+
+        void startControlServiceCB_(const std::shared_ptr<bridge_interface::srv::SetDefaultPosition::Request> request,
+                                          std::shared_ptr<bridge_interface::srv::SetDefaultPosition::Response> response);
     };
 
 } // namespace sairol_bridge

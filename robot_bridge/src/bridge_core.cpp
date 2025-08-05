@@ -10,8 +10,6 @@ namespace sairol_bridge
     {
         nh = node;
 
-        rclcpp::sleep_for(std::chrono::milliseconds(100));
-
         // Load parameters
         if (!loadParameters_())
         {
@@ -29,8 +27,8 @@ namespace sairol_bridge
         desiredSubscriber_ = nh->create_subscription<bridge_interface::msg::RobotCmd>(
             "/robot_cmd", 10, std::bind(&BridgeCore::robotCmdCallBack_, this, _1));
 
-        startControlService_ = nh->create_service<std_srvs::srv::Trigger>(
-            "start_control", std::bind(&BridgeCore::startControlServiceCB_, this, _1, _2));
+        // startControlService_ = nh->create_service<std_srvs::srv::Trigger>(
+        //     "start_control", std::bind(&BridgeCore::startControlServiceCB_, this, _1, _2));
 
         stopControlService_ = nh->create_service<std_srvs::srv::Trigger>(
             "stop_control", std::bind(&BridgeCore::stopControlServiceCB_, this, _1, _2));
@@ -41,16 +39,25 @@ namespace sairol_bridge
         zeroPositionService_ = nh->create_service<std_srvs::srv::Trigger>(
             "zero_position_control", std::bind(&BridgeCore::zeroPositionControlServiceCB_, this, _1, _2));
 
+        startControlService_ = nh->create_service<bridge_interface::srv::SetDefaultPosition>(
+            "start_control", std::bind(&BridgeCore::startControlServiceCB_, this, _1, _2));
+
         last_state_time_ = nh->get_clock()->now();
-
-
-                    
     }
 
-    void BridgeCore::start(){
+    void BridgeCore::start()
+    {
         // Init Thread
         controlThread_ = std::thread([this]()
                                      { this->update_(); });
+    }
+    
+    void BridgeCore::stop()
+    {
+        if (controlThread_.joinable())
+        {
+            controlThread_.join();
+        }
     }
 
     BridgeCore::~BridgeCore() = default;
@@ -66,6 +73,7 @@ namespace sairol_bridge
             RCLCPP_ERROR(nh->get_logger(), "Failed to get 'torque_control' from parameters");
             return false;
         }
+        assert(torqueControl_ == false && "Torque control is not supported yet, please set 'torque_control' to false");
         if (!nh->get_parameter("duration", duration_))
         {
             RCLCPP_ERROR(nh->get_logger(), "Failed to get 'duration' from parameters");
@@ -94,11 +102,6 @@ namespace sairol_bridge
         if (!nh->get_parameter("upper_limbs_kd_max", upper_limbs_kd_max_))
         {
             RCLCPP_ERROR(nh->get_logger(), "Failed to get 'upper_limbs_kd_max' from parameters");
-            return false;
-        }
-        if (!nh->get_parameter("lower_limbs_kp_min", lower_limbs_kp_min_))
-        {
-            RCLCPP_ERROR(nh->get_logger(), "Failed to get 'lower_limbs_kp_min' from parameters");
             return false;
         }
         if (!nh->get_parameter("lower_limbs_kp_min", lower_limbs_kp_min_))
@@ -150,7 +153,16 @@ namespace sairol_bridge
                 ret = ret && nh->get_parameter(name + ".tau_limit", joint_info.tau_limit);
                 ret = ret && nh->get_parameter(name + ".kp", joint_info.kp);
                 ret = ret && nh->get_parameter(name + ".kd", joint_info.kd);
+                ret = ret && nh->get_parameter(name + ".default_position", joint_info.default_position);
                 joints_.push_back(joint_info);
+                assert(joint_info.idx < numJoint_ && ("Joint index exceeds the number of joints, please check the joint index: " + std::to_string(joint_info.idx)).c_str());
+                assert(joint_info.q_max >= joint_info.q_min && ("Joint q_max must be greater than or equal to q_min, please check the joint index: " + std::to_string(joint_info.idx)).c_str());
+                assert(joint_info.dq_limit >= 0 && ("Joint dq_limit must be non-negative, please check the joint index: " + std::to_string(joint_info.idx)).c_str());
+                assert(joint_info.tau_limit >= 0 && ("Joint tau_limit must be non-negative, please check the joint index: " + std::to_string(joint_info.idx)).c_str());
+                assert(joint_info.kp >= 0 && ("Joint kp must be non-negative, please check the joint index: " + std::to_string(joint_info.idx)).c_str());
+                assert(joint_info.kd >= 0 && ("Joint kd must be non-negative, please check the joint index: " + std::to_string(joint_info.idx)).c_str());
+                assert(joint_info.default_position >= joint_info.q_min && joint_info.default_position <= joint_info.q_max &&
+                       ("Joint default_position must be within the range of q_min and q_max, please check the joint index: " + std::to_string(joint_info.idx)).c_str());
             }
             if (!ret)
             {
@@ -164,6 +176,11 @@ namespace sairol_bridge
             RCLCPP_ERROR(nh->get_logger(), "Failed to get 'joint_names' from parameters");
             return false;
         }
+        assert(joints_.size() == numJoint_ && "Number of joints does not match the number of joint limits");
+        assert(upper_limbs_kp_max_ >= upper_limbs_kp_min_ && "Upper limbs kp max must be greater than or equal to min");
+        assert(upper_limbs_kd_max_ >= upper_limbs_kd_min_ && "Upper limbs kd max must be greater than or equal to min");
+        assert(lower_limbs_kp_max_ >= lower_limbs_kp_min_ && "Lower limbs kp max must be greater than or equal to min");
+        assert(lower_limbs_kd_max_ >= lower_limbs_kd_min_ && "Lower limbs kd max must be greater than or equal to min");
         return true;
     }
 
@@ -213,7 +230,7 @@ namespace sairol_bridge
             lowCommandDesired_.motor_cmd[i].kp = joints_[i].kp;
             lowCommandDesired_.motor_cmd[i].kd = joints_[i].kd;
         }
-        // 简单示例：抬手
+
         lowCommandDesired_.motor_cmd[13].q = -1.0;
         lowCommandDesired_.motor_cmd[15].q = 1.6;
         lowCommandDesired_.motor_cmd[17].q = 1.0;
@@ -222,8 +239,6 @@ namespace sairol_bridge
 
     bool BridgeCore::initControl_()
     {
-        if (controlStarted_)
-            return false;
 
         for (int i = 0; i < numJoint_; ++i)
         {
@@ -245,23 +260,23 @@ namespace sairol_bridge
         auto rate = rclcpp::Rate(1.0 / controlDt_);
         while (rclcpp::ok())
         {
-            
             if (controlStarted_)
-            {   
+            {
                 // Safety check
                 if (not checkState_())
                 {
                     RCLCPP_ERROR(nh->get_logger(), "Robot state check failed. Please inspect the robot carefully.");
                     return;
                 }
-                
+
                 std::unique_lock<std::mutex> lock(mutex_);
                 // Update the low command
                 publishLowCommand_();
                 lock.unlock();
-                controlStarted_ = (nh->get_clock()->now()).seconds() < tValid_;
+                controlStarted_ = (nh->get_clock()->now()).seconds() <= tValid_;
                 if (!controlStarted_)
                 {
+                    finishControl_();
                     RCLCPP_INFO(nh->get_logger(), "Control finished because the duration has elapsed.");
                 }
             }
@@ -269,13 +284,12 @@ namespace sairol_bridge
         }
     }
 
-    void BridgeCore::calculateInterpolationParams_(float duration,
+    void BridgeCore::calculateInterpolationParams_(float_t duration,
                                                    int interpolation_order,
                                                    bool hold_position)
     {
         checkCommand_();
         std::unique_lock<std::mutex> lock(mutex_);
-        RCLCPP_INFO(nh->get_logger(), "==========================================, %f", lowCommandDesired_.motor_cmd[3].q);
         if (interpolation_order == 0)
         {
             for (int i = 0; i < numJoint_; i++)
@@ -312,10 +326,7 @@ namespace sairol_bridge
         lock.unlock();
 
         tStart_ = nh->get_clock()->now().seconds();
-        RCLCPP_INFO(nh->get_logger(), "Interpolation start time: %.3f", tStart_);
         tFinal_ = tStart_ + duration;
-        RCLCPP_INFO(nh->get_logger(), "Interpolation parameters calculated: tStart=%.3f, tFinal=%.3f, duration=%.3f",
-                    tStart_, tFinal_, duration);
         if (hold_position)
         {
             tValid_ = INF_;
@@ -328,9 +339,9 @@ namespace sairol_bridge
 
     bool BridgeCore::checkState_()
     {
-      
+
         auto dt_state_ = (nh->get_clock()->now() - last_state_time_).seconds();
-        
+
         // Check if the state message is received within the expected interval
         if (dt_state_ > 0.1)
         {
@@ -495,22 +506,6 @@ namespace sairol_bridge
         return true;
     }
 
-    void BridgeCore::startControlServiceCB_(
-        const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
-        std::shared_ptr<std_srvs::srv::Trigger::Response> response)
-    {
-        if (initControl_())
-        {
-            response->success = true;
-            response->message = "Start control service activated";
-        }
-        else
-        {
-            response->success = false;
-            response->message = "Failed to start control service";
-        }
-    }
-
     void BridgeCore::stopControlServiceCB_(
         const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
         std::shared_ptr<std_srvs::srv::Trigger::Response> response)
@@ -553,4 +548,34 @@ namespace sairol_bridge
         response->message = "Zero position control activated";
     }
 
+    void BridgeCore::startControlServiceCB_(
+        const std::shared_ptr<bridge_interface::srv::SetDefaultPosition::Request> request,
+        std::shared_ptr<bridge_interface::srv::SetDefaultPosition::Response> response)
+    {
+        auto default_position = request->default_position;
+
+        if (default_position.size() != numJoint_ )
+        {   
+            initControl_();
+            RCLCPP_INFO(nh->get_logger(), "Starting control...");
+            response->success = true;
+            response->message = "start control with invalid size of default position, kp or kd";
+           
+        }
+        else
+        {
+            lowCommandDefault_.motor_cmd.resize(numJoint_);
+            for (int i = 0; i < numJoint_; ++i)
+            {
+                lowCommandDefault_.motor_cmd[i].q = default_position[i];
+
+            }
+            initControl_();      
+            RCLCPP_INFO(nh->get_logger(), "Starting control...");   
+            response->success = true;
+            response->message = "start control and get default position service activated";
+        }
+
+        
+    }
 }

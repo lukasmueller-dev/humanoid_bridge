@@ -10,14 +10,19 @@ int main(int argc, char **argv)
     auto options = rclcpp::NodeOptions().allow_undeclared_parameters(true).automatically_declare_parameters_from_overrides(true);
     rclcpp::Node::SharedPtr nh = std::make_shared<rclcpp::Node>("robot_bridge", options);
 
+    rclcpp::sleep_for(std::chrono::milliseconds(100));
+
     std::string robot_name;
     nh->get_parameter("robot_name", robot_name);
 
     std::shared_ptr<sairol_bridge::BridgeCore> bridge;
 
+
     if (robot_name == "T1")
     {
-        bridge = std::make_shared<sairol_bridge::T1Bridge>(nh);
+        auto t1_bridge = std::make_shared<sairol_bridge::T1Bridge>(nh);
+        bridge = t1_bridge;
+        // rclcpp::on_shutdown(std::bind(&sairol_bridge::T1Bridge::switch_to_damping_mode, t1_bridge.get()));
     }
     // else if (robot_name == "H1")
     // {
@@ -35,10 +40,13 @@ int main(int argc, char **argv)
     }
 
     if (bridge)
-    {
+    {   
+
         bridge->start();
         rclcpp::spin(nh);
     }
+
+    bridge->stop();
 
     rclcpp::shutdown();
     return 0;

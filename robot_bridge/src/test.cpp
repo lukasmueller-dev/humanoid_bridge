@@ -8,7 +8,7 @@ SignalPublisher::SignalPublisher()
 : Node("signal_publisher") {
     signalPublisher_ = this->create_publisher<bridge_interface::msg::RobotCmd>("/robot_cmd", 10);
     timer_ = this->create_wall_timer(20ms, std::bind(&SignalPublisher::publish_signal, this));//50hz
-    lowCommand_.motor_cmd.resize(20);
+    lowCommand_.motor_cmd.resize(23);
 
     ////test
     // testPublisher_ = this->create_publisher<bridge_interface::msg::TestSignal>("time_topic", 10);
@@ -47,11 +47,28 @@ void SignalPublisher::publish_signal() {
     double dt = 0.02;   // call interval = 20ms
     double omega = 2 * M_PI * freq;
 
-    double q12 = amp * std::sin(omega * t);
-    double q16 = amp * std::sin(omega * t + M_PI);
 
-    lowCommand_.motor_cmd[12].q = q12;
-    lowCommand_.motor_cmd[16].q = q16;
+    //H1 demo
+    // double q12 = amp * std::sin(omega * t);
+    // double q16 = amp * std::sin(omega * t + M_PI);
+
+    // lowCommand_.motor_cmd[12].q = q12;
+    // lowCommand_.motor_cmd[16].q = q16;
+    // lowCommand_.interpolation_order = 1;
+    // lowCommand_.hold_position = false;
+    // lowCommand_.duration = 0.02;
+
+    //T1 demo
+    double q2 = amp * std::sin(omega * t);
+    double q6 = amp * std::sin(omega * t + M_PI);
+    lowCommand_.motor_cmd[2].q = q2;
+    lowCommand_.motor_cmd[6].q = q6;
+
+    lowCommand_.motor_cmd[3].q = -1.3;
+    lowCommand_.motor_cmd[7].q = 1.3;
+    lowCommand_.motor_cmd[5].q = -1.5;
+    lowCommand_.motor_cmd[9].q = 1.5;
+
     lowCommand_.interpolation_order = 1;
     lowCommand_.hold_position = false;
     lowCommand_.duration = 0.02;
