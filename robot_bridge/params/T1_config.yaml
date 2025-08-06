@@ -39,7 +39,8 @@ robot_bridge:
       tau_limit: 7.0
       kp: 5.0
       kd: 0.1
-      default_position: 0.0 
+      default_position: 0.0
+      if_strong_joint: false
 
     HeadPitch:
       idx: 1
@@ -50,6 +51,7 @@ robot_bridge:
       kp: 5.0
       kd: 0.1
       default_position: 0.0
+      if_strong_joint: false
 
     LeftShoulderPitch:
       idx: 2
@@ -60,6 +62,7 @@ robot_bridge:
       kp: 40.0
       kd: 0.5
       default_position: 0.2
+      if_strong_joint: false
 
     LeftShoulderRoll:
       idx: 3
@@ -70,6 +73,7 @@ robot_bridge:
       kp: 50.0
       kd: 1.5
       default_position: -1.35
+      if_strong_joint: false
 
     LeftShoulderYaw:
       idx: 4
@@ -80,6 +84,7 @@ robot_bridge:
       kp: 20.0
       kd: 0.2
       default_position: 0.0
+      if_strong_joint: false
 
     LeftElbow:
       idx: 5
@@ -90,6 +95,7 @@ robot_bridge:
       kp: 10.0
       kd: 0.2
       default_position: -0.5
+      if_strong_joint: false
 
     RightShoulderPitch:
       idx: 6
@@ -100,6 +106,7 @@ robot_bridge:
       kp: 40.0
       kd: 0.5
       default_position: 0.2
+      if_strong_joint: false
 
     RightShoulderRoll:
       idx: 7
@@ -110,6 +117,7 @@ robot_bridge:
       kp: 50.0
       kd: 1.5
       default_position: 1.35
+      if_strong_joint: false
 
     RightShoulderYaw:
       idx: 8
@@ -120,6 +128,7 @@ robot_bridge:
       kp: 20.0
       kd: 0.2
       default_position: 0.0
+      if_strong_joint: false
 
     RightElbow:
       idx: 9
@@ -130,6 +139,7 @@ robot_bridge:
       kp: 10.0
       kd: 0.2 
       default_position: 0.5  
+      if_strong_joint: false
 
     WaistYaw:  
       idx: 10
@@ -140,6 +150,7 @@ robot_bridge:
       kp: 100.0
       kd: 5.0
       default_position: 0.0
+      if_strong_joint: true
 
     LeftHipPitch:
       idx: 11
@@ -150,6 +161,7 @@ robot_bridge:
       kp: 350.0
       kd: 7.5
       default_position: -0.2
+      if_strong_joint: true
 
     LeftHipRoll:  
       idx: 12
@@ -160,6 +172,7 @@ robot_bridge:
       kp: 350.0
       kd: 7.5
       default_position: 0.0
+      if_strong_joint: true
 
     LeftHipYaw: 
       idx: 13
@@ -170,6 +183,7 @@ robot_bridge:
       kp: 180.0
       kd: 3.0
       default_position: 0.0
+      if_strong_joint: true
 
     LeftKnee:
       idx: 14
@@ -180,6 +194,7 @@ robot_bridge:
       kp: 350.0
       kd: 5.5
       default_position: 0.4
+      if_strong_joint: true
 
     LeftAnkleUp:
       idx: 15
@@ -190,6 +205,7 @@ robot_bridge:
       kp: 450.0
       kd: 0.5
       default_position: -0.25 
+      if_strong_joint: false
     
     LeftAnkleDown:
       idx: 16
@@ -199,7 +215,8 @@ robot_bridge:
       tau_limit: 15.0      
       kp: 450.0
       kd: 0.5
-      default_position: 0.0 
+      default_position: 0.0
+      if_strong_joint: false 
     
     RightHipPitch:
       idx: 17
@@ -210,6 +227,7 @@ robot_bridge:
       kp: 350.0
       kd: 7.5
       default_position: -0.2
+      if_strong_joint: true
     
     RightHipRoll:
       idx: 18   
@@ -220,6 +238,7 @@ robot_bridge:
       kp: 350.0
       kd: 7.5
       default_position: 0.0
+      if_strong_joint: true
 
     RightHipYaw:
       idx: 19
@@ -230,6 +249,7 @@ robot_bridge:
       kp: 180.0
       kd: 3.0
       default_position: 0.0
+      if_strong_joint: true
 
     RightKnee:
       idx: 20
@@ -240,6 +260,7 @@ robot_bridge:
       kp: 350.0
       kd: 5.5
       default_position: 0.4
+      if_strong_joint: true
 
     RightAnkleUp:
       idx: 21
@@ -249,7 +270,8 @@ robot_bridge:
       tau_limit: 24.0      
       kp: 450.0
       kd: 0.5 
-      default_position: -0.25
+      default_position: -0.25 
+      if_strong_joint: false
     
     RightAnkleDown:
       idx: 22
@@ -260,3 +282,4 @@ robot_bridge:
       kp: 450.0
       kd: 0.5 
       default_position: 0.0
+      if_strong_joint: false

@@ -140,72 +140,15 @@ void sairol_bridge::T1Bridge::publishLowCommand_()
 
         // Clamp q within limits
         float q_target = cmdParams_[i].q_0 + cmdParams_[i].q_1 * phase;
-        cmd.q = std::clamp(q_target, joint_info.q_min, joint_info.q_max);
-   
+        // cmd.q = std::clamp(q_target, joint_info.q_min, joint_info.q_max);
+        cmd.q = q_target;
 
         // Clamp dq within limits
         float dq_target = cmdParams_[i].dq_0 + cmdParams_[i].dq_1 * phase;
         cmd.dq = std::clamp(dq_target, -joint_info.dq_limit, joint_info.dq_limit);
 
-        if (torqueControl_)
-        {
-            auto kp = cmdParams_[i].kp_0 + cmdParams_[i].kp_1 * phase;
-            auto kd = cmdParams_[i].kd_0 + cmdParams_[i].kd_1 * phase;
-            auto tau_set = cmdParams_[i].tau_1;
 
-            cmd.tau = kp * (cmd.q - currentState_.motor_state[i].q) + kd * (cmd.dq - currentState_.motor_state[i].dq) + tau_set;
-            cmd.kp = 0.0;
-            cmd.kd = 0.0;
-        }
-        else
-        {
-            cmd.tau = 0.0;
-            cmd.kp = cmdParams_[i].kp_0 + cmdParams_[i].kp_1 * phase;
-            cmd.kd = cmdParams_[i].kd_0 + cmdParams_[i].kd_1 * phase;
-
-            auto tau_predict = cmd.kp * (cmd.q - currentState_.motor_state[i].q) + cmd.kd * (cmd.dq - currentState_.motor_state[i].dq) + cmd.tau;
-
-            auto error_q = cmd.q - currentState_.motor_state[i].q;
-            auto error_dq = cmd.dq - currentState_.motor_state[i].dq;
-            // if (std::abs(error_q) < 1e-6)
-            //     error_q = 1e-6; // Avoid division by zero
-
-            if (std::abs(tau_predict) > joint_info.tau_limit)
-            {
-                RCLCPP_WARN(nh->get_logger(), "Tau prediction exceeds limit: %f > %f", std::abs(tau_predict), joint_info.tau_limit);
-                double adjusted_factor = 1.0;
-                auto A = 1;
-                double B = cmd.kd * error_dq / (cmd.kp * error_q);
-                double sign = (tau_predict > 0) ? 1.0 : -1.0;
-                double C = -1 * joint_info.tau_limit * sign / (cmd.kp * error_q);
-                double discriminant = B * B - 4 * A * C;
-                if (discriminant >= 0)
-                {
-                    double sqrt_dis = std::sqrt(discriminant);
-                    double x1 = (-B + sqrt_dis) / (2 * A);
-                    double x2 = (-B - sqrt_dis) / (2 * A);
-                    if (x1 > 0)
-                        adjusted_factor = x1;
-                    else if (x2 > 0)
-                        adjusted_factor = x2;
-                    else
-                    {
-                        adjusted_factor = 0.0;
-                        RCLCPP_WARN(nh->get_logger(), "No positive root found, using kp = 0.0, kd = 0.0");
-                    }
-                }
-                else
-                {
-                    adjusted_factor = 0.0;
-                    RCLCPP_WARN(nh->get_logger(), "Discriminant is negative, using kp = 0.0, kd = 0.0");
-                }
-                cmd.kp = cmd.kp * adjusted_factor;
-                cmd.kd = cmd.kd * sqrt(adjusted_factor);
-            }
-        }
-
-        // TODO modify the idx
-        if (i < emptyJointIndex_)
+        if (joint_info.if_strong_joint) 
         {
             cmd.kp = std::clamp(cmd.kp, lower_limbs_kp_min_, lower_limbs_kp_max_);
             cmd.kd = std::clamp(cmd.kd, lower_limbs_kd_min_, lower_limbs_kd_max_);
@@ -216,7 +159,72 @@ void sairol_bridge::T1Bridge::publishLowCommand_()
             cmd.kd = std::clamp(cmd.kd, upper_limbs_kd_min_, upper_limbs_kd_max_);
         }
 
-        cmd.tau = std::clamp(cmd.tau, -joint_info.tau_limit, joint_info.tau_limit);
+
+        if (torqueControl_)
+        {
+            auto kp = cmdParams_[i].kp_0 + cmdParams_[i].kp_1 * phase;
+            auto kd = cmdParams_[i].kd_0 + cmdParams_[i].kd_1 * phase;
+            auto tau_set = cmdParams_[i].tau_1;
+
+            cmd.tau = kp * (cmd.q - currentState_.motor_state[i].q) + kd * (cmd.dq - currentState_.motor_state[i].dq) + tau_set;
+            cmd.tau = std::clamp(cmd.tau, -joint_info.tau_limit, joint_info.tau_limit);
+            cmd.kp = 0.0;
+            cmd.kd = 0.0;
+        }
+        else
+        {
+            cmd.tau = 0.0;
+            cmd.kp = cmdParams_[i].kp_0 + cmdParams_[i].kp_1 * phase;
+            cmd.kd = cmdParams_[i].kd_0 + cmdParams_[i].kd_1 * phase;
+
+            cmd.q = std::clamp(cmd.q, (-cmd.kd * (currentState_.motor_state[i].q - cmd.dq) - joint_info.tau_limit) / cmd.kp + currentState_.motor_state[i].q, (-cmd.kd * (currentState_.motor_state[i].q - cmd.dq) + joint_info.tau_limit) / cmd.kp + currentState_.motor_state[i].q);
+
+
+
+            // auto tau_predict = cmd.kp * (cmd.q - currentState_.motor_state[i].q) + cmd.kd * (cmd.dq - currentState_.motor_state[i].dq) + cmd.tau;
+
+            // auto error_q = cmd.q - currentState_.motor_state[i].q;
+            // auto error_dq = cmd.dq - currentState_.motor_state[i].dq;
+
+            // if (std::abs(error_q) < 1e-6)
+            //     error_q = 1e-6; // Avoid division by zero
+
+            // if (std::abs(tau_predict) > joint_info.tau_limit)
+            // {
+            //     RCLCPP_WARN(nh->get_logger(), "Tau prediction exceeds limit: %f > %f", std::abs(tau_predict), joint_info.tau_limit);
+            //     double adjusted_factor = 1.0;
+            //     auto A = 1;
+            //     double B = cmd.kd * error_dq / (cmd.kp * error_q);
+            //     double sign = (tau_predict > 0) ? 1.0 : -1.0;
+            //     double C = -1 * joint_info.tau_limit * sign / (cmd.kp * error_q);
+            //     double discriminant = B * B - 4 * A * C;
+            //     if (discriminant >= 0)
+            //     {
+            //         double sqrt_dis = std::sqrt(discriminant);
+            //         double x1 = (-B + sqrt_dis) / (2 * A);
+            //         double x2 = (-B - sqrt_dis) / (2 * A);
+            //         if (x1 > 0)
+            //             adjusted_factor = x1;
+            //         else if (x2 > 0)
+            //             adjusted_factor = x2;
+            //         else
+            //         {
+            //             adjusted_factor = 0.0;
+            //             RCLCPP_WARN(nh->get_logger(), "No positive root found, using kp = 0.0, kd = 0.0");
+            //         }
+            //     }
+            //     else
+            //     {
+            //         adjusted_factor = 0.0;
+            //         RCLCPP_WARN(nh->get_logger(), "Discriminant is negative, using kp = 0.0, kd = 0.0");
+            //     }
+            //     cmd.kp = cmd.kp * adjusted_factor;
+            //     cmd.kd = cmd.kd * sqrt(adjusted_factor);
+            // }
+        }
+
+
+        
     }
 
     booster_interface::msg::LowCmd booster_cmd;
@@ -312,9 +320,11 @@ void sairol_bridge::T1Bridge::stopControlServiceCB_(
 const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
 std::shared_ptr<std_srvs::srv::Trigger::Response> response)
 {
-switch_to_damping_mode();
-response->success = true;
-response->message = "Stop control service activated";
+    controlStarted_ = false;
+    RCLCPP_INFO(nh->get_logger(), "Stopping control service...");
+    switch_to_damping_mode();
+    response->success = true;
+    response->message = "Stop control service activated";
 }
 
 void sairol_bridge::T1Bridge::switch_mode(booster::robot::RobotMode target_mode)

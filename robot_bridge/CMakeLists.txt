@@ -169,8 +169,15 @@ install(TARGETS
   test_node
   DESTINATION lib/${PROJECT_NAME}
 )
-# -----------------------------------------------------------
+# ============================================================== T1 policy deploy cmake==============================================================================
+find_package(rclpy REQUIRED)
 
+install(PROGRAMS
+  example/T1/T1_policy_deploy.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+# ==================================================launch files=====================================================================================================
 install(DIRECTORY launch/
   DESTINATION share/${PROJECT_NAME}/launch
 )

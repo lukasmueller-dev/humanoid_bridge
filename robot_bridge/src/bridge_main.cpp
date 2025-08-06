@@ -47,7 +47,5 @@ int main(int argc, char **argv)
     }
 
     bridge->stop();
-
-    rclcpp::shutdown();
     return 0;
 }

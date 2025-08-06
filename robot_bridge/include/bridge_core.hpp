@@ -32,6 +32,7 @@ namespace sairol_bridge
         float_t kp{0};
         float_t kd{0};
         float_t default_position{0}; // Default weight for the joint
+        bool if_strong_joint{false}; // Whether the joint is a strong joint
     };
 
     struct CmdParams
@@ -62,7 +63,7 @@ namespace sairol_bridge
 
         void robotCmdCallBack_(bridge_interface::msg::RobotCmd::SharedPtr message);
 
-        void readyPositionControl_();
+        virtual void readyPositionControl_();
         void zeroPositionControl_();
         void update_();
         virtual void publishLowCommand_() = 0;
@@ -108,7 +109,7 @@ namespace sairol_bridge
         bool controlStarted_{false};
 
 
-        void stopControlServiceCB_(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+        virtual void stopControlServiceCB_(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
                                    std::shared_ptr<std_srvs::srv::Trigger::Response> response);
 
         void readyPositionControlServiceCB_(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,

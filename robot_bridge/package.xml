@@ -17,6 +17,7 @@
   <depend>std_msgs</depend>
   <depend>bridge_interface</depend>
   <depend>sensor_msgs</depend>
+  <depend>booster_interface</depend>
 
 
   <depend>unitree_go</depend>
@@ -24,6 +25,9 @@
   <exec_depend>unitree_api</exec_depend>
   <exec_depend>rosidl_default_runtime</exec_depend>
   <exec_depend>builtin_interfaces</exec_depend>
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>python3</exec_depend>
+
   
   <member_of_group>rosidl_interface_packages</member_of_group>
 

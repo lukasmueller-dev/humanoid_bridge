@@ -7,7 +7,7 @@ using namespace std::chrono_literals;
 SignalPublisher::SignalPublisher()
 : Node("signal_publisher") {
     signalPublisher_ = this->create_publisher<bridge_interface::msg::RobotCmd>("/robot_cmd", 10);
-    timer_ = this->create_wall_timer(20ms, std::bind(&SignalPublisher::publish_signal, this));//50hz
+    timer_ = this->create_wall_timer(2ms, std::bind(&SignalPublisher::publish_signal, this));//500hz
     lowCommand_.motor_cmd.resize(23);
 
     ////test
@@ -44,7 +44,7 @@ void SignalPublisher::publish_signal() {
     static double t = 0.0;
     double freq = 0.3;  // Hz，frequency
     double amp = 0.3;   // ampitude
-    double dt = 0.02;   // call interval = 20ms
+    double dt = 0.002;   // call interval = 2ms
     double omega = 2 * M_PI * freq;
 
 
@@ -69,9 +69,9 @@ void SignalPublisher::publish_signal() {
     lowCommand_.motor_cmd[5].q = -1.5;
     lowCommand_.motor_cmd[9].q = 1.5;
 
-    lowCommand_.interpolation_order = 1;
+    lowCommand_.interpolation_order = 0;
     lowCommand_.hold_position = false;
-    lowCommand_.duration = 0.02;
+    lowCommand_.duration = 0.002;
     
     signalPublisher_->publish(lowCommand_);
     t += dt;

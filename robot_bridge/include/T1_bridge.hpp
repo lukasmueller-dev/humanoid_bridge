@@ -28,13 +28,13 @@ private:
     void wireless_callback(sensor_msgs::msg::Joy::SharedPtr message);
     void publishLowCommand_();
     void lowStateHandler_(booster_interface::msg::LowState::SharedPtr message);
-    void readyPositionControl_();
+    void readyPositionControl_() override;
     bool initControl_() override;
     void switch_mode(booster::robot::RobotMode target_mode);
     void switch_to_damping_mode();
     void switch_to_prepare_mode();
     void stopControlServiceCB_(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
-                               std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+                               std::shared_ptr<std_srvs::srv::Trigger::Response> response) override;
     void finishControl_();
 
     rclcpp::Subscription<booster_interface::msg::LowState>::SharedPtr lowStateSubscriber_;  

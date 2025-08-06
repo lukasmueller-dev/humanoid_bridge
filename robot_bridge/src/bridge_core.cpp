@@ -154,6 +154,7 @@ namespace sairol_bridge
                 ret = ret && nh->get_parameter(name + ".kp", joint_info.kp);
                 ret = ret && nh->get_parameter(name + ".kd", joint_info.kd);
                 ret = ret && nh->get_parameter(name + ".default_position", joint_info.default_position);
+                ret = ret && nh->get_parameter(name + ".if_strong_joint", joint_info.if_strong_joint);
                 joints_.push_back(joint_info);
                 assert(joint_info.idx < numJoint_ && ("Joint index exceeds the number of joints, please check the joint index: " + std::to_string(joint_info.idx)).c_str());
                 assert(joint_info.q_max >= joint_info.q_min && ("Joint q_max must be greater than or equal to q_min, please check the joint index: " + std::to_string(joint_info.idx)).c_str());
@@ -163,6 +164,7 @@ namespace sairol_bridge
                 assert(joint_info.kd >= 0 && ("Joint kd must be non-negative, please check the joint index: " + std::to_string(joint_info.idx)).c_str());
                 assert(joint_info.default_position >= joint_info.q_min && joint_info.default_position <= joint_info.q_max &&
                        ("Joint default_position must be within the range of q_min and q_max, please check the joint index: " + std::to_string(joint_info.idx)).c_str());
+                assert(joint_info.if_strong_joint == true || joint_info.if_strong_joint == false && ("Joint if_strong_joint must be a boolean value, please check the joint index: " + std::to_string(joint_info.idx)).c_str());
             }
             if (!ret)
             {
@@ -333,7 +335,7 @@ namespace sairol_bridge
         }
         else
         {
-            tValid_ = tFinal_ + 1.0;
+            tValid_ = tFinal_ + 0.2;
         }
     }
 
@@ -450,13 +452,13 @@ namespace sairol_bridge
                     any_value_clipped = i;
                 }
             }
-            // Check position
-            if (cmd.q < joint_info.q_min || cmd.q > joint_info.q_max)
-            {
-                RCLCPP_WARN_ONCE(nh->get_logger(), "Clipping motor_cmd[%lu] q: %.3f", i, cmd.q);
-                cmd.q = std::clamp(cmd.q, joint_info.q_min, joint_info.q_max);
-                any_value_clipped = i;
-            }
+            // // Check position
+            // if (cmd.q < joint_info.q_min || cmd.q > joint_info.q_max)
+            // {
+            //     RCLCPP_WARN_ONCE(nh->get_logger(), "Clipping motor_cmd[%lu] q: %.3f", i, cmd.q);
+            //     cmd.q = std::clamp(cmd.q, joint_info.q_min, joint_info.q_max);
+            //     any_value_clipped = i;
+            // }
             // Check velocity
             if (cmd.dq < -joint_info.dq_limit || cmd.dq > joint_info.dq_limit)
             {
