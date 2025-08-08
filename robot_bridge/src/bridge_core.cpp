@@ -380,7 +380,7 @@ namespace sairol_bridge
                 RCLCPP_ERROR(nh->get_logger(),
                              "Joint [%lu] dq (%.3f) exceeds limit (%.3f). Shutting down for safety.",
                              i, motor.dq, joint.dq_limit);
-                rclcpp::shutdown();
+                // rclcpp::shutdown();
                 return false;
             }
         }

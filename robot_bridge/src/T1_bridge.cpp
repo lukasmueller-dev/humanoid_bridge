@@ -26,13 +26,13 @@ sairol_bridge::T1Bridge::T1Bridge(rclcpp::Node::SharedPtr node) : BridgeCore(nod
     cmdParams_.resize(numJoint_);
 
     lowStateSubscriber_ = nh->create_subscription<booster_interface::msg::LowState>(
-        "/low_state", 10, std::bind(&sairol_bridge::T1Bridge::lowStateHandler_, this, std::placeholders::_1));
+        "/low_state", 1, std::bind(&sairol_bridge::T1Bridge::lowStateHandler_, this, std::placeholders::_1));
 
     remoteControlSubscriber_ = nh->create_subscription<sensor_msgs::msg::Joy>(
-        "/joy", 10, std::bind(&sairol_bridge::T1Bridge::wireless_callback, this, std::placeholders::_1));
+        "/joy", 1, std::bind(&sairol_bridge::T1Bridge::wireless_callback, this, std::placeholders::_1));
 
     lowCommandPublisher_ = nh->create_publisher<booster_interface::msg::LowCmd>(
-        "/joint_ctrl", 10); // /joint_ctrl
+        "/joint_ctrl", 1); // /joint_ctrl
 
     // Waiting for publisher on topic lowstate
     RCLCPP_INFO(nh->get_logger(), "Waiting for publisher on topic /lowstate...");
@@ -126,7 +126,12 @@ void sairol_bridge::T1Bridge::publishLowCommand_()
 {
     rclcpp::Time current = nh->get_clock()->now();
 
-    float_t phase = (current.seconds() - tStart_) / (tFinal_ - tStart_);
+    // float_t phase = (current.seconds() - tStart_) / (tFinal_ - tStart_);
+
+    float_t phase = 1.0f;
+    if (tFinal_ - tStart_ > 1e-6) {
+        phase = (current.seconds() - tStart_) / (tFinal_ - tStart_);
+    }
 
     phase = std::clamp(phase, 0.0f, 1.0f); // Ensure phase is between 0 and 1
 
@@ -147,19 +152,6 @@ void sairol_bridge::T1Bridge::publishLowCommand_()
         float dq_target = cmdParams_[i].dq_0 + cmdParams_[i].dq_1 * phase;
         cmd.dq = std::clamp(dq_target, -joint_info.dq_limit, joint_info.dq_limit);
 
-
-        if (joint_info.if_strong_joint) 
-        {
-            cmd.kp = std::clamp(cmd.kp, lower_limbs_kp_min_, lower_limbs_kp_max_);
-            cmd.kd = std::clamp(cmd.kd, lower_limbs_kd_min_, lower_limbs_kd_max_);
-        }
-        else
-        {
-            cmd.kp = std::clamp(cmd.kp, upper_limbs_kp_min_, upper_limbs_kp_max_);
-            cmd.kd = std::clamp(cmd.kd, upper_limbs_kd_min_, upper_limbs_kd_max_);
-        }
-
-
         if (torqueControl_)
         {
             auto kp = cmdParams_[i].kp_0 + cmdParams_[i].kp_1 * phase;
@@ -173,11 +165,29 @@ void sairol_bridge::T1Bridge::publishLowCommand_()
         }
         else
         {
-            cmd.tau = 0.0;
+            cmd.tau = cmdParams_[i].tau_0 + cmdParams_[i].tau_1 * phase;
             cmd.kp = cmdParams_[i].kp_0 + cmdParams_[i].kp_1 * phase;
             cmd.kd = cmdParams_[i].kd_0 + cmdParams_[i].kd_1 * phase;
 
-            cmd.q = std::clamp(cmd.q, (-cmd.kd * (currentState_.motor_state[i].q - cmd.dq) - joint_info.tau_limit) / cmd.kp + currentState_.motor_state[i].q, (-cmd.kd * (currentState_.motor_state[i].q - cmd.dq) + joint_info.tau_limit) / cmd.kp + currentState_.motor_state[i].q);
+            // Ensure kp and kd are within limits
+            if (joint_info.if_strong_joint) 
+            {
+                cmd.kp = std::clamp(cmd.kp, lower_limbs_kp_min_, lower_limbs_kp_max_);
+                cmd.kd = std::clamp(cmd.kd, lower_limbs_kd_min_, lower_limbs_kd_max_);
+            }
+            else
+            {
+                cmd.kp = std::clamp(cmd.kp, upper_limbs_kp_min_, upper_limbs_kp_max_);
+                cmd.kd = std::clamp(cmd.kd, upper_limbs_kd_min_, upper_limbs_kd_max_);
+            }
+
+            // if (i == 15 || i == 16 || i == 21 || i == 22) // Special case for waist joints
+            // {
+            //     cmd.tau = std::clamp((cmd.q - currentState_.motor_state[i].q) * cmd.kp, -joint_info.tau_limit, joint_info.tau_limit);
+            //     cmd.kp = 0.0;
+            // }
+            cmd.tau = std::clamp(cmd.tau, -joint_info.tau_limit, joint_info.tau_limit);
+            // cmd.q = std::clamp(cmd.q, (-cmd.kd * (currentState_.motor_state[i].q - cmd.dq) - joint_info.tau_limit) / cmd.kp + currentState_.motor_state[i].q, (-cmd.kd * (currentState_.motor_state[i].q - cmd.dq) + joint_info.tau_limit) / cmd.kp + currentState_.motor_state[i].q);
 
 
 
