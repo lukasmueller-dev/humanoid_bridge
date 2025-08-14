@@ -173,7 +173,7 @@ install(TARGETS
 find_package(rclpy REQUIRED)
 
 install(PROGRAMS
-  example/T1/T1_policy_deploy.py
+  example/T1/T1_ros_test.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

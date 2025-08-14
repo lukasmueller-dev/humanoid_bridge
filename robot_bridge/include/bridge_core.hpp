@@ -31,7 +31,6 @@ namespace sairol_bridge
         float_t tau_limit{0};
         float_t kp{0};
         float_t kd{0};
-        float_t default_position{0}; // Default weight for the joint
         bool if_strong_joint{false}; // Whether the joint is a strong joint
     };
 
@@ -58,16 +57,16 @@ namespace sairol_bridge
     protected:
         bool loadParameters_();
         void calculateInterpolationParams_(float_t duration,
-                                           int interpolation_order,
+                                           float_t interpolation_order,
                                            bool hold_position = false);
 
         void robotCmdCallBack_(bridge_interface::msg::RobotCmd::SharedPtr message);
 
-        virtual void readyPositionControl_();
+        void readyPositionControl_();
         void zeroPositionControl_();
         void update_();
         virtual void publishLowCommand_() = 0;
-        virtual bool initControl_();
+        virtual bool initControl_(bridge_interface::msg::RobotCmd default_cmd) = 0;
         bool checkCommand_();
         bool checkState_();
         virtual void finishControl_() = 0;
@@ -81,9 +80,10 @@ namespace sairol_bridge
 
         std::vector<Joint> joints_;
         std::vector<CmdParams> cmdParams_;
+        std::vector<double> ready_q_;
+        float_t cmdInterpOrder_{0.0};
 
         bridge_interface::msg::RobotCmd lowCommandDesired_;
-        bridge_interface::msg::RobotCmd lowCommandDefault_;
         bridge_interface::msg::LowCmd lowCommand_;
         bridge_interface::msg::LowState currentState_;
         bridge_interface::msg::ImuState imu_;
@@ -107,6 +107,7 @@ namespace sairol_bridge
 
         bool torqueControl_{false};
         bool controlStarted_{false};
+        bool if_init_{false}; // Whether the control is initialized
 
 
         virtual void stopControlServiceCB_(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,

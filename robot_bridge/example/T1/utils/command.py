@@ -3,7 +3,7 @@ from bridge_interface.msg import RobotCmd, MotorCmd
 def init_Cmd_T1(robot_cmd: RobotCmd):
     motorCmds = [MotorCmd() for _ in range(23)]
     robot_cmd.motor_cmd = motorCmds
-    robot_cmd.interpolation_order = 0
+    robot_cmd.interpolation_order = 0.8
     robot_cmd.hold_position = False
     robot_cmd.duration = 0.002
 

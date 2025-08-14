@@ -18,7 +18,7 @@ sairol_bridge::T1Bridge::T1Bridge(rclcpp::Node::SharedPtr node) : BridgeCore(nod
         RCLCPP_INFO(nh->get_logger(), "service not available, waiting again...");
     }
 
-    switch_to_prepare_mode();
+    // switch_to_prepare_mode();
 
     lowCommandDesired_.motor_cmd.resize(numJoint_);
     lowCommand_.motor_cmd.resize(numJoint_);
@@ -75,13 +75,13 @@ void sairol_bridge::T1Bridge::wireless_callback(sensor_msgs::msg::Joy::SharedPtr
     if (key == (Button_LT | Button_START))  // start: LT + START
     {
         RCLCPP_INFO(nh->get_logger(), "Starting control...");
-        initControl_();
+        initControl_(bridge_interface::msg::RobotCmd());
         return;
     }
     else if (key == Button_LB)  // ready position: LB
     {
         RCLCPP_INFO(nh->get_logger(), "Ready position control...");
-        initControl_();
+        if (!controlStarted_) initControl_(bridge_interface::msg::RobotCmd());
         readyPositionControl_();
         calculateInterpolationParams_(duration_, 1, true);
         return;
@@ -89,7 +89,7 @@ void sairol_bridge::T1Bridge::wireless_callback(sensor_msgs::msg::Joy::SharedPtr
     else if (key == Button_RB)  // zero position RB
     {
         RCLCPP_INFO(nh->get_logger(), "Zero position control...");
-        initControl_();
+        if (!controlStarted_) initControl_(bridge_interface::msg::RobotCmd());
         zeroPositionControl_();
         calculateInterpolationParams_(duration_, 1, true);
         return;
@@ -143,22 +143,26 @@ void sairol_bridge::T1Bridge::publishLowCommand_()
         // Set motor command mode and initial values
         // cmd.mode = (i < emptyJointIndex_) ? 0x0A : 0x01;
 
-        // Clamp q within limits
-        float q_target = cmdParams_[i].q_0 + cmdParams_[i].q_1 * phase;
-        // cmd.q = std::clamp(q_target, joint_info.q_min, joint_info.q_max);
-        cmd.q = q_target;
+        if (1e-6 < cmdInterpOrder_ && cmdInterpOrder_ < 1.0 - 1e-6)
+        {
+            // Low pass filter for cmd
+            cmd.q = cmd.q * cmdInterpOrder_ + cmdParams_[i].q_0 * (1 - cmdInterpOrder_);
+            cmd.dq = cmd.dq * cmdInterpOrder_ + cmdParams_[i].dq_0 * (1 - cmdInterpOrder_);
+        }
+        else {
+            // Interpolation
+            cmd.q = cmdParams_[i].q_0 + cmdParams_[i].q_1 * phase;
+            cmd.dq = cmdParams_[i].dq_0 + cmdParams_[i].dq_1 * phase;
+        }
 
-        // Clamp dq within limits
-        float dq_target = cmdParams_[i].dq_0 + cmdParams_[i].dq_1 * phase;
-        cmd.dq = std::clamp(dq_target, -joint_info.dq_limit, joint_info.dq_limit);
+        cmd.kp = cmdParams_[i].kp_0 + cmdParams_[i].kp_1 * phase;
+        cmd.kd = cmdParams_[i].kd_0 + cmdParams_[i].kd_1 * phase;
+
+        cmd.dq = std::clamp(cmd.dq, -joint_info.dq_limit, joint_info.dq_limit);
 
         if (torqueControl_)
         {
-            auto kp = cmdParams_[i].kp_0 + cmdParams_[i].kp_1 * phase;
-            auto kd = cmdParams_[i].kd_0 + cmdParams_[i].kd_1 * phase;
-            auto tau_set = cmdParams_[i].tau_1;
-
-            cmd.tau = kp * (cmd.q - currentState_.motor_state[i].q) + kd * (cmd.dq - currentState_.motor_state[i].dq) + tau_set;
+            cmd.tau = cmd.kp * (cmd.q - currentState_.motor_state[i].q) + cmd.kd * (cmd.dq - currentState_.motor_state[i].dq) + cmdParams_[i].tau_0;
             cmd.tau = std::clamp(cmd.tau, -joint_info.tau_limit, joint_info.tau_limit);
             cmd.kp = 0.0;
             cmd.kd = 0.0;
@@ -166,28 +170,16 @@ void sairol_bridge::T1Bridge::publishLowCommand_()
         else
         {
             cmd.tau = cmdParams_[i].tau_0 + cmdParams_[i].tau_1 * phase;
-            cmd.kp = cmdParams_[i].kp_0 + cmdParams_[i].kp_1 * phase;
-            cmd.kd = cmdParams_[i].kd_0 + cmdParams_[i].kd_1 * phase;
-
-            // Ensure kp and kd are within limits
-            if (joint_info.if_strong_joint) 
+            if (!if_init_)
             {
-                cmd.kp = std::clamp(cmd.kp, lower_limbs_kp_min_, lower_limbs_kp_max_);
-                cmd.kd = std::clamp(cmd.kd, lower_limbs_kd_min_, lower_limbs_kd_max_);
+                if (i == 15 || i == 16 || i == 21 || i == 22) // Special case for waist joints
+                {
+                    cmd.tau = std::clamp((cmd.q - currentState_.motor_state[i].q) * cmd.kp, -joint_info.tau_limit, joint_info.tau_limit);
+                    cmd.kp = 0.0;
+                }
             }
-            else
-            {
-                cmd.kp = std::clamp(cmd.kp, upper_limbs_kp_min_, upper_limbs_kp_max_);
-                cmd.kd = std::clamp(cmd.kd, upper_limbs_kd_min_, upper_limbs_kd_max_);
-            }
-
-            // if (i == 15 || i == 16 || i == 21 || i == 22) // Special case for waist joints
-            // {
-            //     cmd.tau = std::clamp((cmd.q - currentState_.motor_state[i].q) * cmd.kp, -joint_info.tau_limit, joint_info.tau_limit);
-            //     cmd.kp = 0.0;
-            // }
-            cmd.tau = std::clamp(cmd.tau, -joint_info.tau_limit, joint_info.tau_limit);
-            // cmd.q = std::clamp(cmd.q, (-cmd.kd * (currentState_.motor_state[i].q - cmd.dq) - joint_info.tau_limit) / cmd.kp + currentState_.motor_state[i].q, (-cmd.kd * (currentState_.motor_state[i].q - cmd.dq) + joint_info.tau_limit) / cmd.kp + currentState_.motor_state[i].q);
+            // cmd.tau = std::clamp(cmd.tau, -joint_info.tau_limit, joint_info.tau_limit);
+            cmd.q = std::clamp(cmd.q, (-cmd.kd * (currentState_.motor_state[i].q - cmd.dq) - joint_info.tau_limit) / cmd.kp + currentState_.motor_state[i].q, (-cmd.kd * (currentState_.motor_state[i].q - cmd.dq) + joint_info.tau_limit) / cmd.kp + currentState_.motor_state[i].q);
 
 
 
@@ -253,26 +245,8 @@ void sairol_bridge::T1Bridge::publishLowCommand_()
     lowCommandPublisher_->publish(booster_cmd);
 }
 
-void sairol_bridge::T1Bridge::readyPositionControl_()
+bool sairol_bridge::T1Bridge::initControl_(bridge_interface::msg::RobotCmd default_cmd)
 {
-    for (int i = 0; i < numJoint_; ++i)
-    {
-        lowCommandDesired_.motor_cmd[i].q = 0.0;
-        lowCommandDesired_.motor_cmd[i].dq = 0.0;
-        lowCommandDesired_.motor_cmd[i].tau = 0.0;
-        lowCommandDesired_.motor_cmd[i].kp = joints_[i].kp;
-        lowCommandDesired_.motor_cmd[i].kd = joints_[i].kd;
-    }
-
-    lowCommandDesired_.motor_cmd[3].q = -1.3;
-    lowCommandDesired_.motor_cmd[7].q = 1.3;
-    lowCommandDesired_.motor_cmd[5].q = -1.5;
-    lowCommandDesired_.motor_cmd[9].q = 1.5;
-}
-
-bool sairol_bridge::T1Bridge::initControl_()
-{
-
     booster_interface::msg::LowCmd booster_cmd;
     booster_cmd.motor_cmd.resize(numJoint_);
     for (size_t i = 0; i < numJoint_; ++i)
@@ -298,29 +272,32 @@ bool sairol_bridge::T1Bridge::initControl_()
     }
 
     calculateInterpolationParams_(0.0, 1, true);
+
     controlStarted_ = true;
+    if_init_ = true;
     rclcpp::Rate rate(100);
     rate.sleep();
     RCLCPP_INFO(nh->get_logger(), "Control initialized successfully.");
-
-    if (lowCommandDefault_.motor_cmd.empty())
+    
+    if (default_cmd.motor_cmd.size() == numJoint_)
     {
         for (size_t i = 0; i < numJoint_; ++i)
         {
-            lowCommandDesired_.motor_cmd[i].q = joints_[i].default_position;
+            lowCommandDesired_.motor_cmd[i].q = default_cmd.motor_cmd[i].q;
+            lowCommandDesired_.motor_cmd[i].kp = default_cmd.motor_cmd[i].kp;
+            lowCommandDesired_.motor_cmd[i].kd = default_cmd.motor_cmd[i].kd;
+        }
+    }
+    else 
+    {
+        for (size_t i = 0; i < numJoint_; ++i)
+        {
+            lowCommandDesired_.motor_cmd[i].q = ready_q_[i];
             lowCommandDesired_.motor_cmd[i].kp = joints_[i].kp;
             lowCommandDesired_.motor_cmd[i].kd = joints_[i].kd;
         }
     }
-    else
-    {
-        for (size_t i = 0; i < numJoint_; ++i)
-        {
-            lowCommandDesired_.motor_cmd[i].q = lowCommandDefault_.motor_cmd[i].q;
-            lowCommandDesired_.motor_cmd[i].kp = lowCommandDefault_.motor_cmd[i].kp;
-            lowCommandDesired_.motor_cmd[i].kd = lowCommandDefault_.motor_cmd[i].kd;
-        }
-    }
+
     calculateInterpolationParams_(duration_, 1, true);
 
     return true;
@@ -330,7 +307,6 @@ void sairol_bridge::T1Bridge::stopControlServiceCB_(
 const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
 std::shared_ptr<std_srvs::srv::Trigger::Response> response)
 {
-    controlStarted_ = false;
     RCLCPP_INFO(nh->get_logger(), "Stopping control service...");
     switch_to_damping_mode();
     response->success = true;

@@ -153,7 +153,6 @@ namespace sairol_bridge
                 ret = ret && nh->get_parameter(name + ".tau_limit", joint_info.tau_limit);
                 ret = ret && nh->get_parameter(name + ".kp", joint_info.kp);
                 ret = ret && nh->get_parameter(name + ".kd", joint_info.kd);
-                ret = ret && nh->get_parameter(name + ".default_position", joint_info.default_position);
                 ret = ret && nh->get_parameter(name + ".if_strong_joint", joint_info.if_strong_joint);
                 joints_.push_back(joint_info);
                 assert(joint_info.idx < numJoint_ && ("Joint index exceeds the number of joints, please check the joint index: " + std::to_string(joint_info.idx)).c_str());
@@ -162,8 +161,6 @@ namespace sairol_bridge
                 assert(joint_info.tau_limit >= 0 && ("Joint tau_limit must be non-negative, please check the joint index: " + std::to_string(joint_info.idx)).c_str());
                 assert(joint_info.kp >= 0 && ("Joint kp must be non-negative, please check the joint index: " + std::to_string(joint_info.idx)).c_str());
                 assert(joint_info.kd >= 0 && ("Joint kd must be non-negative, please check the joint index: " + std::to_string(joint_info.idx)).c_str());
-                assert(joint_info.default_position >= joint_info.q_min && joint_info.default_position <= joint_info.q_max &&
-                       ("Joint default_position must be within the range of q_min and q_max, please check the joint index: " + std::to_string(joint_info.idx)).c_str());
                 assert(joint_info.if_strong_joint == true || joint_info.if_strong_joint == false && ("Joint if_strong_joint must be a boolean value, please check the joint index: " + std::to_string(joint_info.idx)).c_str());
             }
             if (!ret)
@@ -178,6 +175,30 @@ namespace sairol_bridge
             RCLCPP_ERROR(nh->get_logger(), "Failed to get 'joint_names' from parameters");
             return false;
         }
+
+        // // Get list of arrays from parameter server
+        // if (!nh->get_parameter("default_q", default_q_))
+        // {
+        //     RCLCPP_ERROR(nh->get_logger(), "Failed to get 'default_q' from parameters");
+        //     for (int i = 0; i < numJoint_; ++i)
+        //     {
+        //         assert(default_q_[i] >= joints_[i].q_min && default_q_[i] <= joints_[i].q_max &&
+        //                ("Default position must be within joint limits, please check the joint index: " + std::to_string(i)).c_str());
+        //     }
+        //     return false;
+        // }
+
+        if (!nh->get_parameter("ready_q", ready_q_))
+        {
+            RCLCPP_ERROR(nh->get_logger(), "Failed to get 'ready_q' from parameters");
+            for (int i = 0; i < numJoint_; ++i)
+            {
+                assert(ready_q_[i] >= joints_[i].q_min && ready_q_[i] <= joints_[i].q_max &&
+                       ("Ready position must be within joint limits, please check the joint index: " + std::to_string(i)).c_str());
+            }
+            return false;
+        }
+
         assert(joints_.size() == numJoint_ && "Number of joints does not match the number of joint limits");
         assert(upper_limbs_kp_max_ >= upper_limbs_kp_min_ && "Upper limbs kp max must be greater than or equal to min");
         assert(upper_limbs_kd_max_ >= upper_limbs_kd_min_ && "Upper limbs kd max must be greater than or equal to min");
@@ -200,7 +221,8 @@ namespace sairol_bridge
         }
 
         if (checkCommand_())
-        {
+        {   
+            if_init_ = false;
             calculateInterpolationParams_(duration, interpolation_order, hold_position);
         }
         else
@@ -226,36 +248,14 @@ namespace sairol_bridge
     {
         for (int i = 0; i < numJoint_; ++i)
         {
-            lowCommandDesired_.motor_cmd[i].q = 0.0;
+            lowCommandDesired_.motor_cmd[i].q = ready_q_[i];
             lowCommandDesired_.motor_cmd[i].dq = 0.0;
             lowCommandDesired_.motor_cmd[i].tau = 0.0;
             lowCommandDesired_.motor_cmd[i].kp = joints_[i].kp;
             lowCommandDesired_.motor_cmd[i].kd = joints_[i].kd;
         }
-
-        lowCommandDesired_.motor_cmd[13].q = -1.0;
-        lowCommandDesired_.motor_cmd[15].q = 1.6;
-        lowCommandDesired_.motor_cmd[17].q = 1.0;
-        lowCommandDesired_.motor_cmd[19].q = 1.6;
     }
 
-    bool BridgeCore::initControl_()
-    {
-
-        for (int i = 0; i < numJoint_; ++i)
-        {
-            lowCommandDesired_.motor_cmd[i].q = currentState_.motor_state[i].q;
-            lowCommandDesired_.motor_cmd[i].kp = joints_[i].kp;
-            lowCommandDesired_.motor_cmd[i].kd = joints_[i].kd;
-        }
-
-        calculateInterpolationParams_(0.0, 1, true);
-        controlStarted_ = true;
-        rclcpp::Rate rate(100);
-        rate.sleep();
-
-        return true;
-    }
 
     void BridgeCore::update_()
     {
@@ -287,12 +287,12 @@ namespace sairol_bridge
     }
 
     void BridgeCore::calculateInterpolationParams_(float_t duration,
-                                                   int interpolation_order,
+                                                   float_t interpolation_order,
                                                    bool hold_position)
     {
-        checkCommand_();
         std::unique_lock<std::mutex> lock(mutex_);
-        if (interpolation_order == 0)
+        cmdInterpOrder_ = interpolation_order;
+        if (0.0 <= cmdInterpOrder_ && cmdInterpOrder_ < 1.0)
         {
             for (int i = 0; i < numJoint_; i++)
             {
@@ -308,7 +308,7 @@ namespace sairol_bridge
                 cmdParams_[i].kd_1 = 0.0;
             }
         }
-        else if (interpolation_order == 1)
+        else if (cmdInterpOrder_ == 1.0)
         {
             for (int i = 0; i < numJoint_; i++)
             {
@@ -323,6 +323,11 @@ namespace sairol_bridge
                 cmdParams_[i].kd_0 = lowCommand_.motor_cmd[i].kd; // currentState_.motor_state[i].kd;
                 cmdParams_[i].kd_1 = lowCommandDesired_.motor_cmd[i].kd - cmdParams_[i].kd_0;
             }
+        }
+        else
+        {
+            RCLCPP_FATAL(nh->get_logger(), "Invalid interpolation order: %f. Must be 0 or 1.", cmdInterpOrder_);
+            throw std::invalid_argument("Invalid interpolation order");
         }
 
         lock.unlock();
@@ -425,33 +430,21 @@ namespace sairol_bridge
                                  "Command check failed: motor_cmd[%lu] contains invalid (NaN/Inf) values.", i);
                 return false; // Can't clip NaN/Inf, so still return false
             }
+
             // Check gains
-            if (i < emptyJointIndex_)
+            if (joint_info.if_strong_joint) 
             {
-                if (joint_info.kp < lower_limbs_kp_min_ || joint_info.kp > lower_limbs_kp_max_)
-                {
-                    cmd.kp = std::clamp(joint_info.kp, lower_limbs_kp_min_, lower_limbs_kp_max_);
-                    any_value_clipped = i;
-                }
-                if (joint_info.kd < lower_limbs_kd_min_ || joint_info.kd > lower_limbs_kd_max_)
-                {
-                    cmd.kd = std::clamp(joint_info.kd, lower_limbs_kd_min_, lower_limbs_kd_max_);
-                    any_value_clipped = i;
-                }
+                if (cmd.kp < lower_limbs_kp_min_ || cmd.kp > lower_limbs_kp_max_) any_value_clipped = i;
+                cmd.kp = std::clamp(cmd.kp, lower_limbs_kp_min_, lower_limbs_kp_max_);
+                cmd.kd = std::clamp(cmd.kd, lower_limbs_kd_min_, lower_limbs_kd_max_);
             }
             else
             {
-                if (joint_info.kp < upper_limbs_kp_min_ || joint_info.kp > upper_limbs_kp_max_)
-                {
-                    cmd.kp = std::clamp(joint_info.kp, upper_limbs_kp_min_, upper_limbs_kp_max_);
-                    any_value_clipped = i;
-                }
-                if (joint_info.kd < upper_limbs_kd_min_ || joint_info.kd > upper_limbs_kd_max_)
-                {
-                    cmd.kd = std::clamp(joint_info.kd, upper_limbs_kd_min_, upper_limbs_kd_max_);
-                    any_value_clipped = i;
-                }
+                if (cmd.kp < upper_limbs_kp_min_ || cmd.kp > upper_limbs_kp_max_) any_value_clipped = i;
+                cmd.kp = std::clamp(cmd.kp, upper_limbs_kp_min_, upper_limbs_kp_max_);
+                cmd.kd = std::clamp(cmd.kd, upper_limbs_kd_min_, upper_limbs_kd_max_);
             }
+
             // // Check position
             // if (cmd.q < joint_info.q_min || cmd.q > joint_info.q_max)
             // {
@@ -459,6 +452,7 @@ namespace sairol_bridge
             //     cmd.q = std::clamp(cmd.q, joint_info.q_min, joint_info.q_max);
             //     any_value_clipped = i;
             // }
+
             // Check velocity
             if (cmd.dq < -joint_info.dq_limit || cmd.dq > joint_info.dq_limit)
             {
@@ -466,37 +460,13 @@ namespace sairol_bridge
                 cmd.dq = std::clamp(cmd.dq, -joint_info.dq_limit, joint_info.dq_limit);
                 any_value_clipped = i;
             }
+
             // Check torque
             if (cmd.tau < -joint_info.tau_limit || cmd.tau > joint_info.tau_limit)
             {
                 RCLCPP_WARN_ONCE(nh->get_logger(), "Clipping motor_cmd[%lu] tau: %.3f", i, cmd.tau);
                 cmd.tau = std::clamp(cmd.tau, -joint_info.tau_limit, joint_info.tau_limit);
                 any_value_clipped = i;
-            }
-            // Check gains
-            auto kp_max_ = (i < emptyJointIndex_) ? lower_limbs_kp_max_ : upper_limbs_kp_max_;
-            auto kp_min_ = (i < emptyJointIndex_) ? lower_limbs_kp_min_ : upper_limbs_kp_min_;
-            auto kd_max_ = (i < emptyJointIndex_) ? lower_limbs_kd_max_ : upper_limbs_kd_max_;
-            auto kd_min_ = (i < emptyJointIndex_) ? lower_limbs_kd_min_ : upper_limbs_kd_min_;
-            if (cmd.kp < kp_min_ || cmd.kp > kp_max_)
-            {
-                RCLCPP_WARN_ONCE(nh->get_logger(), "Clipping motor_cmd[%lu] kp: %.3f", i, cmd.kp);
-                cmd.kp = std::clamp(cmd.kp, kp_min_, kp_max_);
-                any_value_clipped = i;
-            }
-            if (cmd.kd < kd_min_ || cmd.kd > kd_max_)
-            {
-                RCLCPP_WARN_ONCE(nh->get_logger(), "Clipping motor_cmd[%lu] kd: %.3f", i, cmd.kd);
-                cmd.kd = std::clamp(cmd.kd, kd_min_, kd_max_);
-                any_value_clipped = i;
-            }
-            if (cmd.kp == 0.0 and cmd.kd == 0.0)
-            {
-                cmd.kp = joint_info.kp;
-                cmd.kd = joint_info.kd;
-                RCLCPP_WARN_ONCE(nh->get_logger(), "motor_cmd[%lu] kp and kd are both zero."
-                                                   "Using default gains: [%.3f, %.3f].",
-                                 i, joint_info.kp, joint_info.kd);
             }
 
             if (any_value_clipped > 0)
@@ -512,18 +482,9 @@ namespace sairol_bridge
         const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
         std::shared_ptr<std_srvs::srv::Trigger::Response> response)
     {
-        if (!controlStarted_)
-        {
-            response->success = false;
-            response->message = "Control service is not started";
-            return;
-        }
-        else
-        {
-            controlStarted_ = false;
-            response->success = true;
-            response->message = "Stop control service activated";
-        }
+        if (controlStarted_) controlStarted_ = false;
+        response->success = true;
+        response->message = "Stop control service activated";
     }
 
     void BridgeCore::readyPositionControlServiceCB_(
@@ -531,7 +492,7 @@ namespace sairol_bridge
         std::shared_ptr<std_srvs::srv::Trigger::Response> response)
     {
         if (!controlStarted_)
-            initControl_();
+            initControl_(bridge_interface::msg::RobotCmd());
         readyPositionControl_();
         calculateInterpolationParams_(duration_, 1, true);
         response->success = true;
@@ -543,7 +504,7 @@ namespace sairol_bridge
         std::shared_ptr<std_srvs::srv::Trigger::Response> response)
     {
         if (!controlStarted_)
-            initControl_();
+            initControl_(bridge_interface::msg::RobotCmd());
         zeroPositionControl_();
         calculateInterpolationParams_(duration_, 1, true);
         response->success = true;
@@ -555,29 +516,24 @@ namespace sairol_bridge
         std::shared_ptr<bridge_interface::srv::SetDefaultPosition::Response> response)
     {
         auto default_position = request->default_position;
-
-        if (default_position.size() != numJoint_ )
-        {   
-            initControl_();
-            RCLCPP_INFO(nh->get_logger(), "Starting control...");
-            response->success = true;
-            response->message = "start control with invalid size of default position, kp or kd";
-           
-        }
-        else
+        bridge_interface::msg::RobotCmd default_cmd;
+        
+        if (default_position.size() == numJoint_ )
         {
-            lowCommandDefault_.motor_cmd.resize(numJoint_);
+            default_cmd.motor_cmd.resize(numJoint_);
             for (int i = 0; i < numJoint_; ++i)
             {
-                lowCommandDefault_.motor_cmd[i].q = default_position[i];
-
+                default_cmd.motor_cmd[i].q = default_position[i];
+                default_cmd.motor_cmd[i].dq = 0.0;
+                default_cmd.motor_cmd[i].tau = 0.0;
+                default_cmd.motor_cmd[i].kp = joints_[i].kp;
+                default_cmd.motor_cmd[i].kd = joints_[i].kd;
             }
-            initControl_();      
-            RCLCPP_INFO(nh->get_logger(), "Starting control...");   
-            response->success = true;
-            response->message = "start control and get default position service activated";
         }
 
-        
+        initControl_(default_cmd);
+        RCLCPP_INFO(nh->get_logger(), "Starting control...");
+        response->success = true;
+        response->message = "start control with invalid size of default position, kp or kd";
     }
 }

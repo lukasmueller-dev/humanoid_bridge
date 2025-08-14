@@ -59,10 +59,9 @@ class Controller(Node):
         self._init_timer()
         self._init_low_state_values()
         self._init_ros_communication()
-        self.publish_runner = None
+
         self.running = True
 
-        self.publish_lock = threading.Lock()
 
     def _init_timer(self):
         self.timer = Timer(TimerConfig(time_step=self.cfg["common"]["dt"]))
@@ -96,10 +95,9 @@ class Controller(Node):
                 1
             )
             
-            self.client = B1LocoClient()
-            self.client.Init()
+            # self.client = B1LocoClient()
+            # self.client.Init()
 
-            
             self.logger.info("ROS 2 communication initialized successfully")
         except Exception as e:
             self.logger.error(f"Failed to initialize ROS 2 communication: {e}")
@@ -120,18 +118,13 @@ class Controller(Node):
                 self.dof_pos_latest[i] = motor.q
                 
         if time_now >= self.next_inference_time:
-         
             self.projected_gravity[:] = rotate_vector_inverse_rpy(
                 low_state_msg.imu_state.rpy[0],
                 low_state_msg.imu_state.rpy[1],
                 low_state_msg.imu_state.rpy[2],
                 np.array([0.0, 0.0, -1.0]),
             )
-            
-       
             self.base_ang_vel[:] = low_state_msg.imu_state.gyro
-            
-           
             for i, motor in enumerate(low_state_msg.motor_state_serial):
                 if i < B1JointCnt:
                     self.dof_pos[i] = motor.q
@@ -186,11 +179,6 @@ class Controller(Node):
         self.next_inference_time = self.timer.get_time()
         self.next_publish_time = self.timer.get_time()
         
-
-        self.publish_runner = threading.Thread(target=self._publish_cmd)
-        self.publish_runner.daemon = True
-        self.publish_runner.start()
-        
         print(f"{self.remoteControlService.get_operation_hint()}")
 
     def run(self):
@@ -216,37 +204,15 @@ class Controller(Node):
 
         inference_time = time.perf_counter()
         self.logger.debug(f"Inference took {(inference_time - start_time)*1000:.4f} ms")
+
+        for i in range(B1JointCnt):
+            self.low_cmd.motor_cmd[i].q = float(self.dof_target[i])
+            self.low_cmd.motor_cmd[i].tau = 0.0  # Reset torque to zero
+            self.low_cmd.motor_cmd[i].kp = float(self.cfg["common"]["stiffness"][i])
+            self.low_cmd.motor_cmd[i].kd = float(self.cfg["common"]["damping"][i])
+        
+        self._send_cmd(self.low_cmd)
         time.sleep(0.001)
-
-    def _publish_cmd(self):
-        while self.running:
-            time_now = self.timer.get_time()
-            if time_now < self.next_publish_time:
-                time.sleep(0.001)
-                continue
-            self.next_publish_time += self.cfg["common"]["dt"]
-            self.logger.debug(f"Next publish time: {self.next_publish_time}")
-
-            self.filtered_dof_target = self.filtered_dof_target * 0.8 + self.dof_target * 0.2
-
-            for i in range(B1JointCnt):
-                self.low_cmd.motor_cmd[i].q = float(self.filtered_dof_target[i])
-
-            # Use series-parallel conversion for torque to avoid non-linearity
-            for i in self.cfg["mech"]["parallel_mech_indexes"]:
-                self.low_cmd.motor_cmd[i].q = float(self.dof_pos_latest[i])
-                self.low_cmd.motor_cmd[i].tau = float(np.clip(
-                    (self.filtered_dof_target[i] - self.dof_pos_latest[i]) * self.cfg["common"]["stiffness"][i],
-                    -self.cfg["common"]["torque_limit"][i],
-                    self.cfg["common"]["torque_limit"][i],
-                ))
-                self.low_cmd.motor_cmd[i].kp = 0.0
-
-            start_time = time.perf_counter()
-            self._send_cmd(self.low_cmd)
-            publish_time = time.perf_counter()
-            self.logger.debug(f"Publish took {(publish_time - start_time)*1000:.4f} ms")
-            time.sleep(0.001)
 
     def __enter__(self) -> "Controller":
         return self
@@ -277,9 +243,8 @@ if __name__ == "__main__":
 
     cfg_file = "src/sairol_bridge/robot_bridge/example/T1/configs/T1.yaml"
     print(f"Starting ROS 2 custom controller...")
-    ChannelFactory.Instance().Init(0)
+    # ChannelFactory.Instance().Init(0)
     
-
     rclpy.init()
 
     t = threading.Thread(target=spin_in_background)
@@ -302,7 +267,7 @@ if __name__ == "__main__":
                 # rclpy.spin_once(controller, timeout_sec=0.001)
             
           
-            controller.client.ChangeMode(RobotMode.kDamping)
+            # controller.client.ChangeMode(RobotMode.kDamping)
             
         except KeyboardInterrupt:
             print("\nKeyboard interrupt received. Cleaning up...")
