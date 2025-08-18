@@ -18,7 +18,7 @@ sairol_bridge::T1Bridge::T1Bridge(rclcpp::Node::SharedPtr node) : BridgeCore(nod
         RCLCPP_INFO(nh->get_logger(), "service not available, waiting again...");
     }
 
-    // switch_to_prepare_mode();
+    switch_to_prepare_mode();
 
     lowCommandDesired_.motor_cmd.resize(numJoint_);
     lowCommand_.motor_cmd.resize(numJoint_);
@@ -28,8 +28,8 @@ sairol_bridge::T1Bridge::T1Bridge(rclcpp::Node::SharedPtr node) : BridgeCore(nod
     lowStateSubscriber_ = nh->create_subscription<booster_interface::msg::LowState>(
         "/low_state", 1, std::bind(&sairol_bridge::T1Bridge::lowStateHandler_, this, std::placeholders::_1));
 
-    remoteControlSubscriber_ = nh->create_subscription<sensor_msgs::msg::Joy>(
-        "/joy", 1, std::bind(&sairol_bridge::T1Bridge::wireless_callback, this, std::placeholders::_1));
+    // remoteControlSubscriber_ = nh->create_subscription<sensor_msgs::msg::Joy>(
+    //     "/joy", 1, std::bind(&sairol_bridge::T1Bridge::wireless_callback, this, std::placeholders::_1));
 
     lowCommandPublisher_ = nh->create_publisher<booster_interface::msg::LowCmd>(
         "/joint_ctrl", 1); // /joint_ctrl

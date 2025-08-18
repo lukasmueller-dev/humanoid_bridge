@@ -23,6 +23,13 @@ from utils.rotate import rotate_vector_inverse_rpy
 from utils.timer import TimerConfig, Timer
 from utils.policy import Policy
 
+# 导入RobotClient
+import os
+script_path = '/home/xuanhaosong/sairol_ws/src/sairol_bridge/robot_bridge/scripts'
+if script_path not in sys.path:
+    sys.path.append(script_path)
+from robot_client import RobotClient
+
 
 
 from booster_robotics_sdk_python import (
@@ -57,81 +64,25 @@ class Controller(Node):
         self.policy = Policy(cfg=self.cfg)
 
         self._init_timer()
-        self._init_low_state_values()
-        self._init_ros_communication()
+        
+        # 使用RobotClient替代直接的ROS通信
+        self.robot_client = RobotClient("T1", B1JointCnt, self)
 
         self.running = True
+        
+        # 初始化一些需要的变量
+        self.dof_target = np.zeros(B1JointCnt, dtype=np.float32)
 
-
+        self.low_cmd = RobotCmd()
     def _init_timer(self):
         self.timer = Timer(TimerConfig(time_step=self.cfg["common"]["dt"]))
         self.next_publish_time = self.timer.get_time()
         self.next_inference_time = self.timer.get_time()
 
-    def _init_low_state_values(self):
-        self.base_ang_vel = np.zeros(3, dtype=np.float32)
-        self.projected_gravity = np.zeros(3, dtype=np.float32)
-        self.dof_pos = np.zeros(B1JointCnt, dtype=np.float32)
-        self.dof_vel = np.zeros(B1JointCnt, dtype=np.float32)
 
-        self.dof_target = np.zeros(B1JointCnt, dtype=np.float32)
-        self.filtered_dof_target = np.zeros(B1JointCnt, dtype=np.float32)
-        self.dof_pos_latest = np.zeros(B1JointCnt, dtype=np.float32)
-
-    def _init_ros_communication(self) -> None:
-
-        try:
-
-            self.low_state_subscription = self.create_subscription(
-                LowState,
-                '/low_state',
-                self._low_state_handler,
-                1
-            )
-            
-            self.low_cmd_publisher = self.create_publisher(
-                RobotCmd,
-                '/robot_cmd',
-                1
-            )
-            
-            # self.client = B1LocoClient()
-            # self.client.Init()
-
-            self.logger.info("ROS 2 communication initialized successfully")
-        except Exception as e:
-            self.logger.error(f"Failed to initialize ROS 2 communication: {e}")
-            raise
-
-    def _low_state_handler(self, low_state_msg: LowState):
-
-        if abs(low_state_msg.imu_state.rpy[0]) > 1.0 or abs(low_state_msg.imu_state.rpy[1]) > 1.0:
-            self.logger.warning("IMU base rpy values are too large: {}".format(low_state_msg.imu_state.rpy))
-            self.running = False
-            
-        self.timer.tick_timer_if_sim()
-        time_now = self.timer.get_time()
+    def _send_cmd(self, dof_target_pos, dof_target_vel, dof_target_tau, dof_target_kp, dof_target_kd):
         
-     
-        for i, motor in enumerate(low_state_msg.motor_state_serial):
-            if i < B1JointCnt:
-                self.dof_pos_latest[i] = motor.q
-                
-        if time_now >= self.next_inference_time:
-            self.projected_gravity[:] = rotate_vector_inverse_rpy(
-                low_state_msg.imu_state.rpy[0],
-                low_state_msg.imu_state.rpy[1],
-                low_state_msg.imu_state.rpy[2],
-                np.array([0.0, 0.0, -1.0]),
-            )
-            self.base_ang_vel[:] = low_state_msg.imu_state.gyro
-            for i, motor in enumerate(low_state_msg.motor_state_serial):
-                if i < B1JointCnt:
-                    self.dof_pos[i] = motor.q
-                    self.dof_vel[i] = motor.dq
-
-    def _send_cmd(self, cmd: RobotCmd):
-        self.low_cmd_publisher.publish(cmd)
+        self.robot_client._send_cmd(dof_target_pos, dof_target_vel, dof_target_tau, dof_target_kp, dof_target_kd)
 
     def cleanup(self) -> None:
         self.logger.info("Cleaning up resources...")
@@ -146,27 +97,7 @@ class Controller(Node):
         if hasattr(self, "publish_runner") and getattr(self, "publish_runner") is not None:
             self.publish_runner.join(timeout=1.0)
 
-    def start_custom_mode_conditionally(self):
-
-        print(f"{self.remoteControlService.get_custom_mode_operation_hint()}")
-        while True:
-            if self.remoteControlService.start_custom_mode():
-                break
-            time.sleep(0.1)
-            
-        start_time = time.perf_counter()
-        
-
-        self.low_cmd = RobotCmd()
-        create_prepare_cmd(self.low_cmd, self.cfg)
-        
-        for i in range(B1JointCnt):
-            self.dof_target[i] = self.low_cmd.motor_cmd[i].q
-            self.filtered_dof_target[i] = self.low_cmd.motor_cmd[i].q
-            
-
     def start_rl_gait_conditionally(self):
-
         print(f"{self.remoteControlService.get_rl_gait_operation_hint()}")
         while True:
             if self.remoteControlService.start_rl_gait():
@@ -174,18 +105,34 @@ class Controller(Node):
             time.sleep(0.1)
             
         create_first_frame_rl_cmd(self.low_cmd, self.cfg)
-        self._send_cmd(self.low_cmd)
         
+  
+        dof_target_pos = np.array([self.low_cmd.motor_cmd[i].q for i in range(B1JointCnt)])
+        dof_target_vel = np.array([self.low_cmd.motor_cmd[i].dq for i in range(B1JointCnt)])
+        dof_target_tau = np.array([self.low_cmd.motor_cmd[i].tau for i in range(B1JointCnt)])
+        dof_target_kp = np.array([self.low_cmd.motor_cmd[i].kp for i in range(B1JointCnt)])
+        dof_target_kd = np.array([self.low_cmd.motor_cmd[i].kd for i in range(B1JointCnt)])
+        
+        self._send_cmd(dof_target_pos, dof_target_vel, dof_target_tau, dof_target_kp, dof_target_kd)
+
         self.next_inference_time = self.timer.get_time()
         self.next_publish_time = self.timer.get_time()
         
         print(f"{self.remoteControlService.get_operation_hint()}")
 
     def run(self):
+        self.timer.counter = self.robot_client.count
         time_now = self.timer.get_time()
+
         if time_now < self.next_inference_time:
             time.sleep(0.001)
             return
+   
+        if abs(self.robot_client.rpy[0]) > 1.0 or abs(self.robot_client.rpy[1]) > 1.0:
+            self.logger.warning("IMU base rpy values are too large: {}".format(self.robot_client.rpy))
+            self.running = False
+            return
+        
         self.logger.debug("-----------------------------------------------------")
         self.next_inference_time += self.policy.get_policy_interval()
         self.logger.debug(f"Next start time: {self.next_inference_time}")
@@ -193,10 +140,10 @@ class Controller(Node):
 
         self.dof_target[:] = self.policy.inference(
             time_now=time_now,
-            dof_pos=self.dof_pos,
-            dof_vel=self.dof_vel,
-            base_ang_vel=self.base_ang_vel,
-            projected_gravity=self.projected_gravity,
+            dof_pos=self.robot_client.dof_pos,
+            dof_vel=self.robot_client.dof_vel,
+            base_ang_vel=self.robot_client.base_ang_vel,
+            projected_gravity=self.robot_client.projected_gravity,
             vx=self.remoteControlService.get_vx_cmd(),
             vy=self.remoteControlService.get_vy_cmd(),
             vyaw=self.remoteControlService.get_vyaw_cmd(),
@@ -205,13 +152,15 @@ class Controller(Node):
         inference_time = time.perf_counter()
         self.logger.debug(f"Inference took {(inference_time - start_time)*1000:.4f} ms")
 
-        for i in range(B1JointCnt):
-            self.low_cmd.motor_cmd[i].q = float(self.dof_target[i])
-            self.low_cmd.motor_cmd[i].tau = 0.0  # Reset torque to zero
-            self.low_cmd.motor_cmd[i].kp = float(self.cfg["common"]["stiffness"][i])
-            self.low_cmd.motor_cmd[i].kd = float(self.cfg["common"]["damping"][i])
+      
+        dof_target_pos = self.dof_target.copy()
+        dof_target_vel = np.zeros(B1JointCnt, dtype=np.float32)
+        dof_target_tau = np.zeros(B1JointCnt, dtype=np.float32)
+        dof_target_kp = np.array([float(self.cfg["common"]["stiffness"][i]) for i in range(B1JointCnt)], dtype=np.float32)
+        dof_target_kd = np.array([float(self.cfg["common"]["damping"][i]) for i in range(B1JointCnt)], dtype=np.float32)
         
-        self._send_cmd(self.low_cmd)
+ 
+        self._send_cmd(dof_target_pos, dof_target_vel, dof_target_tau, dof_target_kp, dof_target_kd)
         time.sleep(0.001)
 
     def __enter__(self) -> "Controller":
@@ -221,12 +170,7 @@ class Controller(Node):
         self.cleanup()
 
 
-def spin_in_background():
-    executor = rclpy.get_global_executor()
-    try:
-        executor.spin()
-    except ExternalShutdownException:
-        pass
+
 
 if __name__ == "__main__":
     import argparse
@@ -243,32 +187,21 @@ if __name__ == "__main__":
 
     cfg_file = "src/sairol_bridge/robot_bridge/example/T1/configs/T1.yaml"
     print(f"Starting ROS 2 custom controller...")
-    # ChannelFactory.Instance().Init(0)
     
     rclpy.init()
 
-    t = threading.Thread(target=spin_in_background)
-    t.start()
-    
-
     try:
         controller = Controller(cfg_file)
-        rclpy.get_global_executor().add_node(controller)
 
         time.sleep(2)  
         print("Initialization complete.")
-        
-        controller.start_custom_mode_conditionally()
-        controller.start_rl_gait_conditionally()
 
+        controller.start_rl_gait_conditionally()
+        i = 0
         try:
             while controller.running and rclpy.ok():
                 controller.run()
-                # rclpy.spin_once(controller, timeout_sec=0.001)
-            
-          
-            # controller.client.ChangeMode(RobotMode.kDamping)
-            
+
         except KeyboardInterrupt:
             print("\nKeyboard interrupt received. Cleaning up...")
         finally:
