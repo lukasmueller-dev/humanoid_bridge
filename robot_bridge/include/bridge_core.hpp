@@ -8,7 +8,6 @@
 #include "bridge_interface/msg/imu_state.hpp"
 #include "bridge_interface/srv/set_default_position.hpp"
 #include "std_srvs/srv/trigger.hpp"
-#include "key_event_handler.hpp"
 
 #include <vector>
 #include <limits>

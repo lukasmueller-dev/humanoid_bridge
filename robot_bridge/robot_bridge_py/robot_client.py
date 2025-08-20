@@ -4,6 +4,8 @@ import numpy as np
 from bridge_interface.msg import RobotCmd, MotorCmd
 from bridge_interface.srv import SetDefaultPosition
 from std_srvs.srv import Trigger
+from rclpy.node import Node
+from rclpy.client import Client as ROSClient
 
 
 class JoyCmd(Enum):
@@ -11,12 +13,13 @@ class JoyCmd(Enum):
     STOP_CONTROL = 1
     DEFAULT_POSITION = 2
     ZERO_POSITION = 3
-    START_CONTROL = 4
+    INIT_CONTROL = 4
+    START_AGENT = 5
 
 
 class RobotClient:
     def __init__(self, node, robot_type, num_dof, control_frequency, interpolation_order=0) -> None:
-        self.node = node
+        self.node: Node = node
         self.robot_type = robot_type
         self.num_dof = num_dof
         self.time_count = 0
@@ -79,6 +82,11 @@ class RobotClient:
 
         self.low_cmd_publisher = self.node.create_publisher(RobotCmd, '/robot_cmd', 1)
         
+        self.start_control_client = self.node.create_client(SetDefaultPosition, '/start_control')
+        self.goto_zero_position_client = self.node.create_client(Trigger, '/zero_position_control')
+        self.ready_position_client = self.node.create_client(Trigger, '/ready_position_control')
+        self.stop_control_client = self.node.create_client(Trigger, '/stop_control')
+
         self.joy_state = JoyCmd.EMPTY
 
     @property
@@ -161,7 +169,7 @@ class RobotClient:
 
         if key == (Button_LT | Button_START):  # start: LT + START
             self.node.get_logger().info("Starting control...")
-            self.joy_state = JoyCmd.START_CONTROL
+            self.joy_state = JoyCmd.INIT_CONTROL
             return
         elif key == Button_LB:  # ready position: LB
             self.node.get_logger().info("Ready position control...")
@@ -171,10 +179,10 @@ class RobotClient:
             self.node.get_logger().info("Zero position control...")
             self.joy_state = JoyCmd.ZERO_POSITION
             return
-        # elif key == (Button_BACK | Button_LT):  # shutdown: BACK + LT
-        #     self.node.get_logger().info("Shutting down...")
-        #     rclpy.shutdown()
-        #     return
+        elif key == (Button_LT | Button_B):  # start agent: LT + B
+            self.node.get_logger().info("Starting agent...")
+            self.joy_state = JoyCmd.START_AGENT
+            return
         elif key == Button_BACK:  # stop: BACK
             self.node.get_logger().info("Stopping control...")
             self.joy_state = JoyCmd.STOP_CONTROL
@@ -203,59 +211,50 @@ class RobotClient:
         if default_kd is not None:
             self._default_kd = np.array(default_kd, dtype=np.float32)
         
-    def start_control(self, default_pos=None):
+    def init_control(self, default_pos=None):
         """
-        Start the control loop by calling the start_control service.
+        Start the control loop by calling the init_control service.
         """
         if default_pos is None:
             default_pos = self._default_pos
-            
-        self.cli = self.node.create_client(SetDefaultPosition, '/start_control')
-        
-        while not self.cli.wait_for_service(timeout_sec=1.0):
+
+        while not self.start_control_client.wait_for_service(timeout_sec=1.0):
             self.node.get_logger().info('start_control service not available, waiting again...')
         
-        self.req = SetDefaultPosition.Request()
-        self.req.default_position = default_pos.tolist()
-        future = self.cli.call_async(self.req)
+        request = SetDefaultPosition.Request()
+        request.default_position = default_pos.tolist()
+        future = self.start_control_client.call_async(request)
         return future.result()
     
     def stop_control(self):
         """
         Stop the control loop by calling the stop_control service.
-        """
-        cli = self.node.create_client(Trigger, '/stop_control')
-        
-        while not cli.wait_for_service(timeout_sec=1.0):
+        """        
+        while not self.stop_control_client.wait_for_service(timeout_sec=1.0):
             self.node.get_logger().info('stop_control service not available, waiting again...')
-        
-        req = Trigger.Request() 
-        future = cli.call_async(req)
+
+        request = Trigger.Request()
+        future = self.stop_control_client.call_async(request)
         return future.result()
-    
     
     def goto_default_position(self):
         """
         Send robot to default position by calling the ready_position_control service.
         """
-        cli = self.node.create_client(Trigger, '/ready_position_control')
-        
-        while not cli.wait_for_service(timeout_sec=1.0):
+        while not self.ready_position_client.wait_for_service(timeout_sec=1.0):
             self.node.get_logger().info('ready_position_control service not available, waiting again...')
-        
-        req = Trigger.Request()  
-        future = cli.call_async(req)
+
+        request = Trigger.Request()
+        future = self.ready_position_client.call_async(request)
         return future.result()
         
     def goto_zero_position(self):
         """
         Send robot to zero position by calling the zero_position_control service.
         """
-        cli = self.node.create_client(Trigger, '/zero_position_control')
-        
-        while not cli.wait_for_service(timeout_sec=1.0):
+        while not self.goto_zero_position_client.wait_for_service(timeout_sec=1.0):
             self.node.get_logger().info('zero_position_control service not available, waiting again...')
-        
-        req = Trigger.Request()  
-        future = cli.call_async(req)
+
+        request = Trigger.Request()
+        future = self.goto_zero_position_client.call_async(request)
         return future.result()

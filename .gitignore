@@ -14,6 +14,9 @@ log/
 *.swp
 *.bak
 
+# Python package info
+robot_bridge_py.egg-info/
+
 # IDE and editor files
 .vscode/
 .idea/

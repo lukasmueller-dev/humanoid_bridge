@@ -4,19 +4,13 @@ import numpy as np
 from utils.remote_control_service import RemoteControlService
 from utils.policy import Policy
 import yaml
-# 导入RobotClient
-import os
-import sys
-script_path = '/home/xuanhaosong/sairol_ws/src/sairol_bridge/robot_bridge/scripts'
-if script_path not in sys.path:
-    sys.path.append(script_path)
-from robot_client import RobotClient, JoyCmd
+from robot_bridge_py.robot_client import JoyCmd, RobotClient
 from enum import Enum
 
 
 class RobotController:   
     def __init__(self, node, cfg):
-        self.node = node  # 保存node的引用
+        self.node = node  
         self.robot = RobotClient(node=self.node, robot_type="T1", num_dof=23, control_frequency=50.0, interpolation_order=0.8)
         self.timer = self.node.create_timer(0.02, self.step)  # 50 Hz control frequency
         
@@ -29,12 +23,13 @@ class RobotController:
         self.policy_kd = np.array([float(cfg["common"]["damping"][i]) for i in range(self.robot.num_dof)], dtype=np.float32)
         
         self.control_started = False
+        self.agent_started = False
         self.control_start_time = None
         
     def step(self):
         self.check_state()
-        if self.control_started:
-            self.policy_step()
+        if self.control_started and self.agent_started:
+            self.policy_step()  
             
     def policy_step(self):
         time_now = self.robot.time_count / 500.
@@ -55,12 +50,14 @@ class RobotController:
         joy_state = self.robot.joy_state
         time_now = time.time()
 
-        if joy_state == JoyCmd.START_CONTROL:
-            result = self.robot.start_control(default_pos=self.init_pos)
+        if joy_state == JoyCmd.INIT_CONTROL:
+            future = self.robot.init_control(default_pos=self.init_pos)
             self.control_start_time = time_now + 2.0 
         elif joy_state == JoyCmd.STOP_CONTROL:
-            result = self.robot.stop_control()
+            future = self.robot.stop_control()
             self.control_start_time = None
+        elif joy_state == JoyCmd.START_AGENT:
+            self.agent_started = True
         elif joy_state == JoyCmd.DEFAULT_POSITION:
             self.robot.goto_default_position()
             self.control_start_time = None

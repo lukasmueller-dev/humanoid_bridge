@@ -1,37 +1,23 @@
-#include "T1_bridge.hpp"
-#include "booster_interface/message_utils.hpp"
+#include "G1_bridge.hpp"
+// #include "unitree_hg/message_utils.hpp"
 
-using json = nlohmann::json;
 using namespace std::chrono_literals;
 
-sairol_bridge::T1Bridge::T1Bridge(rclcpp::Node::SharedPtr node) : BridgeCore(node)
+sairol_bridge::G1Bridge::G1Bridge(rclcpp::Node::SharedPtr node) : BridgeCore(node)
 {
-    client_ = nh->create_client<booster_interface::srv::RpcService>("booster_rpc_service");
-
-    while (!client_->wait_for_service(1s))
-    {
-        if (!rclcpp::ok())
-        {
-            RCLCPP_ERROR(rclcpp::get_logger("rclcpp"),
-                            "Interrupted while waiting for the service. Exiting.");
-        }
-        RCLCPP_INFO(nh->get_logger(), "service not available, waiting again...");
-    }
-
-    // switch_to_prepare_mode();
 
     lowCommandDesired_.motor_cmd.resize(numJoint_);
     lowCommand_.motor_cmd.resize(numJoint_);
     currentState_.motor_state.resize(numJoint_);
     cmdParams_.resize(numJoint_);
 
-    lowStateSubscriber_ = nh->create_subscription<booster_interface::msg::LowState>(
-        "/low_state", 1, std::bind(&sairol_bridge::T1Bridge::lowStateHandler_, this, std::placeholders::_1));
+    lowStateSubscriber_ = nh->create_subscription<unitree_hg::msg::LowState>(
+        "/low_state", 1, std::bind(&sairol_bridge::G1Bridge::lowStateHandler_, this, std::placeholders::_1));
 
     // remoteControlSubscriber_ = nh->create_subscription<sensor_msgs::msg::Joy>(
-    //     "/joy", 1, std::bind(&sairol_bridge::T1Bridge::wireless_callback, this, std::placeholders::_1));
+    //     "/joy", 1, std::bind(&sairol_bridge::G1Bridge::wireless_callback, this, std::placeholders::_1));
 
-    lowCommandPublisher_ = nh->create_publisher<booster_interface::msg::LowCmd>(
+    lowCommandPublisher_ = nh->create_publisher<unitree_hg::msg::LowCmd>(
         "/joint_ctrl", 1); // /joint_ctrl
 
     // Waiting for publisher on topic lowstate
@@ -43,11 +29,9 @@ sairol_bridge::T1Bridge::T1Bridge(rclcpp::Node::SharedPtr node) : BridgeCore(nod
     }
 }
 
-void sairol_bridge::T1Bridge::stop()
-{
-    // Switch to damping mode before stopping
-    switch_to_damping_mode();
 
+void sairol_bridge::G1Bridge::stop()
+{
     // Stop the control thread if it's running
     if (controlThread_.joinable())
     {
@@ -57,72 +41,72 @@ void sairol_bridge::T1Bridge::stop()
     RCLCPP_INFO(nh->get_logger(), "T1 Bridge stopped.");
 }
 
-void sairol_bridge::T1Bridge::wireless_callback(sensor_msgs::msg::Joy::SharedPtr message)
-{
-    auto buttons = message->buttons;
-    uint32_t key = 0;
-    if (buttons[0]) key |= Button_X;
-    if (buttons[1]) key |= Button_A;
-    if (buttons[2]) key |= Button_B;
-    if (buttons[3]) key |= Button_Y;
-    if (buttons[4]) key |= Button_LB;
-    if (buttons[5]) key |= Button_RB;
-    if (buttons[6]) key |= Button_LT;
-    if (buttons[7]) key |= Button_RT;
-    if (buttons[8]) key |= Button_BACK;
-    if (buttons[9]) key |= Button_START;
+// void sairol_bridge::G1Bridge::wireless_callback(sensor_msgs::msg::Joy::SharedPtr message)
+// {
+//     auto buttons = message->buttons;
+//     uint32_t key = 0;
+//     if (buttons[0]) key |= Button_X;
+//     if (buttons[1]) key |= Button_A;
+//     if (buttons[2]) key |= Button_B;
+//     if (buttons[3]) key |= Button_Y;
+//     if (buttons[4]) key |= Button_LB;
+//     if (buttons[5]) key |= Button_RB;
+//     if (buttons[6]) key |= Button_LT;
+//     if (buttons[7]) key |= Button_RT;
+//     if (buttons[8]) key |= Button_BACK;
+//     if (buttons[9]) key |= Button_START;
 
-    if (key == (Button_LT | Button_START))  // start: LT + START
-    {
-        RCLCPP_INFO(nh->get_logger(), "Starting control...");
-        initControl_(bridge_interface::msg::RobotCmd());
-        return;
-    }
-    else if (key == Button_LB)  // ready position: LB
-    {
-        RCLCPP_INFO(nh->get_logger(), "Ready position control...");
-        if (!controlStarted_) initControl_(bridge_interface::msg::RobotCmd());
-        readyPositionControl_();
-        calculateInterpolationParams_(duration_, 1, true);
-        return;
-    }
-    else if (key == Button_RB)  // zero position RB
-    {
-        RCLCPP_INFO(nh->get_logger(), "Zero position control...");
-        if (!controlStarted_) initControl_(bridge_interface::msg::RobotCmd());
-        zeroPositionControl_();
-        calculateInterpolationParams_(duration_, 1, true);
-        return;
-    }
-    else if (key == (Button_BACK | Button_LT))  // shutdown: BACK + LT
-    {
-        RCLCPP_INFO(nh->get_logger(), "Shutting down...");
-        rclcpp::shutdown();
-        return;
-    }
-    else if (key == Button_BACK)  // stop: BACK
-    {
-        RCLCPP_INFO(nh->get_logger(), "Stopping control...");
-        switch_to_damping_mode();
-        return;
-    }
+//     if (key == (Button_LT | Button_START))  // start: LT + START
+//     {
+//         RCLCPP_INFO(nh->get_logger(), "Starting control...");
+//         initControl_(bridge_interface::msg::RobotCmd());
+//         return;
+//     }
+//     else if (key == Button_LB)  // ready position: LB
+//     {
+//         RCLCPP_INFO(nh->get_logger(), "Ready position control...");
+//         if (!controlStarted_) initControl_(bridge_interface::msg::RobotCmd());
+//         readyPositionControl_();
+//         calculateInterpolationParams_(duration_, 1, true);
+//         return;
+//     }
+//     else if (key == Button_RB)  // zero position RB
+//     {
+//         RCLCPP_INFO(nh->get_logger(), "Zero position control...");
+//         if (!controlStarted_) initControl_(bridge_interface::msg::RobotCmd());
+//         zeroPositionControl_();
+//         calculateInterpolationParams_(duration_, 1, true);
+//         return;
+//     }
+//     else if (key == (Button_BACK | Button_LT))  // shutdown: BACK + LT
+//     {
+//         RCLCPP_INFO(nh->get_logger(), "Shutting down...");
+//         rclcpp::shutdown();
+//         return;
+//     }
+//     else if (key == Button_BACK)  // stop: BACK
+//     {
+//         RCLCPP_INFO(nh->get_logger(), "Stopping control...");
+//         switch_to_damping_mode();
+//         return;
+//     }
 
-}
+// }
 
-void sairol_bridge::T1Bridge::lowStateHandler_(booster_interface::msg::LowState::SharedPtr msg)
+void sairol_bridge::G1Bridge::lowStateHandler_(unitree_hg::msg::LowState::SharedPtr msg)
 {
     // Update the last state time using the same clock source
     last_state_time_ = nh->get_clock()->now();
-    for (size_t i = 0; i < msg->motor_state_serial.size(); ++i)
+    for (size_t i = 0; i < msg->motor_state.size(); ++i)
     {
-        currentState_.motor_state[i].q = msg->motor_state_serial[i].q;
-        currentState_.motor_state[i].dq = msg->motor_state_serial[i].dq;
-        currentState_.motor_state[i].ddq = msg->motor_state_serial[i].ddq;
-        currentState_.motor_state[i].tau_est = msg->motor_state_serial[i].tau_est;
+        currentState_.motor_state[i].q = msg->motor_state[i].q;
+        currentState_.motor_state[i].dq = msg->motor_state[i].dq;
+        currentState_.motor_state[i].ddq = msg->motor_state[i].ddq;
+        currentState_.motor_state[i].tau_est = msg->motor_state[i].tau_est;
     }
 }
 
-void sairol_bridge::T1Bridge::publishLowCommand_()
+void sairol_bridge::G1Bridge::publishLowCommand_()
 {
     rclcpp::Time current = nh->get_clock()->now();
 
@@ -229,39 +213,23 @@ void sairol_bridge::T1Bridge::publishLowCommand_()
         
     }
 
-    booster_interface::msg::LowCmd booster_cmd;
-    booster_cmd.motor_cmd.resize(lowCommand_.motor_cmd.size());
-    booster_cmd.cmd_type = booster_interface::msg::LowCmd::CMD_TYPE_SERIAL;
+    unitree_hg::msg::LowCmd unitree_cmd;
+    // unitree_cmd.motor_cmd.resize(lowCommand_.motor_cmd.size());
+    // unitree_cmd.cmd_type = unitree_hg::msg::LowCmd::CMD_TYPE_SERIAL;
     for (size_t i = 0; i < lowCommand_.motor_cmd.size(); ++i)
     {
-        booster_cmd.motor_cmd[i].mode = 0;
-        booster_cmd.motor_cmd[i].q = lowCommand_.motor_cmd[i].q;
-        booster_cmd.motor_cmd[i].dq = lowCommand_.motor_cmd[i].dq;
-        booster_cmd.motor_cmd[i].tau = lowCommand_.motor_cmd[i].tau;
-        booster_cmd.motor_cmd[i].kp = lowCommand_.motor_cmd[i].kp;
-        booster_cmd.motor_cmd[i].kd = lowCommand_.motor_cmd[i].kd;
-        booster_cmd.motor_cmd[i].weight = 1.0; // Default weight, can be adjusted later
+        unitree_cmd.motor_cmd[i].mode = 0;
+        unitree_cmd.motor_cmd[i].q = lowCommand_.motor_cmd[i].q;
+        unitree_cmd.motor_cmd[i].dq = lowCommand_.motor_cmd[i].dq;
+        unitree_cmd.motor_cmd[i].tau = lowCommand_.motor_cmd[i].tau;
+        unitree_cmd.motor_cmd[i].kp = lowCommand_.motor_cmd[i].kp;
+        unitree_cmd.motor_cmd[i].kd = lowCommand_.motor_cmd[i].kd;
     }
-    lowCommandPublisher_->publish(booster_cmd);
+    lowCommandPublisher_->publish(unitree_cmd);
 }
 
-bool sairol_bridge::T1Bridge::initControl_(bridge_interface::msg::RobotCmd default_cmd)
+bool sairol_bridge::G1Bridge::initControl_(bridge_interface::msg::RobotCmd default_cmd)
 {
-    booster_interface::msg::LowCmd booster_cmd;
-    booster_cmd.motor_cmd.resize(numJoint_);
-    for (size_t i = 0; i < numJoint_; ++i)
-    {
-        booster_cmd.motor_cmd[i].q = currentState_.motor_state[i].q;
-        booster_cmd.motor_cmd[i].dq = 0.0;
-        booster_cmd.motor_cmd[i].tau = 0.0;
-        booster_cmd.motor_cmd[i].kp = joints_[i].kp;
-        booster_cmd.motor_cmd[i].kd = joints_[i].kd;
-    }
-
-    lowCommandPublisher_->publish(booster_cmd);
-
-    switch_mode(booster::robot::RobotMode::kCustom);
-
     last_state_time_ = nh->get_clock()->now();
 
     for (int i = 0; i < numJoint_; ++i)
@@ -303,56 +271,36 @@ bool sairol_bridge::T1Bridge::initControl_(bridge_interface::msg::RobotCmd defau
     return true;
 }
 
-void sairol_bridge::T1Bridge::stopControlServiceCB_(
-const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
-std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+
+void sairol_bridge::G1Bridge::finishControl_() {
+    RCLCPP_INFO(nh->get_logger(), "finishControl_ called from G1Bridge");
+}
+
+int main(int argc, char **argv)
 {
-    RCLCPP_INFO(nh->get_logger(), "Stopping control service...");
-    switch_to_damping_mode();
-    response->success = true;
-    response->message = "Stop control service activated";
+    rclcpp::init(argc, argv);
+
+    auto options = rclcpp::NodeOptions().allow_undeclared_parameters(true).automatically_declare_parameters_from_overrides(true);
+    rclcpp::Node::SharedPtr nh = std::make_shared<rclcpp::Node>("robot_bridge", options);
+
+    rclcpp::sleep_for(std::chrono::milliseconds(100));
+
+    std::string robot_name;
+    nh->get_parameter("robot_name", robot_name);
+
+    std::shared_ptr<sairol_bridge::BridgeCore> bridge;
+
+    auto g1_bridge = std::make_shared<sairol_bridge::G1Bridge>(nh);
+    bridge = g1_bridge;
+
+
+    if (bridge)
+    {   
+        bridge->start();
+        rclcpp::spin(nh);
+    }
+
+    bridge->stop();
+    return 0;
 }
 
-void sairol_bridge::T1Bridge::switch_mode(booster::robot::RobotMode target_mode)
-{
-    booster_interface::srv::RpcService::Request::SharedPtr req = std::make_shared<booster_interface::srv::RpcService::Request>();
-    req->msg = booster_interface::CreateChangeModeMsg(target_mode);
-
-    using ServiceResponseFuture = rclcpp::Client<booster_interface::srv::RpcService>::SharedFuture;
-
-    auto result_future = client_->async_send_request(
-        req,
-        [this](ServiceResponseFuture future)
-        {
-            try
-            {
-                auto response = future.get();
-            }
-            catch (const std::exception &e)
-            {
-                RCLCPP_ERROR(nh->get_logger(), "Service call failed: %s", e.what());
-            }
-        });
-    // RCLCPP_INFO(nh->get_logger(), "Waiting 2s to ensure robot is ready...");
-    // std::this_thread::sleep_for(2s);
-}
-
-void sairol_bridge::T1Bridge::switch_to_damping_mode()
-{
-    if (controlStarted_) controlStarted_ = false;
-    switch_mode(booster::robot::RobotMode::kDamping);
-    RCLCPP_INFO(nh->get_logger(), "Switched to damping mode.");
-}
-
-void sairol_bridge::T1Bridge::switch_to_prepare_mode()
-{
-    if (controlStarted_) controlStarted_ = false;
-    switch_mode(booster::robot::RobotMode::kPrepare);
-    RCLCPP_INFO(nh->get_logger(), "Switched to prepare mode.");
-}
-
-void sairol_bridge::T1Bridge::finishControl_(){
-    // Switch to damping mode when control is finished
-    switch_to_damping_mode();
-    RCLCPP_INFO(nh->get_logger(), "Control finished, switched to damping mode.");
-}
