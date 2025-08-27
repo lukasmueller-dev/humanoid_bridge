@@ -41,7 +41,7 @@ class RemoteControlService:
         self._keyboard_listener_active = False
         
 
-        print("Downgrade to keyboard control")
+        print("Downgrade to keyboard control. Press 'w'/'s' to increase/decrease vx; Press 'a'/'d' to increase/decrease vy; Press 'q'/'e' to increase/decrease vyaw, press 'Space' to stop.")
         self._init_keyboard_control()
         self._start_keyboard_thread()
 

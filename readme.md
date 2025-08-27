@@ -1,92 +1,100 @@
 
 markdown
-# 🤖 robot_bridge Overview
+# 🤖 sairol_bridge Overview
 
-`robot_bridge` is a ROS 2 node for controlling Unitree robots (e.g., H1, G1).  
-It receives motion commands, performs trajectory interpolation, and sends real-time motor control messages via `/lowcmd`.
+`sairol_bridge` is a ROS 2 package for controlling Unitree and Booster robots (e.g., H1, G1, T1).
+It receives commands from the client node, decides whether to perform command interpolation, and, after completing command and state safety checks, sends real-time motor control commands to the robot.
 
 ---
 
-## 🚀 Quick Start
-
+## Installation
+Prepare the library for T1 robot:
 ```bash
-ros2 launch robot_bridge robot_bridge_launch.py
-This will:
-
-Stop any existing publisher on /lowcmd (via release_node)
-
-Start the control bridge node
-
-🧩 Core Interfaces
-Subscribers:
-
-/lowstate: Robot state input
-
-/robot_cmd: Target motion commands
-
-/wirelesscontroller: Remote control input
-
-Publisher:
-
-/lowcmd: Realtime motor command output
-
-Services:
-
-/start_control
-
-/stop_control
-
-/ready_position_control
-
-/zero_position_control
-
-🔒 Safety Mechanisms (Key Features)
-✅ 1. Connection Timeout Protection
-If no /lowstate message is received for >0.1s, the controller shuts down automatically to prevent unsafe behavior.
-
-✅ 2. Joint Velocity Limits
-Every joint has a configured dq_limit.
-If exceeded, an error is logged and the node shuts down for safety.
-
-✅ 3. Torque Prediction-Based Gain Scaling
-Before applying control, the node predicts resulting torque:
-
-τ_predict = Kp * (q_cmd - q) + Kd * (dq_cmd - dq)
-If this exceeds the joint's τ_limit, the controller solves a quadratic equation to scale gains:
-
-scss
-Kp ← Kp * x
-Kd ← Kd * sqrt(x)
-If no positive root exists, fallback values are used.
-
-✅ 4. Auto-Fill Gains (Kp/Kd)
-If incoming command has both gains = 0, default gains are filled to prevent instability.
-
-✅ 5. Command and State Validation
-
-All control values (q, dq, tau, kp, kd) are clamped to joint-safe limits
-
-IMU values (roll, pitch, yaw, accel, gyro) are validated
-
-NaN/Inf values are checked and blocked
-
-✅ Recommended Usage
-bash
-ros2 launch robot_bridge robot_bridge_launch.py
+cd ~
+git clone https://github.com/DFKI-SAIROL/booster_robotics_sdk.git
+cd booster_robotics_sdk
+./install.sh
+```
+Afer that you can follow the `README` of booster_robotics_sdk to build and prepare the python environment for T1.
+Then create your own workspace in your home and enter its `src` folder, for example:
+```bash
+mkdir -p ~/sairol_ws/src
+cd ~/sairol_ws/src
+```
+Clone this code repository:
+```bash
+git clone git@github.com:DFKI-SAIROL/humanoid_bridge.git
+```
+Build the package:
+```bash
+cd ..
+colcon build
+```
 
 
-🎮 Wireless Controller Key Mapping
-The system supports remote control input from a wireless gamepad. The following key combinations can be used to control the robot manually:
+## Operation guide 
+Open a terminal for bridge interface:
+```bash
+    cd ~/sairol_ws
+    source src/humanoid_bridge/setup_booster.sh #if booster T1
+    source src/humanoid_bridge/serup_unitree.sh #if unitree G1 or H1
+```
+then launch the bridge interface:
+```bash
+    ros2 run robot_bridge T1_bridge --ros-args --params-file robot_bridge/params/T1_config.yaml  #if booster T1
+    ros2 run robot_bridge G1_bridge --ros-args --params-file /robot_bridge/params/G1_config.yaml #if unitree G1
+    ros2 run robot_bridge H1_bridge --ros-args --params-file /robot_bridge/params/H1_config.yaml #if unitree H1
+```
+Now the bridge interface is already launched, and initial mode is damping mode.
+Next you can launch your client node. Here we have provided an example for your reference. Open a new terminal for client node: 
+```bash 
+    cd ~/sairol_ws
+    conda activate {YOUR_ENV} # activate your environment relevant to T1 or G1, H1 
+    source src/humanoid_bridge/setup_booster.sh #if booster T1
+    source src/humanoid_bridge/serup_unitree.sh #if unitree G1 or H1
 
-Key Combination	Action Description
-L2 + START	✅ Start the robot controller
-L2 + UP + LEFT	🛑 Stop control and clear commands
-L1	📐 Enter Ready Position
-R1	📍 Enter Zero Position
+    python src/humanoid_bridge/robot_bridge/example/T1/T1_example.py
+```
+With this example you can use remote controller to checkout the mode and use the keyboad (w,s,a,d,space) to control the robot.
 
-Notes:
-Holding L2 acts as a modifier key for START / UP / LEFT actions.
+Step1: Press `LT + start` to send the `start service` request for starting the control, then bridge can start to publish lowcmd     
+        if there is lowcmd from client and checkout custom mode, then move to defauft position for standing.
 
-If control is not yet started, pressing L1 or R1 will automatically trigger controller initialization.
+Step2: Lower the robot’s body and make its feet touch the ground.
 
-After each posture switch (Ready / Zero), trajectory interpolation is triggered to smoothly transition.
+Step3: Press `LT + b` to start the policy inference, then robot can use policy to keep standing.
+
+Step4: Use keyboad (w,s,a,d,space) to control the robot
+
+Step5: Press `back` to send the `stop service` request for stopping the control, then bridge can stop to publish any lowcmd and 
+        checkout damping mode .
+
+
+For step 1 you can also use your own joints position for initial joints position with ros2 service command instead of remote controller:
+```bash
+    ros2 service call /start_control bridge_interface/srv/SetDefaultPosition "{
+        default_position: [0, 0,
+                            0.2, -1.35, 0, -0.5,
+                            0.2, 1.35, 0, 0.5,
+                            0,
+                            -0.2, 0, 0, 0.4, -0.25, 0,
+                            -0.2, 0, 0, 0.4, -0.25, 0]
+        }"
+```
+And for step 5 you can also use ros2 service command instead of remote controller:
+```bash
+    ros2 service call /stop_control std_srvs/srv/Trigger {}
+```
+
+## Other demos
+In addition, we have prepared some other demos after you launch `T1_example.py` such as ready position control: 
+```bash
+    ros2 service call /ready_position_control std_srvs/srv/Trigger {} # you can also press LB of controller
+```
+And zero position control:
+```bash
+    ros2 service call /zero_position_control std_srvs/srv/Trigger {}  # you can also press RB of controller  
+```
+But you should pay attention to stopping policy inference firstly.
+If you want to modify the default configuration of the bridge interface like kp/kd limit or tau limit, you can jump into the /robot_bridge/params to modify.
+
