@@ -107,6 +107,7 @@ namespace sairol_bridge
         bool torqueControl_{false};
         bool controlStarted_{false};
         bool if_init_{false}; // Whether the control is initialized
+        float_t imu_rpy_threshold_{1.0}; // Threshold for IMU roll/pitch in radians
 
 
         virtual void stopControlServiceCB_(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,

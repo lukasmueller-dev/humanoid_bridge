@@ -110,7 +110,13 @@ void sairol_bridge::T1Bridge::wireless_callback(sensor_msgs::msg::Joy::SharedPtr
 }
 
 void sairol_bridge::T1Bridge::lowStateHandler_(booster_interface::msg::LowState::SharedPtr msg)
-{
+{        
+    if (std::abs(msg->imu_state.rpy[0]) > imu_rpy_threshold_ || std::abs(msg->imu_state.rpy[1]) > imu_rpy_threshold_)
+    {
+        RCLCPP_WARN(nh->get_logger(), "IMU base rpy values are too large: [%f, %f]", msg->imu_state.rpy[0], msg->imu_state.rpy[1]);
+        controlStarted_ = false;
+        switch_to_damping_mode();
+    }
     // Update the last state time using the same clock source
     last_state_time_ = nh->get_clock()->now();
     for (size_t i = 0; i < msg->motor_state_serial.size(); ++i)
@@ -172,14 +178,14 @@ void sairol_bridge::T1Bridge::publishLowCommand_()
             cmd.tau = cmdParams_[i].tau_0 + cmdParams_[i].tau_1 * phase;
             if (!if_init_)
             {
-                if (i == 15 || i == 16 || i == 21 || i == 22) // Special case for waist joints
+                if (i == 15 || i == 16 || i == 21 || i == 22) // Special case for parallel joints
                 {
                     cmd.tau = std::clamp((cmd.q - currentState_.motor_state[i].q) * cmd.kp, -joint_info.tau_limit, joint_info.tau_limit);
                     cmd.kp = 0.0;
                 }
             }
             // cmd.tau = std::clamp(cmd.tau, -joint_info.tau_limit, joint_info.tau_limit);
-            cmd.q = std::clamp(cmd.q, (-cmd.kd * (currentState_.motor_state[i].q - cmd.dq) - joint_info.tau_limit) / cmd.kp + currentState_.motor_state[i].q, (-cmd.kd * (currentState_.motor_state[i].q - cmd.dq) + joint_info.tau_limit) / cmd.kp + currentState_.motor_state[i].q);
+            cmd.q = std::clamp(cmd.q, (-cmd.kd * (currentState_.motor_state[i].dq - cmd.dq) - joint_info.tau_limit) / cmd.kp + currentState_.motor_state[i].q, (-cmd.kd * (currentState_.motor_state[i].dq - cmd.dq) + joint_info.tau_limit) / cmd.kp + currentState_.motor_state[i].q);
 
 
 

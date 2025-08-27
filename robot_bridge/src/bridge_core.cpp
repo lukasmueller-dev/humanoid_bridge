@@ -129,6 +129,11 @@ namespace sairol_bridge
             RCLCPP_ERROR(nh->get_logger(), "Failed to get 'empty_joint_index' from parameters");
             return false;
         }
+        if (!nh->get_parameter("imu_rpy_threshold", imu_rpy_threshold_))
+        {
+            RCLCPP_ERROR(nh->get_logger(), "Failed to get 'imu_rpy_threshold' from parameters");
+            return false;
+        }
 
         RCLCPP_INFO(nh->get_logger(), "Number of the joints  = %d", numJoint_);
         RCLCPP_INFO(nh->get_logger(), "duration = %.3f", duration_);
@@ -137,6 +142,7 @@ namespace sairol_bridge
         RCLCPP_INFO(nh->get_logger(), "Upper limbs kd range: [%.3f, %.3f]", upper_limbs_kd_min_, upper_limbs_kd_max_);
         RCLCPP_INFO(nh->get_logger(), "Lower limbs kp range: [%.3f, %.3f]", lower_limbs_kp_min_, lower_limbs_kp_max_);
         RCLCPP_INFO(nh->get_logger(), "Lower limbs kd range: [%.3f, %.3f]", lower_limbs_kd_min_, lower_limbs_kd_max_);
+        RCLCPP_INFO(nh->get_logger(), "IMU RPY threshold = %.3f", imu_rpy_threshold_);
 
         std::vector<std::string> joint_names;
         if (nh->get_parameter("joint_names", joint_names))
