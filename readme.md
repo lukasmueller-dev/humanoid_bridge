@@ -1,8 +1,8 @@
 
 markdown
-# 🤖 sairol_bridge Overview
+# 🤖 Humanoid_bridge Overview
 
-`sairol_bridge` is a ROS 2 package for controlling Unitree and Booster robots (e.g., H1, G1, T1).
+`Humanoid_bridge` is a ROS 2 package for controlling Unitree and Booster robots (e.g., H1, G1, T1).
 It receives commands from the client node, decides whether to perform command interpolation, and, after completing command and state safety checks, sends real-time motor control commands to the robot.
 
 ---

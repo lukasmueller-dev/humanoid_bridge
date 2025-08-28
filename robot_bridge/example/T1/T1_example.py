@@ -75,7 +75,7 @@ class RobotController:
 
 if __name__ == "__main__":
     rclpy.init()
-    cfg_file = "src/sairol_bridge/robot_bridge/example/T1/configs/T1.yaml"
+    cfg_file = "src/humanoid_bridge/robot_bridge/example/T1/configs/T1.yaml"
     with open(cfg_file, "r", encoding="utf-8") as f:
         policy_cfg = yaml.load(f.read(), Loader=yaml.FullLoader)
     node = rclpy.create_node('robot_client_node')

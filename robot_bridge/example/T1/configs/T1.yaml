@@ -34,7 +34,7 @@ common:
   ]
 
 policy:
-  policy_path: "./src/sairol_bridge/robot_bridge/example/T1/models/T1.pt"
+  policy_path: "./src/humanoid_bridge/robot_bridge/example/T1/models/T1.pt"
   num_actions: 12
   num_observations: 47
   gait_frequency: 1
