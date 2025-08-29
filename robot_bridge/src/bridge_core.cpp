@@ -274,7 +274,7 @@ namespace sairol_bridge
                 if (not checkState_())
                 {
                     RCLCPP_ERROR(nh->get_logger(), "Robot state check failed. Please inspect the robot carefully.");
-                    return;
+                    controlStarted_ = false;
                 }
 
                 std::unique_lock<std::mutex> lock(mutex_);
@@ -389,7 +389,7 @@ namespace sairol_bridge
             if (std::abs(motor.dq) > joint.dq_limit)
             {
                 RCLCPP_ERROR(nh->get_logger(),
-                             "Joint [%lu] dq (%.3f) exceeds limit (%.3f). Shutting down for safety.",
+                             "Joint [%lu] dq (%.3f) exceeds limit (%.3f).",
                              i, motor.dq, joint.dq_limit);
                 // rclcpp::shutdown();
                 return false;

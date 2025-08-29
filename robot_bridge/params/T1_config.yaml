@@ -29,8 +29,8 @@ robot_bridge:
                   "LeftShoulderPitch", "LeftShoulderRoll", "LeftShoulderYaw", "LeftElbow",
                   "RightShoulderPitch", "RightShoulderRoll", "RightShoulderYaw", "RightElbow",
                   "WaistYaw",
-                  "LeftHipPitch", "LeftHipRoll", "LeftHipYaw", "LeftKnee", "LeftAnkleUp", "LeftAnkleDown",
-                  "RightHipPitch", "RightHipRoll", "RightHipYaw", "RightKnee","RightAnkleUp", "RightAnkleDown"]
+                  "LeftHipPitch", "LeftHipRoll", "LeftHipYaw", "LeftKnee", "Left_Ankle_Pitch", "Left_Ankle_Roll",
+                  "RightHipPitch", "RightHipRoll", "RightHipYaw", "RightKnee","Right_Ankle_Pitch", "Right_Ankle_Roll"]
 
     ready_q: [0.0, 0.0, 
               0.2, -1.35, 0.0, -0.5,
@@ -189,20 +189,20 @@ robot_bridge:
       kd: 5.5
       if_strong_joint: true
 
-    LeftAnkleUp:
+    Left_Ankle_Pitch:
       idx: 15
-      q_min: -0.401
-      q_max: 0.855
+      q_min: -0.87
+      q_max: 0.35
       dq_limit: 18.8
       tau_limit: 24.0      
       kp: 400.0
       kd: 0.5
       if_strong_joint: false
     
-    LeftAnkleDown:
+    Left_Ankle_Roll:
       idx: 16
-      q_min: -0.419
-      q_max: 0.785
+      q_min: -0.44
+      q_max: 0.44
       dq_limit: 12.4
       tau_limit: 15.0      
       kp: 400.0
@@ -249,20 +249,20 @@ robot_bridge:
       kd: 5.5
       if_strong_joint: true
 
-    RightAnkleUp:
+    Right_Ankle_Pitch:
       idx: 21
-      q_min: -0.401
-      q_max: 0.855
+      q_min: -0.87
+      q_max: 0.35
       dq_limit: 18.8
       tau_limit: 24.0      
       kp: 400.0
       kd: 0.5 
       if_strong_joint: false
     
-    RightAnkleDown:
+    Right_Ankle_Roll:
       idx: 22
-      q_min: -0.419      
-      q_max: 0.785
+      q_min: -0.44      
+      q_max: 0.44
       dq_limit: 12.4
       tau_limit: 15.0  
       kp: 400.0
