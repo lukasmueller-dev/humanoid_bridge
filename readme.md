@@ -50,9 +50,14 @@ Next you can launch your client node. Here we have provided an example for your 
 ```bash 
     cd ~/sairol_ws
     conda activate {YOUR_ENV} # activate your environment relevant to T1 or G1, H1 
+    cd src/humanoid_bridge/robot_bridge
+    pip install -e .
+    cd example/T1
+    pip install -r requirements.txt
+    cd ~/sairol_ws
     source src/humanoid_bridge/setup_booster.sh #if booster T1
     source src/humanoid_bridge/serup_unitree.sh #if unitree G1 or H1
-
+    
     python src/humanoid_bridge/robot_bridge/example/T1/T1_example.py
 ```
 With this example you can use remote controller to checkout the mode and use the keyboad (w,s,a,d,space) to control the robot.
