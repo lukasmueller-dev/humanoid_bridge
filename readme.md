@@ -41,9 +41,9 @@ Open a terminal for bridge interface:
 ```
 then launch the bridge interface:
 ```bash
-    ros2 run robot_bridge T1_bridge --ros-args --params-file robot_bridge/params/T1_config.yaml  #if booster T1
-    ros2 run robot_bridge G1_bridge --ros-args --params-file /robot_bridge/params/G1_config.yaml #if unitree G1
-    ros2 run robot_bridge H1_bridge --ros-args --params-file /robot_bridge/params/H1_config.yaml #if unitree H1
+    ros2 run robot_bridge T1_bridge --ros-args --params-file src/humanoid_bridge/robot_bridge/params/T1_config.yaml  #if booster T1
+    ros2 run robot_bridge G1_bridge --ros-args --params-file src/humanoid_bridge/robot_bridge/params/G1_config.yaml #if unitree G1
+    ros2 run robot_bridge H1_bridge --ros-args --params-file src/humanoid_bridge/robot_bridge/params/H1_config.yaml #if unitree H1
 ```
 Now the bridge interface is already launched, and initial mode is damping mode.
 Next you can launch your client node. Here we have provided an example for your reference. Open a new terminal for client node: 

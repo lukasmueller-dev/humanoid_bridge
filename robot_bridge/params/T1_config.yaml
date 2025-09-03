@@ -3,6 +3,7 @@
 # stop control: back
 # Ready position: LB
 # Zero position: RB
+# Emergency stop: LT + BACK
 
 
 robot_bridge:
@@ -191,8 +192,12 @@ robot_bridge:
 
     Left_Ankle_Pitch:
       idx: 15
-      q_min: -0.87
-      q_max: 0.35
+
+      # q_min: -0.87
+      # q_max: 0.35
+      q_min: -0.401
+      q_max: 0.855
+
       dq_limit: 18.8
       tau_limit: 24.0      
       kp: 400.0
@@ -201,8 +206,12 @@ robot_bridge:
     
     Left_Ankle_Roll:
       idx: 16
-      q_min: -0.44
-      q_max: 0.44
+
+      # q_min: -0.44
+      # q_max: 0.44
+      q_min: -0.419
+      q_max: 0.785
+
       dq_limit: 12.4
       tau_limit: 15.0      
       kp: 400.0
@@ -251,8 +260,12 @@ robot_bridge:
 
     Right_Ankle_Pitch:
       idx: 21
-      q_min: -0.87
-      q_max: 0.35
+
+      # q_min: -0.87
+      # q_max: 0.35
+      q_min: -0.401
+      q_max: 0.855
+
       dq_limit: 18.8
       tau_limit: 24.0      
       kp: 400.0
@@ -261,8 +274,12 @@ robot_bridge:
     
     Right_Ankle_Roll:
       idx: 22
-      q_min: -0.44      
-      q_max: 0.44
+
+      # q_min: -0.44      
+      # q_max: 0.44
+      q_min: -0.419      
+      q_max: 0.785
+
       dq_limit: 12.4
       tau_limit: 15.0  
       kp: 400.0

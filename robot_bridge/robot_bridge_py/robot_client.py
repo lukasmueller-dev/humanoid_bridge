@@ -1,4 +1,5 @@
 import rclpy
+import time
 from enum import Enum
 import numpy as np
 from bridge_interface.msg import RobotCmd, MotorCmd
@@ -7,14 +8,19 @@ from std_srvs.srv import Trigger
 from rclpy.node import Node
 from rclpy.client import Client as ROSClient
 
-
-class JoyCmd(Enum):
-    EMPTY = 0
-    STOP_CONTROL = 1
-    DEFAULT_POSITION = 2
-    ZERO_POSITION = 3
-    INIT_CONTROL = 4
-    START_AGENT = 5
+class BoosterJoyButton:
+    Button_X = 1 << 0      # buttons[0]
+    Button_A = 1 << 1      # buttons[1]
+    Button_B = 1 << 2      # buttons[2]
+    Button_Y = 1 << 3      # buttons[3]
+    Button_LB = 1 << 4     # buttons[4]
+    Button_RB = 1 << 5     # buttons[5]
+    Button_LT = 1 << 6     # buttons[6]
+    Button_RT = 1 << 7     # buttons[7]
+    Button_BACK = 1 << 8   # buttons[8]
+    Button_START = 1 << 9  # buttons[9]
+    Button_LAXES = 1 << 10  # buttons[10]
+    Button_RAXES = 1 << 11  # buttons[11]
 
 
 class RobotClient:
@@ -62,6 +68,7 @@ class RobotClient:
                                     5.0,
                                     7.5, 7.5, 3., 5.5, 0.5, 0.5,
                                     7.5, 7.5, 3., 5.5, 0.5, 0.5])
+        self._default_duration = 2.0
 
         if self.robot_type == "T1":
             from booster_interface.msg import LowState
@@ -87,7 +94,10 @@ class RobotClient:
         self.ready_position_client = self.node.create_client(Trigger, '/ready_position_control')
         self.stop_control_client = self.node.create_client(Trigger, '/stop_control')
 
-        self.joy_state = JoyCmd.EMPTY
+        self.joy_key = None
+        self.joy_axes = np.zeros(6, dtype=np.float32)
+        self.control_start_time = None
+        self.control_started = False
 
     @property
     def q_pos(self):
@@ -135,6 +145,13 @@ class RobotClient:
             self._q_pos[i] = motor.q
             self._q_vel[i] = motor.dq
             
+    def update_robot_state(self):
+        time_now = time.time()
+        if self.control_start_time is not None and time_now > self.control_start_time:
+            self.control_started = True
+        else:
+            self.control_started = False
+            
     def _low_state_handler_unitree(self, low_state_msg):
         raise NotImplementedError("Unitree low state handler is not implemented yet.")
     
@@ -142,51 +159,38 @@ class RobotClient:
         """
         Handle joystick messages for the Booster robot.
         """
-        Button_X = 1 << 0      # buttons[0]
-        Button_A = 1 << 1      # buttons[1]
-        Button_B = 1 << 2      # buttons[2]
-        Button_Y = 1 << 3      # buttons[3]
-        Button_LB = 1 << 4     # buttons[4]
-        Button_RB = 1 << 5     # buttons[5]
-        Button_LT = 1 << 6     # buttons[6]
-        Button_RT = 1 << 7     # buttons[7]
-        Button_BACK = 1 << 8   # buttons[8]
-        Button_START = 1 << 9  # buttons[9]
-        
-        buttons = joy_msg.buttons
-        key = 0
-        
-        if len(buttons) > 0 and buttons[0]: key |= Button_X
-        if len(buttons) > 1 and buttons[1]: key |= Button_A
-        if len(buttons) > 2 and buttons[2]: key |= Button_B
-        if len(buttons) > 3 and buttons[3]: key |= Button_Y
-        if len(buttons) > 4 and buttons[4]: key |= Button_LB
-        if len(buttons) > 5 and buttons[5]: key |= Button_RB
-        if len(buttons) > 6 and buttons[6]: key |= Button_LT
-        if len(buttons) > 7 and buttons[7]: key |= Button_RT
-        if len(buttons) > 8 and buttons[8]: key |= Button_BACK
-        if len(buttons) > 9 and buttons[9]: key |= Button_START
+        buttons = np.array(joy_msg.buttons)
+        self.joy_axes = np.array(joy_msg.axes)
+        key = np.dot(buttons, 2 ** np.arange(buttons.size))
 
-        if key == (Button_LT | Button_START):  # start: LT + START
+        time_now = time.time()
+
+        self.joy_key = None
+        if key == (BoosterJoyButton.Button_LT | BoosterJoyButton.Button_START):  # start: LT + START
             self.node.get_logger().info("Starting control...")
-            self.joy_state = JoyCmd.INIT_CONTROL
+            future = self.init_control()
+            self.control_start_time = time_now + self._default_duration
             return
-        elif key == Button_LB:  # ready position: LB
+        elif key == BoosterJoyButton.Button_LB:  # ready position: LB
             self.node.get_logger().info("Ready position control...")
-            self.joy_state = JoyCmd.DEFAULT_POSITION
+            self.goto_default_position()
+            self.control_start_time = None
             return
-        elif key == Button_RB:  # zero position: RB
+        elif key == BoosterJoyButton.Button_RB:  # zero position: RB
             self.node.get_logger().info("Zero position control...")
-            self.joy_state = JoyCmd.ZERO_POSITION
+            self.goto_zero_position()
+            self.control_start_time = None
             return
-        elif key == (Button_LT | Button_B):  # start agent: LT + B
-            self.node.get_logger().info("Starting agent...")
-            self.joy_state = JoyCmd.START_AGENT
-            return
-        elif key == Button_BACK:  # stop: BACK
+        elif key == BoosterJoyButton.Button_BACK:  # stop: BACK
             self.node.get_logger().info("Stopping control...")
-            self.joy_state = JoyCmd.STOP_CONTROL
+            future = self.stop_control()
+            self.control_start_time = None
             return
+        elif key == (BoosterJoyButton.Button_LT | BoosterJoyButton.Button_BACK):
+            self.control_start_time = None
+        else:
+            # Set key only for unknown key combinations
+            self.joy_key = key
         
     def _joy_handler_unitree(self, joy_msg):
         raise NotImplementedError("Unitree joystick handler is not implemented yet.")

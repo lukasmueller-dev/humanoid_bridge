@@ -4,7 +4,7 @@ import numpy as np
 from utils.remote_control_service import RemoteControlService
 from utils.policy import Policy
 import yaml
-from robot_bridge_py.robot_client import JoyCmd, RobotClient
+from robot_bridge_py.robot_client import RobotClient, BoosterJoyButton
 from enum import Enum
 
 
@@ -22,13 +22,14 @@ class RobotController:
         self.policy_kp = np.array([float(cfg["common"]["stiffness"][i]) for i in range(self.robot.num_dof)], dtype=np.float32)
         self.policy_kd = np.array([float(cfg["common"]["damping"][i]) for i in range(self.robot.num_dof)], dtype=np.float32)
         
-        self.control_started = False
         self.agent_started = False
-        self.control_start_time = None
-        
+        self.vx_cmd = 0.0
+        self.vy_cmd = 0.0
+        self.vyaw_cmd = 0.0
+
     def step(self):
         self.check_state()
-        if self.control_started and self.agent_started:
+        if self.robot.control_started and self.agent_started:
             self.policy_step()  
             
     def policy_step(self):
@@ -39,39 +40,59 @@ class RobotController:
             dof_vel=self.robot.q_vel,
             base_ang_vel=self.robot.base_ang_vel,
             projected_gravity=self.robot.projected_gravity,
-            vx=self.remoteControlService.get_vx_cmd(),
-            vy=self.remoteControlService.get_vy_cmd(),
-            vyaw=self.remoteControlService.get_vyaw_cmd(),
+            vx=self.vx_cmd,
+            vy=self.vy_cmd,
+            vyaw=self.vyaw_cmd,
+            # vx=self.remoteControlService.get_vx_cmd(),
+            # vy=self.remoteControlService.get_vy_cmd(),
+            # vyaw=self.remoteControlService.get_vyaw_cmd(),
         )
         
         self.robot.send_cmd(q_target_pos=q_des, target_kp=self.policy_kp, target_kd=self.policy_kd)
         
     def check_state(self):
-        joy_state = self.robot.joy_state
-        time_now = time.time()
+        self.robot.update_robot_state()
 
-        if joy_state == JoyCmd.INIT_CONTROL:
-            future = self.robot.init_control(default_pos=self.init_pos)
-            self.control_start_time = time_now + 2.0 
-        elif joy_state == JoyCmd.STOP_CONTROL:
-            future = self.robot.stop_control()
-            self.control_start_time = None
-        elif joy_state == JoyCmd.START_AGENT:
-            self.agent_started = True
-        elif joy_state == JoyCmd.DEFAULT_POSITION:
-            self.robot.goto_default_position()
-            self.control_start_time = None
-        elif joy_state == JoyCmd.ZERO_POSITION:
-            self.robot.goto_zero_position()
-            self.control_start_time = None
-            
-        if self.control_start_time is not None and time_now > self.control_start_time:
-            self.control_started = True
-        else:
-            self.control_started = False
+        if self.robot.joy_key is not None:
+            if self.robot.joy_key == (BoosterJoyButton.Button_LT | BoosterJoyButton.Button_A):
+                self.agent_started = True
+                self.vx_cmd = 0.0
+                self.vy_cmd = 0.0
+                self.vyaw_cmd = 0.0
 
-        if joy_state != JoyCmd.EMPTY:
-            self.robot.joy_state = JoyCmd.EMPTY
+            if self.agent_started:
+                if self.robot.joy_axes[5] >= 1.0:
+                    self.vx_cmd += 0.1
+                elif self.robot.joy_axes[5] <= -1.0:
+                    self.vx_cmd -= 0.1
+                elif self.robot.joy_axes[4] >= 1.0:
+                    self.vy_cmd += 0.1
+                elif self.robot.joy_axes[4] <= -1.0:
+                    self.vy_cmd -= 0.1
+                elif self.robot.joy_axes[2] >= 1.0:
+                    self.vyaw_cmd += 0.1
+                elif self.robot.joy_axes[2] <= -1.0:
+                    self.vyaw_cmd -= 0.1
+                if self.robot.joy_key == BoosterJoyButton.Button_LAXES or self.robot.joy_key == BoosterJoyButton.Button_RAXES:
+                    self.vx_cmd = 0.0
+                    self.vy_cmd = 0.0
+                    self.vyaw_cmd = 0.0
+
+                self.vx_cmd = np.clip(self.vx_cmd, -0.5, 0.5)
+                self.vy_cmd = np.clip(self.vy_cmd, -0.5, 0.5)
+                self.vyaw_cmd = np.clip(self.vyaw_cmd, -0.4, 0.4)
+                print(f"Velocity commands - vx: {self.vx_cmd}, vy: {self.vy_cmd}, vyaw: {self.vyaw_cmd}")
+            else:
+                self.vx_cmd = 0.0
+                self.vy_cmd = 0.0
+                self.vyaw_cmd = 0.0
+
+            self.robot.joy_key = None  # Reset joy_key
+            self.robot.joy_axes = np.zeros(6, dtype=np.float32)
+
+        if not self.robot.control_started:
+            self.agent_started = False
+
 
 if __name__ == "__main__":
     rclpy.init()
