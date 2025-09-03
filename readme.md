@@ -60,14 +60,15 @@ Next you can launch your client node. Here we have provided an example for your 
     
     python src/humanoid_bridge/robot_bridge/example/T1/T1_example.py
 ```
-With this example you can use remote controller to checkout the mode and use the keyboad (w,s,a,d,space) to control the robot.
+With this example you can use remote controller to select the mode and use `D-pad (up, down, left, right)` to control the robot movement and press down `either joystick` to stop the movement. Tilt the right joystick to left/right to control the robot yaw rotation. You can see the current velocity in terminal output. 
+In case of emergency, use `LT + Back` to switch the mode forcefully to damping mode. clear
 
 Step1: Press `LT + start` to send the `start service` request for starting the control, then bridge can start to publish lowcmd     
         if there is lowcmd from client and checkout custom mode, then move to defauft position for standing.
 
 Step2: Lower the robot’s body and make its feet touch the ground.
 
-Step3: Press `LT + b` to start the policy inference, then robot can use policy to keep standing.
+Step3: Press `LT + A` to start the policy inference, then robot can use policy to keep standing.
 
 Step4: Use keyboad (w,s,a,d,space) to control the robot
 

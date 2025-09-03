@@ -1,7 +1,7 @@
 import rclpy
 import time
 import numpy as np
-from utils.remote_control_service import RemoteControlService
+# from utils.remote_control_service import RemoteControlService
 from utils.policy import Policy
 import yaml
 from robot_bridge_py.robot_client import RobotClient, BoosterJoyButton
@@ -15,7 +15,7 @@ class RobotController:
         self.timer = self.node.create_timer(0.02, self.step)  # 50 Hz control frequency
         
         # Initialize components
-        self.remoteControlService = RemoteControlService()
+        # self.remoteControlService = RemoteControlService()
         self.policy = Policy(cfg=cfg)
 
         self.init_pos = np.array([float(cfg["common"]["default_qpos"][i]) for i in range(self.robot.num_dof)], dtype=np.float32)
@@ -26,6 +26,7 @@ class RobotController:
         self.vx_cmd = 0.0
         self.vy_cmd = 0.0
         self.vyaw_cmd = 0.0
+        print("Please press \"LT + START\" to start control, \"LT + A\" to start inferrence, \"BACK\" to stop control, \"LB\" for ready position, \"RB\" for zero position, \"LT + BACK\" for emergency stop.")
 
     def step(self):
         self.check_state()
