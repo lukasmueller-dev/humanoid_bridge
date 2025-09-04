@@ -168,18 +168,25 @@ class RobotClient:
         self.joy_key = None
         if key == (BoosterJoyButton.Button_LT | BoosterJoyButton.Button_START):  # start: LT + START
             self.node.get_logger().info("Starting control...")
-            future = self.init_control()
-            self.control_start_time = time_now + self._default_duration
+            if not self.control_started:
+                future = self.init_control()
+                self.control_start_time = time_now + self._default_duration
             return
         elif key == BoosterJoyButton.Button_LB:  # ready position: LB
             self.node.get_logger().info("Ready position control...")
-            self.goto_default_position()
-            self.control_start_time = None
+            if not self.control_started:
+                self.goto_default_position()
+                self.control_start_time = None
+            else:
+                self.node.get_logger().warn("Control already started, please stop the control first by pressing BACK.")
             return
         elif key == BoosterJoyButton.Button_RB:  # zero position: RB
             self.node.get_logger().info("Zero position control...")
-            self.goto_zero_position()
-            self.control_start_time = None
+            if not self.control_started:
+                self.goto_zero_position()
+                self.control_start_time = None
+            else:
+                self.node.get_logger().warn("Control already started, please stop the control first by pressing BACK.")
             return
         elif key == BoosterJoyButton.Button_BACK:  # stop: BACK
             self.node.get_logger().info("Stopping control...")

@@ -26,7 +26,7 @@ class RobotController:
         self.vx_cmd = 0.0
         self.vy_cmd = 0.0
         self.vyaw_cmd = 0.0
-        print("Please press \"LT + START\" to start control, \"LT + A\" to start inferrence, \"BACK\" to stop control, \"LB\" for ready position, \"RB\" for zero position, \"LT + BACK\" for emergency stop.")
+        print("Please press\n\t \"LT + START\" to start control, \n\t \"LT + A\" to start inferrence, \n\t \"BACK\" to stop control, \n\t \"LB\" for ready position, \n\t \"RB\" for zero position, \n\t \"LT + BACK\" for emergency stop.")
 
     def step(self):
         self.check_state()
@@ -56,10 +56,13 @@ class RobotController:
 
         if self.robot.joy_key is not None:
             if self.robot.joy_key == (BoosterJoyButton.Button_LT | BoosterJoyButton.Button_A):
-                self.agent_started = True
-                self.vx_cmd = 0.0
-                self.vy_cmd = 0.0
-                self.vyaw_cmd = 0.0
+                if self.robot.control_started:
+                    self.agent_started = True
+                    self.vx_cmd = 0.0
+                    self.vy_cmd = 0.0
+                    self.vyaw_cmd = 0.0
+                else:
+                    self.node.get_logger().warn("Please start the control first by pressing LT + START.")
 
             if self.agent_started:
                 if self.robot.joy_axes[5] >= 1.0:
