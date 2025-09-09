@@ -12,18 +12,18 @@ sairol_bridge::G1Bridge::G1Bridge(rclcpp::Node::SharedPtr node) : BridgeCore(nod
     cmdParams_.resize(numJoint_);
 
     lowStateSubscriber_ = nh->create_subscription<unitree_hg::msg::LowState>(
-        "/low_state", 1, std::bind(&sairol_bridge::G1Bridge::lowStateHandler_, this, std::placeholders::_1));
+        "/lowstate", 1, std::bind(&sairol_bridge::G1Bridge::lowStateHandler_, this, std::placeholders::_1));
 
     // remoteControlSubscriber_ = nh->create_subscription<sensor_msgs::msg::Joy>(
     //     "/joy", 1, std::bind(&sairol_bridge::G1Bridge::wireless_callback, this, std::placeholders::_1));
 
     lowCommandPublisher_ = nh->create_publisher<unitree_hg::msg::LowCmd>(
-        "/joint_ctrl", 1); // /joint_ctrl
+        "/lowcmd", 1); // /joint_ctrl
 
     // Waiting for publisher on topic lowstate
     RCLCPP_INFO(nh->get_logger(), "Waiting for publisher on topic /lowstate...");
 
-    while (nh->count_publishers("/low_state") == 0)
+    while (nh->count_publishers("/lowstate") == 0)
     {
         rclcpp::sleep_for(std::chrono::milliseconds(100));
     }
@@ -270,7 +270,6 @@ bool sairol_bridge::G1Bridge::initControl_(bridge_interface::msg::RobotCmd defau
 
     return true;
 }
-
 
 void sairol_bridge::G1Bridge::finishControl_() {
     RCLCPP_INFO(nh->get_logger(), "finishControl_ called from G1Bridge");

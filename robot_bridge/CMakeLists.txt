@@ -46,6 +46,7 @@ find_package(unitree_api REQUIRED)
 add_executable(G1_bridge
   src/bridge_core.cpp
   src/G1_bridge.cpp
+  src/g1_node.cpp
 )
 
 ament_target_dependencies(G1_bridge

@@ -56,7 +56,7 @@ Next you can launch your client node. Here we have provided an example for your 
     pip install -r requirements.txt
     cd ~/sairol_ws
     source src/humanoid_bridge/setup_booster.sh #if booster T1
-    source src/humanoid_bridge/serup_unitree.sh #if unitree G1 or H1
+    source src/humanoid_bridge/setup_unitree.sh #if unitree G1 or H1
     
     python src/humanoid_bridge/robot_bridge/example/T1/T1_example.py
 ```
