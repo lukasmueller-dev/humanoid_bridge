@@ -66,17 +66,17 @@ class RobotController:
                     self.node.get_logger().warn("Please start the control first by pressing LT + START.")
 
             if self.agent_started:
-                if self.robot.joy_key.ly >= 1.0:
+                if self.robot.joy_key.ly * -1 >= 1.0:
                     self.vx_cmd += 0.1
-                elif self.robot.joy_key.ly <= -1.0:
+                elif self.robot.joy_key.ly * -1 <= -1.0:
                     self.vx_cmd -= 0.1
-                elif self.robot.joy_key.lx >= 1.0:
+                elif self.robot.joy_key.lx * -1 >= 1.0:
                     self.vy_cmd += 0.1
-                elif self.robot.joy_key.lx <= -1.0:
+                elif self.robot.joy_key.lx * -1 <= -1.0:
                     self.vy_cmd -= 0.1
-                elif self.robot.joy_key.rx >= 1.0:
+                elif self.robot.joy_key.rx * -1 >= 1.0:
                     self.vyaw_cmd += 0.1
-                elif self.robot.joy_key.rx <= -1.0:
+                elif self.robot.joy_key.rx * -1 <= -1.0:
                     self.vyaw_cmd -= 0.1
                 if self.robot.joy_key.ls  or self.robot.joy_key.rs:
                     self.vx_cmd = 0.0
