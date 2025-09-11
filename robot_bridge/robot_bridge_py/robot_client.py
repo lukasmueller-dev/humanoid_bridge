@@ -4,6 +4,7 @@ from enum import Enum
 import numpy as np
 from bridge_interface.msg import RobotCmd, MotorCmd
 from bridge_interface.srv import SetDefaultPosition
+
 from std_srvs.srv import Trigger
 from rclpy.node import Node
 from rclpy.client import Client as ROSClient
@@ -71,10 +72,9 @@ class RobotClient:
         self._default_duration = 2.0
 
         if self.robot_type == "T1":
-            from booster_interface.msg import LowState
-            from sensor_msgs.msg import Joy
+            from booster_interface.msg import LowState, RemoteControllerState
             state_topic_name = '/low_state' 
-            joy_topic_name = '/joy'
+            joy_topic_name = '/remote_controller_state'
             low_state_handler = self._low_state_handler_booster
             joy_handler = self._joy_handler_booster
         else: 
@@ -85,7 +85,7 @@ class RobotClient:
             joy_handler = self._joy_handler_unitree
 
         self.low_state_subscription = self.node.create_subscription(LowState, state_topic_name, low_state_handler, 1)
-        self.joystick_subscription = self.node.create_subscription(Joy, joy_topic_name, joy_handler, 1)
+        self.joystick_subscription = self.node.create_subscription(RemoteControllerState, joy_topic_name, joy_handler, 1)
 
         self.low_cmd_publisher = self.node.create_publisher(RobotCmd, '/robot_cmd', 1)
         
@@ -95,7 +95,7 @@ class RobotClient:
         self.stop_control_client = self.node.create_client(Trigger, '/stop_control')
 
         self.joy_key = None
-        self.joy_axes = np.zeros(6, dtype=np.float32)
+        # self.joy_axes = np.zeros(6, dtype=np.float32)
         self.control_start_time = None
         self.control_started = False
 
@@ -159,20 +159,54 @@ class RobotClient:
         """
         Handle joystick messages for the Booster robot.
         """
-        buttons = np.array(joy_msg.buttons)
-        self.joy_axes = np.array(joy_msg.axes)
-        key = np.dot(buttons, 2 ** np.arange(buttons.size))
+        # buttons = np.array(joy_msg.buttons)
+        # self.joy_axes = np.array(joy_msg.axes)
+        # key = np.dot(buttons, 2 ** np.arange(buttons.size))
 
         time_now = time.time()
 
-        self.joy_key = None
-        if key == (BoosterJoyButton.Button_LT | BoosterJoyButton.Button_START):  # start: LT + START
+        # self.joy_key = None
+        # if key == (BoosterJoyButton.Button_LT | BoosterJoyButton.Button_START):  # start: LT + START
+        #     self.node.get_logger().info("Starting control...")
+        #     if not self.control_started:
+        #         future = self.init_control()
+        #         self.control_start_time = time_now + self._default_duration
+        #     return
+        # elif key == BoosterJoyButton.Button_LB:  # ready position: LB
+        #     self.node.get_logger().info("Ready position control...")
+        #     if not self.control_started:
+        #         self.goto_default_position()
+        #         self.control_start_time = None
+        #     else:
+        #         self.node.get_logger().warn("Control already started, please stop the control first by pressing BACK.")
+        #     return
+        # elif key == BoosterJoyButton.Button_RB:  # zero position: RB
+        #     self.node.get_logger().info("Zero position control...")
+        #     if not self.control_started:
+        #         self.goto_zero_position()
+        #         self.control_start_time = None
+        #     else:
+        #         self.node.get_logger().warn("Control already started, please stop the control first by pressing BACK.")
+        #     return
+        # elif key == BoosterJoyButton.Button_BACK:  # stop: BACK
+        #     self.node.get_logger().info("Stopping control...")
+        #     future = self.stop_control()
+        #     self.control_start_time = None
+        #     return
+        # elif key == (BoosterJoyButton.Button_LT | BoosterJoyButton.Button_BACK):
+        #     self.control_start_time = None
+        # else:
+        #     # Set key only for unknown key combinations
+        #     self.joy_key = key
+        
+        
+        if joy_msg.lt and joy_msg.start: # start: LT + START
             self.node.get_logger().info("Starting control...")
             if not self.control_started:
                 future = self.init_control()
                 self.control_start_time = time_now + self._default_duration
             return
-        elif key == BoosterJoyButton.Button_LB:  # ready position: LB
+        elif joy_msg.lb:  # ready position: LB
             self.node.get_logger().info("Ready position control...")
             if not self.control_started:
                 self.goto_default_position()
@@ -180,7 +214,7 @@ class RobotClient:
             else:
                 self.node.get_logger().warn("Control already started, please stop the control first by pressing BACK.")
             return
-        elif key == BoosterJoyButton.Button_RB:  # zero position: RB
+        elif joy_msg.rb:  # zero position: RB
             self.node.get_logger().info("Zero position control...")
             if not self.control_started:
                 self.goto_zero_position()
@@ -188,17 +222,18 @@ class RobotClient:
             else:
                 self.node.get_logger().warn("Control already started, please stop the control first by pressing BACK.")
             return
-        elif key == BoosterJoyButton.Button_BACK:  # stop: BACK
+        elif joy_msg.back:  # stop: BACK
             self.node.get_logger().info("Stopping control...")
             future = self.stop_control()
             self.control_start_time = None
             return
-        elif key == (BoosterJoyButton.Button_LT | BoosterJoyButton.Button_BACK):
+        elif joy_msg.lt and joy_msg.back:
             self.control_start_time = None
         else:
             # Set key only for unknown key combinations
-            self.joy_key = key
-        
+            self.joy_key = joy_msg
+
+
     def _joy_handler_unitree(self, joy_msg):
         raise NotImplementedError("Unitree joystick handler is not implemented yet.")
 
