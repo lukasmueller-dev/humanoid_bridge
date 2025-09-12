@@ -275,31 +275,31 @@ void sairol_bridge::G1Bridge::finishControl_() {
     RCLCPP_INFO(nh->get_logger(), "finishControl_ called from G1Bridge");
 }
 
-int main(int argc, char **argv)
-{
-    rclcpp::init(argc, argv);
+// int main(int argc, char **argv)
+// {
+//     rclcpp::init(argc, argv);
 
-    auto options = rclcpp::NodeOptions().allow_undeclared_parameters(true).automatically_declare_parameters_from_overrides(true);
-    rclcpp::Node::SharedPtr nh = std::make_shared<rclcpp::Node>("robot_bridge", options);
+//     auto options = rclcpp::NodeOptions().allow_undeclared_parameters(true).automatically_declare_parameters_from_overrides(true);
+//     rclcpp::Node::SharedPtr nh = std::make_shared<rclcpp::Node>("robot_bridge", options);
 
-    rclcpp::sleep_for(std::chrono::milliseconds(100));
+//     rclcpp::sleep_for(std::chrono::milliseconds(100));
 
-    std::string robot_name;
-    nh->get_parameter("robot_name", robot_name);
+//     std::string robot_name;
+//     nh->get_parameter("robot_name", robot_name);
 
-    std::shared_ptr<sairol_bridge::BridgeCore> bridge;
+//     std::shared_ptr<sairol_bridge::BridgeCore> bridge;
 
-    auto g1_bridge = std::make_shared<sairol_bridge::G1Bridge>(nh);
-    bridge = g1_bridge;
+//     auto g1_bridge = std::make_shared<sairol_bridge::G1Bridge>(nh);
+//     bridge = g1_bridge;
 
 
-    if (bridge)
-    {   
-        bridge->start();
-        rclcpp::spin(nh);
-    }
+//     if (bridge)
+//     {   
+//         bridge->start();
+//         rclcpp::spin(nh);
+//     }
 
-    bridge->stop();
-    return 0;
-}
+//     bridge->stop();
+//     return 0;
+// }
 

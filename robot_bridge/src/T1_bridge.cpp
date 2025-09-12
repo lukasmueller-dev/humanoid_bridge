@@ -178,7 +178,7 @@ void sairol_bridge::T1Bridge::publishLowCommand_()
             cmd.tau = cmdParams_[i].tau_0 + cmdParams_[i].tau_1 * phase;
             if (!if_init_)
             {
-                if (i == 15 || i == 16 || i == 21 || i == 22) // Special case for parallel joints
+                if (joints_[i].if_parallel_joint)
                 {
                     cmd.tau = std::clamp((cmd.q - currentState_.motor_state[i].q) * cmd.kp, -joint_info.tau_limit, joint_info.tau_limit);
                     cmd.kp = 0.0;

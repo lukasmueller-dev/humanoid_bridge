@@ -55,7 +55,7 @@ class RobotController:
         self.robot.update_robot_state()
 
         if self.robot.joy_key is not None:
-            if self.robot.joy_key.lt and self.robot.joy_key.a:
+            if self.robot.joy_key.lt and self.robot.joy_key.a and self.robot.true_count == 2:  # start: LT + A
                 if self.robot.control_started:
                     self.agent_started = True
                     self.vx_cmd = 0.0
@@ -78,7 +78,7 @@ class RobotController:
                     self.vyaw_cmd += 0.1
                 elif self.robot.joy_key.rx * -1 <= -1.0:
                     self.vyaw_cmd -= 0.1
-                if self.robot.joy_key.ls  or self.robot.joy_key.rs:
+                if (self.robot.joy_key.ls or self.robot.joy_key.rs) and self.robot.true_count == 1:
                     self.vx_cmd = 0.0
                     self.vy_cmd = 0.0
                     self.vyaw_cmd = 0.0
@@ -93,6 +93,7 @@ class RobotController:
                 self.vyaw_cmd = 0.0
 
             self.robot.joy_key = None  # Reset joy_key
+            self.robot.true_count = 0 # Reset true_count after processing
             self.robot.joy_axes = np.zeros(6, dtype=np.float32)
 
         if not self.robot.control_started:

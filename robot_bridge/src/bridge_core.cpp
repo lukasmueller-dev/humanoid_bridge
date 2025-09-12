@@ -160,6 +160,7 @@ namespace sairol_bridge
                 ret = ret && nh->get_parameter(name + ".kp", joint_info.kp);
                 ret = ret && nh->get_parameter(name + ".kd", joint_info.kd);
                 ret = ret && nh->get_parameter(name + ".if_strong_joint", joint_info.if_strong_joint);
+                ret = ret && nh->get_parameter(name + ".if_parallel_joint", joint_info.if_parallel_joint);
                 joints_.push_back(joint_info);
                 assert(joint_info.idx < numJoint_ && ("Joint index exceeds the number of joints, please check the joint index: " + std::to_string(joint_info.idx)).c_str());
                 assert(joint_info.q_max >= joint_info.q_min && ("Joint q_max must be greater than or equal to q_min, please check the joint index: " + std::to_string(joint_info.idx)).c_str());
@@ -168,6 +169,7 @@ namespace sairol_bridge
                 assert(joint_info.kp >= 0 && ("Joint kp must be non-negative, please check the joint index: " + std::to_string(joint_info.idx)).c_str());
                 assert(joint_info.kd >= 0 && ("Joint kd must be non-negative, please check the joint index: " + std::to_string(joint_info.idx)).c_str());
                 assert(joint_info.if_strong_joint == true || joint_info.if_strong_joint == false && ("Joint if_strong_joint must be a boolean value, please check the joint index: " + std::to_string(joint_info.idx)).c_str());
+                assert(joint_info.if_parallel_joint == true || joint_info.if_parallel_joint == false && ("Joint if_parallel_joint must be a boolean value, please check the joint index: " + std::to_string(joint_info.idx)).c_str());
             }
             if (!ret)
             {

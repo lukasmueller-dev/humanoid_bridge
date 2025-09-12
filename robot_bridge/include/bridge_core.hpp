@@ -31,6 +31,7 @@ namespace sairol_bridge
         float_t kp{0};
         float_t kd{0};
         bool if_strong_joint{false}; // Whether the joint is a strong joint
+        bool if_parallel_joint{false}; // Whether the joint is a parallel joint
     };
 
     struct CmdParams
