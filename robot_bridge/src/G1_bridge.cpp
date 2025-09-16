@@ -7,15 +7,14 @@ sairol_bridge::G1Bridge::G1Bridge(rclcpp::Node::SharedPtr node) : BridgeCore(nod
 {
 
     lowCommandDesired_.motor_cmd.resize(numJoint_);
-    lowCommand_.motor_cmd.resize(numJoint_);
+    lastCommand_.motor_cmd.resize(numJoint_);
     currentState_.motor_state.resize(numJoint_);
     cmdParams_.resize(numJoint_);
 
     lowStateSubscriber_ = nh->create_subscription<unitree_hg::msg::LowState>(
         "/lowstate", 1, std::bind(&sairol_bridge::G1Bridge::lowStateHandler_, this, std::placeholders::_1));
 
-    // remoteControlSubscriber_ = nh->create_subscription<sensor_msgs::msg::Joy>(
-    //     "/joy", 1, std::bind(&sairol_bridge::G1Bridge::wireless_callback, this, std::placeholders::_1));
+
 
     lowCommandPublisher_ = nh->create_publisher<unitree_hg::msg::LowCmd>(
         "/lowcmd", 1); // /joint_ctrl
@@ -121,7 +120,7 @@ void sairol_bridge::G1Bridge::publishLowCommand_()
 
     for (int i = 0; i < numJoint_; ++i)
     {
-        auto &cmd = lowCommand_.motor_cmd[i];
+        auto &cmd = lastCommand_.motor_cmd[i];
         auto &joint_info = joints_[i];
 
         // Set motor command mode and initial values
@@ -154,13 +153,14 @@ void sairol_bridge::G1Bridge::publishLowCommand_()
         else
         {
             cmd.tau = cmdParams_[i].tau_0 + cmdParams_[i].tau_1 * phase;
-            if (!if_init_)
+            if (!receivedCmd_)
             {
-                if (i == 15 || i == 16 || i == 21 || i == 22) // Special case for waist joints
+                if (joints_[i].if_parallel_joint)
                 {
                     cmd.tau = std::clamp((cmd.q - currentState_.motor_state[i].q) * cmd.kp, -joint_info.tau_limit, joint_info.tau_limit);
                     cmd.kp = 0.0;
                 }
+            
             }
             // cmd.tau = std::clamp(cmd.tau, -joint_info.tau_limit, joint_info.tau_limit);
             cmd.q = std::clamp(cmd.q, (-cmd.kd * (currentState_.motor_state[i].q - cmd.dq) - joint_info.tau_limit) / cmd.kp + currentState_.motor_state[i].q, (-cmd.kd * (currentState_.motor_state[i].q - cmd.dq) + joint_info.tau_limit) / cmd.kp + currentState_.motor_state[i].q);
@@ -207,24 +207,21 @@ void sairol_bridge::G1Bridge::publishLowCommand_()
             //     cmd.kp = cmd.kp * adjusted_factor;
             //     cmd.kd = cmd.kd * sqrt(adjusted_factor);
             // }
-        }
-
-
-        
+        }    
     }
 
     unitree_hg::msg::LowCmd unitree_cmd;
     // unitree_cmd.motor_cmd.resize(lowCommand_.motor_cmd.size());
     // unitree_cmd.cmd_type = unitree_hg::msg::LowCmd::CMD_TYPE_SERIAL;
-    for (size_t i = 0; i < lowCommand_.motor_cmd.size(); ++i)
-    {
-        unitree_cmd.motor_cmd[i].mode = 0;
-        unitree_cmd.motor_cmd[i].q = lowCommand_.motor_cmd[i].q;
-        unitree_cmd.motor_cmd[i].dq = lowCommand_.motor_cmd[i].dq;
-        unitree_cmd.motor_cmd[i].tau = lowCommand_.motor_cmd[i].tau;
-        unitree_cmd.motor_cmd[i].kp = lowCommand_.motor_cmd[i].kp;
-        unitree_cmd.motor_cmd[i].kd = lowCommand_.motor_cmd[i].kd;
-    }
+    for (size_t i = 0; i < lastCommand_.motor_cmd.size(); ++i)
+        {
+            unitree_cmd.motor_cmd[i].mode = 0;
+            unitree_cmd.motor_cmd[i].q = lastCommand_.motor_cmd[i].q;
+            unitree_cmd.motor_cmd[i].dq = lastCommand_.motor_cmd[i].dq;
+            unitree_cmd.motor_cmd[i].tau = lastCommand_.motor_cmd[i].tau;
+            unitree_cmd.motor_cmd[i].kp = lastCommand_.motor_cmd[i].kp;
+            unitree_cmd.motor_cmd[i].kd = lastCommand_.motor_cmd[i].kd;
+        }
     lowCommandPublisher_->publish(unitree_cmd);
 }
 
@@ -242,7 +239,7 @@ bool sairol_bridge::G1Bridge::initControl_(bridge_interface::msg::RobotCmd defau
     calculateInterpolationParams_(0.0, 1, true);
 
     controlStarted_ = true;
-    if_init_ = true;
+    receivedCmd_ = true;
     rclcpp::Rate rate(100);
     rate.sleep();
     RCLCPP_INFO(nh->get_logger(), "Control initialized successfully.");

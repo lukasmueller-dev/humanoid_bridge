@@ -12,8 +12,7 @@ sairol_bridge::T1Bridge::T1Bridge(rclcpp::Node::SharedPtr node) : BridgeCore(nod
     {
         if (!rclcpp::ok())
         {
-            RCLCPP_ERROR(rclcpp::get_logger("rclcpp"),
-                            "Interrupted while waiting for the service. Exiting.");
+            RCLCPP_ERROR(rclcpp::get_logger("rclcpp"), "Interrupted while waiting for the service. Exiting.");
         }
         RCLCPP_INFO(nh->get_logger(), "service not available, waiting again...");
     }
@@ -21,7 +20,7 @@ sairol_bridge::T1Bridge::T1Bridge(rclcpp::Node::SharedPtr node) : BridgeCore(nod
     // switch_to_prepare_mode();
 
     lowCommandDesired_.motor_cmd.resize(numJoint_);
-    lowCommand_.motor_cmd.resize(numJoint_);
+    lastCommand_.motor_cmd.resize(numJoint_);
     currentState_.motor_state.resize(numJoint_);
     cmdParams_.resize(numJoint_);
 
@@ -31,8 +30,7 @@ sairol_bridge::T1Bridge::T1Bridge(rclcpp::Node::SharedPtr node) : BridgeCore(nod
     // remoteControlSubscriber_ = nh->create_subscription<sensor_msgs::msg::Joy>(
     //     "/joy", 1, std::bind(&sairol_bridge::T1Bridge::wireless_callback, this, std::placeholders::_1));
 
-    lowCommandPublisher_ = nh->create_publisher<booster_interface::msg::LowCmd>(
-        "/joint_ctrl", 1); // /joint_ctrl
+    lowCommandPublisher_ = nh->create_publisher<booster_interface::msg::LowCmd>("/joint_ctrl", 1); // /joint_ctrl
 
     // Waiting for publisher on topic lowstate
     RCLCPP_INFO(nh->get_logger(), "Waiting for publisher on topic /lowstate...");
@@ -132,8 +130,6 @@ void sairol_bridge::T1Bridge::publishLowCommand_()
 {
     rclcpp::Time current = nh->get_clock()->now();
 
-    // float_t phase = (current.seconds() - tStart_) / (tFinal_ - tStart_);
-
     float_t phase = 1.0f;
     if (tFinal_ - tStart_ > 1e-6) {
         phase = (current.seconds() - tStart_) / (tFinal_ - tStart_);
@@ -141,19 +137,24 @@ void sairol_bridge::T1Bridge::publishLowCommand_()
 
     phase = std::clamp(phase, 0.0f, 1.0f); // Ensure phase is between 0 and 1
 
+    booster_interface::msg::LowCmd booster_cmd;
+    booster_cmd.motor_cmd.resize(lastCommand_.motor_cmd.size());
+    booster_cmd.cmd_type = booster_interface::msg::LowCmd::CMD_TYPE_SERIAL;
+
     for (int i = 0; i < numJoint_; ++i)
     {
-        auto &cmd = lowCommand_.motor_cmd[i];
+        auto &cmd = booster_cmd.motor_cmd[i];
+        auto &last_cmd = lastCommand_.motor_cmd[i];
         auto &joint_info = joints_[i];
 
-        // Set motor command mode and initial values
-        // cmd.mode = (i < emptyJointIndex_) ? 0x0A : 0x01;
+        booster_cmd.motor_cmd[i].mode = 0;
+        booster_cmd.motor_cmd[i].weight = 1.0;
 
         if (1e-6 < cmdInterpOrder_ && cmdInterpOrder_ < 1.0 - 1e-6)
         {
             // Low pass filter for cmd
-            cmd.q = cmd.q * cmdInterpOrder_ + cmdParams_[i].q_0 * (1 - cmdInterpOrder_);
-            cmd.dq = cmd.dq * cmdInterpOrder_ + cmdParams_[i].dq_0 * (1 - cmdInterpOrder_);
+            cmd.q = last_cmd.q * cmdInterpOrder_ + cmdParams_[i].q_0 * (1 - cmdInterpOrder_);
+            cmd.dq = last_cmd.dq * cmdInterpOrder_ + cmdParams_[i].dq_0 * (1 - cmdInterpOrder_);
         }
         else {
             // Interpolation
@@ -163,7 +164,6 @@ void sairol_bridge::T1Bridge::publishLowCommand_()
 
         cmd.kp = cmdParams_[i].kp_0 + cmdParams_[i].kp_1 * phase;
         cmd.kd = cmdParams_[i].kd_0 + cmdParams_[i].kd_1 * phase;
-
         cmd.dq = std::clamp(cmd.dq, -joint_info.dq_limit, joint_info.dq_limit);
 
         if (torqueControl_)
@@ -172,82 +172,28 @@ void sairol_bridge::T1Bridge::publishLowCommand_()
             cmd.tau = std::clamp(cmd.tau, -joint_info.tau_limit, joint_info.tau_limit);
             cmd.kp = 0.0;
             cmd.kd = 0.0;
-        }
-        else
-        {
+        } else {
             cmd.tau = cmdParams_[i].tau_0 + cmdParams_[i].tau_1 * phase;
-            if (!if_init_)
-            {
-                if (joints_[i].if_parallel_joint)
-                {
-                    cmd.tau = std::clamp((cmd.q - currentState_.motor_state[i].q) * cmd.kp, -joint_info.tau_limit, joint_info.tau_limit);
-                    cmd.kp = 0.0;
-                }
-            }
-            // cmd.tau = std::clamp(cmd.tau, -joint_info.tau_limit, joint_info.tau_limit);
-            cmd.q = std::clamp(cmd.q, (-cmd.kd * (currentState_.motor_state[i].dq - cmd.dq) - joint_info.tau_limit) / cmd.kp + currentState_.motor_state[i].q, (-cmd.kd * (currentState_.motor_state[i].dq - cmd.dq) + joint_info.tau_limit) / cmd.kp + currentState_.motor_state[i].q);
-
-
-
-            // auto tau_predict = cmd.kp * (cmd.q - currentState_.motor_state[i].q) + cmd.kd * (cmd.dq - currentState_.motor_state[i].dq) + cmd.tau;
-
-            // auto error_q = cmd.q - currentState_.motor_state[i].q;
-            // auto error_dq = cmd.dq - currentState_.motor_state[i].dq;
-
-            // if (std::abs(error_q) < 1e-6)
-            //     error_q = 1e-6; // Avoid division by zero
-
-            // if (std::abs(tau_predict) > joint_info.tau_limit)
-            // {
-            //     RCLCPP_WARN(nh->get_logger(), "Tau prediction exceeds limit: %f > %f", std::abs(tau_predict), joint_info.tau_limit);
-            //     double adjusted_factor = 1.0;
-            //     auto A = 1;
-            //     double B = cmd.kd * error_dq / (cmd.kp * error_q);
-            //     double sign = (tau_predict > 0) ? 1.0 : -1.0;
-            //     double C = -1 * joint_info.tau_limit * sign / (cmd.kp * error_q);
-            //     double discriminant = B * B - 4 * A * C;
-            //     if (discriminant >= 0)
-            //     {
-            //         double sqrt_dis = std::sqrt(discriminant);
-            //         double x1 = (-B + sqrt_dis) / (2 * A);
-            //         double x2 = (-B - sqrt_dis) / (2 * A);
-            //         if (x1 > 0)
-            //             adjusted_factor = x1;
-            //         else if (x2 > 0)
-            //             adjusted_factor = x2;
-            //         else
-            //         {
-            //             adjusted_factor = 0.0;
-            //             RCLCPP_WARN(nh->get_logger(), "No positive root found, using kp = 0.0, kd = 0.0");
-            //         }
-            //     }
-            //     else
-            //     {
-            //         adjusted_factor = 0.0;
-            //         RCLCPP_WARN(nh->get_logger(), "Discriminant is negative, using kp = 0.0, kd = 0.0");
-            //     }
-            //     cmd.kp = cmd.kp * adjusted_factor;
-            //     cmd.kd = cmd.kd * sqrt(adjusted_factor);
-            // }
         }
 
+        cmd.q = std::clamp(cmd.q, 
+            (-cmd.kd * (currentState_.motor_state[i].dq - cmd.dq) - joint_info.tau_limit) / cmd.kp + currentState_.motor_state[i].q, 
+            (-cmd.kd * (currentState_.motor_state[i].dq - cmd.dq) + joint_info.tau_limit) / cmd.kp + currentState_.motor_state[i].q);
 
-        
+        last_cmd.q = cmd.q;
+        last_cmd.dq = cmd.dq;
+        last_cmd.kp = cmd.kp;
+        last_cmd.kd = cmd.kd;
+        last_cmd.tau = cmd.tau;
+
+        if (receivedCmd_ && joints_[i].if_parallel_joint)
+        {
+            cmd.tau = std::clamp((last_cmd.q - currentState_.motor_state[i].q) * cmd.kp, -joint_info.tau_limit, joint_info.tau_limit);
+            cmd.q = currentState_.motor_state[i].q;
+            cmd.kp = 0.0;
+        }
     }
 
-    booster_interface::msg::LowCmd booster_cmd;
-    booster_cmd.motor_cmd.resize(lowCommand_.motor_cmd.size());
-    booster_cmd.cmd_type = booster_interface::msg::LowCmd::CMD_TYPE_SERIAL;
-    for (size_t i = 0; i < lowCommand_.motor_cmd.size(); ++i)
-    {
-        booster_cmd.motor_cmd[i].mode = 0;
-        booster_cmd.motor_cmd[i].q = lowCommand_.motor_cmd[i].q;
-        booster_cmd.motor_cmd[i].dq = lowCommand_.motor_cmd[i].dq;
-        booster_cmd.motor_cmd[i].tau = lowCommand_.motor_cmd[i].tau;
-        booster_cmd.motor_cmd[i].kp = lowCommand_.motor_cmd[i].kp;
-        booster_cmd.motor_cmd[i].kd = lowCommand_.motor_cmd[i].kd;
-        booster_cmd.motor_cmd[i].weight = 1.0; // Default weight, can be adjusted later
-    }
     lowCommandPublisher_->publish(booster_cmd);
 }
 
@@ -280,7 +226,7 @@ bool sairol_bridge::T1Bridge::initControl_(bridge_interface::msg::RobotCmd defau
     calculateInterpolationParams_(0.0, 1, true);
 
     controlStarted_ = true;
-    if_init_ = true;
+    receivedCmd_ = false;
     rclcpp::Rate rate(100);
     rate.sleep();
     RCLCPP_INFO(nh->get_logger(), "Control initialized successfully.");

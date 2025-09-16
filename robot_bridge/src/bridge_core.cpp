@@ -20,7 +20,7 @@ namespace sairol_bridge
 
         // distribute parameters
         lowCommandDesired_.motor_cmd.resize(numJoint_);
-        lowCommand_.motor_cmd.resize(numJoint_);
+        lastCommand_.motor_cmd.resize(numJoint_);
         currentState_.motor_state.resize(numJoint_);
         cmdParams_.resize(numJoint_);
 
@@ -230,7 +230,7 @@ namespace sairol_bridge
 
         if (checkCommand_())
         {   
-            if_init_ = false;
+            receivedCmd_ = true;
             calculateInterpolationParams_(duration, interpolation_order, hold_position);
         }
         else
@@ -279,16 +279,18 @@ namespace sairol_bridge
                     controlStarted_ = false;
                 }
 
+                controlStarted_ &= (nh->get_clock()->now()).seconds() <= tValid_;
+
+                if (!controlStarted_)
+                {
+                    finishControl_();
+                    RCLCPP_ERROR(nh->get_logger(), "Control finished due to safety check or time out.");
+                }
+
                 std::unique_lock<std::mutex> lock(mutex_);
                 // Update the low command
                 publishLowCommand_();
                 lock.unlock();
-                controlStarted_ = (nh->get_clock()->now()).seconds() <= tValid_;
-                if (!controlStarted_)
-                {
-                    finishControl_();
-                    RCLCPP_INFO(nh->get_logger(), "Control finished because the duration has elapsed.");
-                }
             }
             rate.sleep();
         }
@@ -320,15 +322,15 @@ namespace sairol_bridge
         {
             for (int i = 0; i < numJoint_; i++)
             {
-                cmdParams_[i].q_0 = lowCommand_.motor_cmd[i].q; // currentState_.motor_state[i].q;
+                cmdParams_[i].q_0 = lastCommand_.motor_cmd[i].q; // currentState_.motor_state[i].q;
                 cmdParams_[i].q_1 = lowCommandDesired_.motor_cmd[i].q - cmdParams_[i].q_0;
                 cmdParams_[i].tau_0 = lowCommandDesired_.motor_cmd[i].tau; // currentState_.motor_state[i].tau;
                 cmdParams_[i].tau_1 = 0.0;
-                cmdParams_[i].dq_0 = lowCommand_.motor_cmd[i].dq; // currentState_.motor_state[i].dq;
+                cmdParams_[i].dq_0 = lastCommand_.motor_cmd[i].dq; // currentState_.motor_state[i].dq;
                 cmdParams_[i].dq_1 = lowCommandDesired_.motor_cmd[i].dq - cmdParams_[i].dq_0;
-                cmdParams_[i].kp_0 = lowCommand_.motor_cmd[i].kp; // currentState_.motor_state[i].kp;
+                cmdParams_[i].kp_0 = lastCommand_.motor_cmd[i].kp; // currentState_.motor_state[i].kp;
                 cmdParams_[i].kp_1 = lowCommandDesired_.motor_cmd[i].kp - cmdParams_[i].kp_0;
-                cmdParams_[i].kd_0 = lowCommand_.motor_cmd[i].kd; // currentState_.motor_state[i].kd;
+                cmdParams_[i].kd_0 = lastCommand_.motor_cmd[i].kd; // currentState_.motor_state[i].kd;
                 cmdParams_[i].kd_1 = lowCommandDesired_.motor_cmd[i].kd - cmdParams_[i].kd_0;
             }
         }
@@ -364,7 +366,7 @@ namespace sairol_bridge
                          "Robot signal lost! No LowState message received for %.2f seconds. "
                          "Expected interval ~0.002s (500Hz). Shutting down the node to prevent unsafe operation.",
                          dt_state_);
-            rclcpp::shutdown();
+            return false;
         }
         // Check if the state message has valid data
         if (currentState_.motor_state.size() != numJoint_)
@@ -393,7 +395,6 @@ namespace sairol_bridge
                 RCLCPP_ERROR(nh->get_logger(),
                              "Joint [%lu] dq (%.3f) exceeds limit (%.3f).",
                              i, motor.dq, joint.dq_limit);
-                // rclcpp::shutdown();
                 return false;
             }
         }
@@ -421,7 +422,7 @@ namespace sairol_bridge
         {
             RCLCPP_ERROR(nh->get_logger(),
                          "Command check failed: motor_cmd size mismatch. Expected %ld, got %ld.",
-                         joints_.size(), lowCommand_.motor_cmd.size());
+                         joints_.size(), lastCommand_.motor_cmd.size());
             return false;
         }
         int any_value_clipped = -1;

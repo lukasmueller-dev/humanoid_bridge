@@ -50,7 +50,7 @@ private:
     void switch_to_prepare_mode();
     void stopControlServiceCB_(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
                                std::shared_ptr<std_srvs::srv::Trigger::Response> response) override;
-    void finishControl_();
+    void finishControl_() override;
 
     rclcpp::Subscription<booster_interface::msg::LowState>::SharedPtr lowStateSubscriber_;  
     rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr remoteControlSubscriber_;

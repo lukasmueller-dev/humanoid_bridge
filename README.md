@@ -37,7 +37,7 @@ Open a terminal for bridge interface:
 ```bash
     cd ~/sairol_ws
     source src/humanoid_bridge/setup_booster.sh #if booster T1
-    source src/humanoid_bridge/serup_unitree.sh #if unitree G1 or H1
+    source src/humanoid_bridge/setup_unitree.sh #if unitree G1 or H1
 ```
 then launch the bridge interface:
 ```bash

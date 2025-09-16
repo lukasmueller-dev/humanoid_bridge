@@ -84,7 +84,7 @@ namespace sairol_bridge
         float_t cmdInterpOrder_{0.0};
 
         bridge_interface::msg::RobotCmd lowCommandDesired_;
-        bridge_interface::msg::LowCmd lowCommand_;
+        bridge_interface::msg::LowCmd lastCommand_;
         bridge_interface::msg::LowState currentState_;
         bridge_interface::msg::ImuState imu_;
 
@@ -107,7 +107,7 @@ namespace sairol_bridge
 
         bool torqueControl_{false};
         bool controlStarted_{false};
-        bool if_init_{false}; // Whether the control is initialized
+        bool receivedCmd_{false}; // Whether the control is initialized
         float_t imu_rpy_threshold_{1.0}; // Threshold for IMU roll/pitch in radians
 
 

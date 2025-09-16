@@ -70,6 +70,7 @@ robot_bridge:
       kp: 100.0
       kd: 2.0
       if_strong_joint: true
+      if_parallel_joint: false
 
     L_LEG_HIP_ROLL:
       idx: 1
@@ -80,6 +81,7 @@ robot_bridge:
       kp: 100.0
       kd: 2.0
       if_strong_joint: true
+      if_parallel_joint: false
 
     L_LEG_HIP_YAW:
       idx: 2
@@ -90,6 +92,7 @@ robot_bridge:
       kp: 100.0
       kd: 2.0
       if_strong_joint: true
+      if_parallel_joint: false
 
     L_LEG_KNEE:
       idx: 3
@@ -100,6 +103,7 @@ robot_bridge:
       kp: 150.0
       kd: 4.0
       if_strong_joint: true
+      if_parallel_joint: false
 
     L_LEG_ANKLE_PITCH:
       idx: 4
@@ -110,6 +114,7 @@ robot_bridge:
       kp: 40.0
       kd: 2.0
       if_strong_joint: false
+      if_parallel_joint: false
 
     L_LEG_ANKLE_ROLL:
       idx: 5
@@ -120,6 +125,7 @@ robot_bridge:
       kp: 40.0
       kd: 2.0
       if_strong_joint: false
+      if_parallel_joint: false
 
     R_LEG_HIP_PITCH:
       idx: 6
@@ -130,6 +136,7 @@ robot_bridge:
       kp: 100.0
       kd: 2.0
       if_strong_joint: true
+      if_parallel_joint: false
 
     R_LEG_HIP_ROLL:
       idx: 7
@@ -140,6 +147,7 @@ robot_bridge:
       kp: 100.0
       kd: 2.0
       if_strong_joint: true
+      if_parallel_joint: false
 
     R_LEG_HIP_YAW:
       idx: 8
@@ -150,6 +158,7 @@ robot_bridge:
       kp: 100.0
       kd: 2.0
       if_strong_joint: true
+      if_parallel_joint: false
 
     R_LEG_KNEE:
       idx: 9
@@ -160,6 +169,7 @@ robot_bridge:
       kp: 150.0
       kd: 4.0
       if_strong_joint: true
+      if_parallel_joint: false
 
     R_LEG_ANKLE_PITCH:
       idx: 10
@@ -170,6 +180,7 @@ robot_bridge:
       kp: 40.0
       kd: 2.0
       if_strong_joint: false
+      if_parallel_joint: false
 
     R_LEG_ANKLE_ROLL:
       idx: 11
@@ -180,6 +191,7 @@ robot_bridge:
       kp: 40.0
       kd: 2.0
       if_strong_joint: false
+      if_parallel_joint: false
 
     WAIST_YAW:
       idx: 12
@@ -190,6 +202,7 @@ robot_bridge:
       kp: 300.0
       kd: 3.0
       if_strong_joint: true
+      if_parallel_joint: false
 
     WAIST_ROLL:
       idx: 13
@@ -200,6 +213,7 @@ robot_bridge:
       kp: 300.0
       kd: 3.0
       if_strong_joint: true
+      if_parallel_joint: false
 
     WAIST_PITCH:
       idx: 14
@@ -210,6 +224,7 @@ robot_bridge:
       kp: 300.0
       kd: 3.0
       if_strong_joint: true
+      if_parallel_joint: false
 
     L_SHOULDER_PITCH:
       idx: 15
@@ -220,6 +235,7 @@ robot_bridge:
       kp: 100.0
       kd: 2.0
       if_strong_joint: false
+      if_parallel_joint: false
 
     L_SHOULDER_ROLL:
       idx: 16
@@ -230,6 +246,7 @@ robot_bridge:
       kp: 100.0
       kd: 2.0 
       if_strong_joint: false
+      if_parallel_joint: false
 
     L_SHOULDER_YAW:
       idx: 17
@@ -240,6 +257,7 @@ robot_bridge:
       kp: 50.0
       kd: 2.0
       if_strong_joint: false
+      if_parallel_joint: false
 
     L_ELBOW:
       idx: 18
@@ -250,6 +268,7 @@ robot_bridge:
       kp: 50.0
       kd: 2.0
       if_strong_joint: false
+      if_parallel_joint: false
 
     L_WRIST_ROLL:
       idx: 19
@@ -260,6 +279,7 @@ robot_bridge:
       kp: 20.0
       kd: 1.0
       if_strong_joint: false
+      if_parallel_joint: false
 
     L_WRIST_PITCH:
       idx: 20
@@ -270,6 +290,7 @@ robot_bridge:
       kp: 20.0
       kd: 1.0
       if_strong_joint: false
+      if_parallel_joint: false
 
     L_WRIST_YAW:
       idx: 21
@@ -280,6 +301,7 @@ robot_bridge:
       kp: 20.0
       kd: 1.0
       if_strong_joint: false
+      if_parallel_joint: false
 
     R_SHOULDER_PITCH:
       idx: 22
@@ -290,6 +312,7 @@ robot_bridge:
       kp: 100.0
       kd: 2.0
       if_strong_joint: false
+      if_parallel_joint: false
 
     R_SHOULDER_ROLL:
       idx: 23
@@ -300,6 +323,7 @@ robot_bridge:
       kp: 100
       kd: 2.0
       if_strong_joint: false
+      if_parallel_joint: false
 
     R_SHOULDER_YAW:
       idx: 24
@@ -310,6 +334,7 @@ robot_bridge:
       kp: 50.0
       kd: 2.0
       if_strong_joint: false
+      if_parallel_joint: false
 
     R_ELBOW:
       idx: 25
@@ -320,6 +345,7 @@ robot_bridge:
       kp: 50.0
       kd: 2.0
       if_strong_joint: false
+      if_parallel_joint: false
 
     R_WRIST_ROLL:
       idx: 26
@@ -330,6 +356,7 @@ robot_bridge:
       kp: 20.0
       kd: 1.0
       if_strong_joint: false
+      if_parallel_joint: false
 
     R_WRIST_PITCH:
       idx: 27
@@ -340,6 +367,7 @@ robot_bridge:
       kp: 20.0
       kd: 1.0
       if_strong_joint: false
+      if_parallel_joint: false
 
     R_WRIST_YAW:
       idx: 28
@@ -350,3 +378,4 @@ robot_bridge:
       kp: 20.0
       kd: 1.0
       if_strong_joint: false
+      if_parallel_joint: false
