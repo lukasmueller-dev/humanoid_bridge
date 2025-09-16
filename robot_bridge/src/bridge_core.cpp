@@ -184,18 +184,6 @@ namespace sairol_bridge
             return false;
         }
 
-        // // Get list of arrays from parameter server
-        // if (!nh->get_parameter("default_q", default_q_))
-        // {
-        //     RCLCPP_ERROR(nh->get_logger(), "Failed to get 'default_q' from parameters");
-        //     for (int i = 0; i < numJoint_; ++i)
-        //     {
-        //         assert(default_q_[i] >= joints_[i].q_min && default_q_[i] <= joints_[i].q_max &&
-        //                ("Default position must be within joint limits, please check the joint index: " + std::to_string(i)).c_str());
-        //     }
-        //     return false;
-        // }
-
         if (!nh->get_parameter("ready_q", ready_q_))
         {
             RCLCPP_ERROR(nh->get_logger(), "Failed to get 'ready_q' from parameters");
@@ -360,7 +348,7 @@ namespace sairol_bridge
         auto dt_state_ = (nh->get_clock()->now() - last_state_time_).seconds();
 
         // Check if the state message is received within the expected interval
-        if (dt_state_ > 0.1)
+        if (dt_state_ > 0.2)
         {
             RCLCPP_ERROR(nh->get_logger(),
                          "Robot signal lost! No LowState message received for %.2f seconds. "

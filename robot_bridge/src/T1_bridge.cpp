@@ -214,8 +214,7 @@ bool sairol_bridge::T1Bridge::initControl_(bridge_interface::msg::RobotCmd defau
 
     switch_mode(booster::robot::RobotMode::kCustom);
 
-    last_state_time_ = nh->get_clock()->now();
-
+    
     for (int i = 0; i < numJoint_; ++i)
     {
         lowCommandDesired_.motor_cmd[i].q = currentState_.motor_state[i].q;
@@ -251,6 +250,8 @@ bool sairol_bridge::T1Bridge::initControl_(bridge_interface::msg::RobotCmd defau
     }
 
     calculateInterpolationParams_(duration_, 1, true);
+
+    last_state_time_ = nh->get_clock()->now();
 
     return true;
 }
