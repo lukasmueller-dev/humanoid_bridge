@@ -118,7 +118,7 @@ Step3: Press `R2 + A` to start the policy inference, then robot can use policy t
 
 Step4: Use keyboad (w,s,a,d,space) to control the robot
 
-Step5: Press `L2 + up +left` to send the `stop service` request for stopping the control, then bridge can stop to publish any lowcmd and 
+Step5: Press `L2 + up + left` to send the `stop service` request for stopping the control, then bridge can stop to publish any lowcmd and 
         checkout damping mode .
 
 ### Notes
@@ -139,7 +139,7 @@ And for step 5 you can also use ros2 service command instead of remote controlle
 ```
 
 ## Other demos
-In addition, we have prepared some other demos after you launch `T1_example.py` ,`G1_example.py` or `H1_example.py` such as ready position control: 
+In addition, we have prepared some other demos after you launch `T1_example.py`, `G1_example.py` or `H1_example.py` such as ready position control: 
 ```bash
     ros2 service call /ready_position_control std_srvs/srv/Trigger {} # you can also press LB/L1 of controller
 ```
