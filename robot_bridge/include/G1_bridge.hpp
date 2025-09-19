@@ -11,24 +11,32 @@
 #include "unitree_hg/msg/low_state.hpp"
 #include "unitree_hg/msg/motor_cmd.hpp"
 #include "common/motor_crc_hg.h"
+#include "unitree_go/msg/wireless_controller.hpp"
+
 
 namespace sairol_bridge {
 
 
-enum WirelessKey_T1 : uint32_t
+enum WirelessKey_H1_G1 : uint32_t
 {
-    Button_X      = 1 << 0,  // 0b00000001 = 1
-    Button_A      = 1 << 1,  // 0b00000010 = 2
-    Button_B      = 1 << 2,  // 0b00000100 = 4
-    Button_Y      = 1 << 3,  // 0b00001000 = 8
-    Button_LB     = 1 << 4,  // 0b00010000 = 16
-    Button_RB     = 1 << 5,  // 0b00100000 = 32
-    Button_LT     = 1 << 6,  // 0b01000000 = 64
-    Button_RT     = 1 << 7,  // 0b10000000 = 128
-    Button_BACK   = 1 << 8,  // 0b100000000 = 256
-    Button_START  = 1 << 9   // 0b1000000000 = 512
-};
+    KEY_R1     = 1 << 0,    // 0b00000000 00000001 = 1
+    KEY_L1     = 1 << 1,    // 0b00000000 00000010 = 2
+    KEY_START  = 1 << 2,    // 0b00000000 00000100 = 4
+    KEY_SELECT = 1 << 3,    // 0b00000000 00001000 = 8
+    KEY_R2     = 1 << 4,    // 0b00000000 00010000 = 16
+    KEY_L2     = 1 << 5,    // 0b00000000 00100000 = 32
 
+    KEY_A      = 1 << 8,    // 0b00000001 00000000 = 256
+    KEY_B      = 1 << 9,    // 0b00000010 00000000 = 512
+    KEY_X      = 1 << 10,   // 0b00000100 00000000 = 1024
+    KEY_Y      = 1 << 11,   // 0b00001000 00000000 = 2048
+
+    KEY_UP     = 1 << 12,   // 0b00010000 00000000 = 4096
+    KEY_RIGHT  = 1 << 13,   // 0b00100000 00000000 = 8192
+    KEY_DOWN   = 1 << 14,   // 0b01000000 00000000 = 16384
+    KEY_LEFT   = 1 << 15    // 0b10000000 00000000 = 32768
+};
+enum PRorAB { PR = 0, AB = 1 };
 
 class G1Bridge : public BridgeCore {
 public:
@@ -37,17 +45,20 @@ public:
 
 private:
 
-    // void wireless_callback(sensor_msgs::msg::Joy::SharedPtr message);
+    void wireless_callback(unitree_go::msg::WirelessController::SharedPtr data);
     void publishLowCommand_();
+    void publishLowCommandOLD_();
     void lowStateHandler_(unitree_hg::msg::LowState::SharedPtr message);
     bool initControl_(bridge_interface::msg::RobotCmd default_cmd) override;
     void finishControl_() override; 
 
     rclcpp::Subscription<unitree_hg::msg::LowState>::SharedPtr lowStateSubscriber_;
-    rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr remoteControlSubscriber_;
+    rclcpp::Subscription<unitree_go::msg::WirelessController>::SharedPtr remoteControlSubscriber_;
     rclcpp::Publisher<unitree_hg::msg::LowCmd>::SharedPtr lowCommandPublisher_;
+    int mode_machine_{0};
 
-
+    
+    double time_;  // Running time count
 
 };
 }

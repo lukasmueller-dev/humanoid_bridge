@@ -480,6 +480,7 @@ namespace sairol_bridge
         std::shared_ptr<std_srvs::srv::Trigger::Response> response)
     {
         if (controlStarted_) controlStarted_ = false;
+        RCLCPP_INFO(nh->get_logger(), "Stopping control...");
         response->success = true;
         response->message = "Stop control service activated";
     }
@@ -492,6 +493,7 @@ namespace sairol_bridge
             initControl_(bridge_interface::msg::RobotCmd());
         readyPositionControl_();
         calculateInterpolationParams_(duration_, 1, true);
+        RCLCPP_INFO(nh->get_logger(), "Ready position control activated");
         response->success = true;
         response->message = "Ready position control activated";
     }
@@ -504,6 +506,7 @@ namespace sairol_bridge
             initControl_(bridge_interface::msg::RobotCmd());
         zeroPositionControl_();
         calculateInterpolationParams_(duration_, 1, true);
+        RCLCPP_INFO(nh->get_logger(), "Zero position control activated");
         response->success = true;
         response->message = "Zero position control activated";
     }

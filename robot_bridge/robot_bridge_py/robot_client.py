@@ -5,23 +5,35 @@ import numpy as np
 from bridge_interface.msg import RobotCmd, MotorCmd
 from bridge_interface.srv import SetDefaultPosition
 
+
 from std_srvs.srv import Trigger
 from rclpy.node import Node
 from rclpy.client import Client as ROSClient
+import numpy as np
+from scipy.spatial.transform import Rotation as R
 
-class BoosterJoyButton:
-    Button_X = 1 << 0      # buttons[0]
-    Button_A = 1 << 1      # buttons[1]
-    Button_B = 1 << 2      # buttons[2]
-    Button_Y = 1 << 3      # buttons[3]
-    Button_LB = 1 << 4     # buttons[4]
-    Button_RB = 1 << 5     # buttons[5]
-    Button_LT = 1 << 6     # buttons[6]
-    Button_RT = 1 << 7     # buttons[7]
-    Button_BACK = 1 << 8   # buttons[8]
-    Button_START = 1 << 9  # buttons[9]
-    Button_LAXES = 1 << 10  # buttons[10]
-    Button_RAXES = 1 << 11  # buttons[11]
+def rpy_to_quat(rpy):
+    r = R.from_euler('xyz', rpy)  
+    quat_xyzw = r.as_quat()  # return [x, y, z, w]
+    quat = np.array([quat_xyzw[3], quat_xyzw[0], quat_xyzw[1], quat_xyzw[2]])  # reorder [w, x, y, z]
+    return quat
+
+
+class WirelessKey_H1_G1:
+    KEY_R1     = 1 << 0
+    KEY_L1     = 1 << 1
+    KEY_START  = 1 << 2
+    KEY_SELECT = 1 << 3
+    KEY_R2     = 1 << 4
+    KEY_L2     = 1 << 5
+    KEY_A      = 1 << 8
+    KEY_B      = 1 << 9
+    KEY_X      = 1 << 10
+    KEY_Y      = 1 << 11
+    KEY_UP     = 1 << 12
+    KEY_RIGHT  = 1 << 13
+    KEY_DOWN   = 1 << 14
+    KEY_LEFT   = 1 << 15
 
 
 class RobotClient:
@@ -40,52 +52,73 @@ class RobotClient:
 
         self.base_ang_vel = np.zeros(3, dtype=np.float32)
         self.projected_gravity = np.zeros(3, dtype=np.float32)
-        self.rpy = np.zeros(3, dtype=np.float32)
+        
         self._q_pos = np.zeros(num_dof, dtype=np.float32)
         self._q_vel = np.zeros(num_dof, dtype=np.float32)
         self._tau = np.zeros(num_dof, dtype=np.float32)
+        self._quat = np.zeros(4, dtype=np.float32)
+        self._angular_velocity = np.zeros(3, dtype=np.float32)
+        
 
-        self.q_target_pos = np.zeros(num_dof, dtype=np.float32)
-        self.q_target_vel = np.zeros(num_dof, dtype=np.float32)
-        self.target_tau = np.zeros(num_dof, dtype=np.float32)
-        self.target_kp = np.zeros(num_dof, dtype=np.float32)
-        self.target_kd = np.zeros(num_dof, dtype=np.float32)
-
-        self._default_pos = np.array([0.0,  0.0,
-                                     0.25, -1.4, 0.0, -0.5,
-                                     0.25, 1.4, 0.0, 0.5,
-                                     0.0,
-                                     -0.1, 0.0, 0.0, 0.2, -0.1, 0.0,
-                                     -0.1, 0.0, 0.0, 0.2, -0.1, 0.0,])
-        self._default_kp =  np.array([5., 5.,
-                                     40., 50., 20., 10.,
-                                     40., 50., 20., 10.,
-                                     100., 
-                                     350., 350., 180., 350., 450., 450.,
-                                     350., 350., 180., 350., 450., 450.])
-        self._default_kd = np.array([0.1, 0.1,
-                                    0.5, 1.5, 0.2, 0.2,
-                                    0.5, 1.5, 0.2, 0.2,
-                                    5.0,
-                                    7.5, 7.5, 3., 5.5, 0.5, 0.5,
-                                    7.5, 7.5, 3., 5.5, 0.5, 0.5])
         self._default_duration = 2.0
-
+        self.joy_key = None
+        
         if self.robot_type == "T1":
-            from booster_interface.msg import LowState, RemoteControllerState
+            from booster_interface.msg import LowState
+            from booster_interface.msg import RemoteControllerState as JoyMsg
             state_topic_name = '/low_state' 
             joy_topic_name = '/remote_controller_state'
             low_state_handler = self._low_state_handler_booster
             joy_handler = self._joy_handler_booster
-        else: 
-            from unitree_go.msg import LowState
+
+            self._default_pos = np.array([0.0,  0.0,
+                                        0.25, -1.4, 0.0, -0.5,
+                                        0.25, 1.4, 0.0, 0.5,
+                                        0.0,
+                                        -0.1, 0.0, 0.0, 0.2, -0.1, 0.0,
+                                        -0.1, 0.0, 0.0, 0.2, -0.1, 0.0,])
+            self._default_kp =  np.array([5., 5.,
+                                        40., 50., 20., 10.,
+                                        40., 50., 20., 10.,
+                                        100., 
+                                        350., 350., 180., 350., 450., 450.,
+                                        350., 350., 180., 350., 450., 450.])
+            self._default_kd = np.array([0.1, 0.1,
+                                        0.5, 1.5, 0.2, 0.2,
+                                        0.5, 1.5, 0.2, 0.2,
+                                        5.0,
+                                        7.5, 7.5, 3., 5.5, 0.5, 0.5,
+                                        7.5, 7.5, 3., 5.5, 0.5, 0.5])
+            
+            self.key_count = 0
+        elif self.robot_type == "G1": 
+            from unitree_hg.msg import LowState
+            from unitree_go.msg import WirelessController as JoyMsg
             state_topic_name = '/lowstate'
-            joy_topic_name = '/joy'
+            joy_topic_name = '/wirelesscontroller'
             low_state_handler = self._low_state_handler_unitree
             joy_handler = self._joy_handler_unitree
+            
+            self._default_pos = np.array([-0.1,  0.0,  0.0,  0.3, -0.2, 0.0, 
+                                          -0.1,  0.0,  0.0,  0.3, -0.2, 0.0,
+                                           0.0, 0.0, 0.0,
+                                           0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                                           0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
+            
+            self._default_kp =  np.array([100, 100, 100, 150, 40, 40, 
+                                          100, 100, 100, 150, 40, 40,
+                                          200, 200, 200,
+                                          100, 100, 50, 50, 20, 20, 20,
+                                          100, 100, 50, 50, 20, 20, 20])
+            
+            self._default_kd = np.array([6, 6, 6, 4, 2, 2, 
+                                         6, 6, 6, 4, 2, 2,
+                                         1, 1, 1, 
+                                         2, 2, 2, 2, 1, 1, 1,
+                                         2, 2, 2, 2, 1, 1, 1])
 
         self.low_state_subscription = self.node.create_subscription(LowState, state_topic_name, low_state_handler, 1)
-        self.joystick_subscription = self.node.create_subscription(RemoteControllerState, joy_topic_name, joy_handler, 1)
+        self.joystick_subscription = self.node.create_subscription(JoyMsg, joy_topic_name, joy_handler, 1)
 
         self.low_cmd_publisher = self.node.create_publisher(RobotCmd, '/robot_cmd', 1)
         
@@ -94,9 +127,6 @@ class RobotClient:
         self.ready_position_client = self.node.create_client(Trigger, '/ready_position_control')
         self.stop_control_client = self.node.create_client(Trigger, '/stop_control')
 
-        self.joy_key = None
-        self.true_count = 0
-        # self.joy_axes = np.zeros(6, dtype=np.float32)
         self.control_start_time = None
         self.control_started = False
 
@@ -112,97 +142,51 @@ class RobotClient:
     def tau(self):
         return self._tau
     
-    def _rotate_vector_inverse_rpy(self, roll, pitch, yaw, vector):
-        """
-        Rotate a vector by the inverse of the given roll, pitch, and yaw angles.
-
-        Parameters:
-        roll (float): The roll angle in radians.
-        pitch (float): The pitch angle in radians.
-        yaw (float): The yaw angle in radians.
-        vector (np.ndarray): The 3D vector to be rotated.
-
-        Returns:
-        np.ndarray: The rotated 3D vector.
-        """
-        R_x = np.array([[1, 0, 0], [0, np.cos(roll), -np.sin(roll)], [0, np.sin(roll), np.cos(roll)]])
-        R_y = np.array([[np.cos(pitch), 0, np.sin(pitch)], [0, 1, 0], [-np.sin(pitch), 0, np.cos(pitch)]])
-        R_z = np.array([[np.cos(yaw), -np.sin(yaw), 0], [np.sin(yaw), np.cos(yaw), 0], [0, 0, 1]])
-        return (R_z @ R_y @ R_x).T @ vector
+    @property
+    def quat(self):
+        return self._quat
+    
+    @property
+    def angular_velocity(self):
+        return self._angular_velocity
 
     def _low_state_handler_booster(self, low_state_msg):
         self.time_count += 1
-        self.rpy[:] = low_state_msg.imu_state.rpy
-
-        self.projected_gravity[:] = self._rotate_vector_inverse_rpy(
-            low_state_msg.imu_state.rpy[0],
-            low_state_msg.imu_state.rpy[1],
-            low_state_msg.imu_state.rpy[2],
-            np.array([0.0, 0.0, -1.0]),
-        )
-        self.base_ang_vel[:] = low_state_msg.imu_state.gyro
-
+        self._angular_velocity = low_state_msg.imu_state.gyro
+        self._angular_acceleration = low_state_msg.imu_state.acc
+        
         for i, motor in enumerate(low_state_msg.motor_state_serial):
             self._q_pos[i] = motor.q
             self._q_vel[i] = motor.dq
-            
+            self._tau[i] = motor.tau_est
+        
+        self._quat = rpy_to_quat(low_state_msg.imu_state.rpy)
+        
+    def _low_state_handler_unitree(self, low_state_msg):
+        self._quat = low_state_msg.imu_state.quaternion
+        self._angular_velocity = low_state_msg.imu_state.gyroscope
+        self._angular_acceleration = low_state_msg.imu_state.accelerometer
+        
+        for i, motor in enumerate(low_state_msg.motor_state):
+            if i < self._q_pos.shape[0]:
+                self._q_pos[i] = motor.q
+                self._q_vel[i] = motor.dq
+                self._tau[i] = motor.tau_est
+    
     def update_robot_state(self):
         time_now = time.time()
         if self.control_start_time is not None and time_now > self.control_start_time:
             self.control_started = True
         else:
             self.control_started = False
-            
-    def _low_state_handler_unitree(self, low_state_msg):
-        raise NotImplementedError("Unitree low state handler is not implemented yet.")
     
     def _joy_handler_booster(self, joy_msg):
         """
         Handle joystick messages for the Booster robot.
         """
         time_now = time.time()
-        
-        # buttons = np.array(joy_msg.buttons)
-        
-        # self.joy_axes = np.array(joy_msg.axes)
-        # key = np.dot(buttons, 2 ** np.arange(buttons.size))
-        
-        # self.joy_key = None
-        # if key == (BoosterJoyButton.Button_LT | BoosterJoyButton.Button_START):  # start: LT + START
-        #     self.node.get_logger().info("Starting control...")
-        #     if not self.control_started:
-        #         future = self.init_control()
-        #         self.control_start_time = time_now + self._default_duration
-        #     return
-        # elif key == BoosterJoyButton.Button_LB:  # ready position: LB
-        #     self.node.get_logger().info("Ready position control...")
-        #     if not self.control_started:
-        #         self.goto_default_position()
-        #         self.control_start_time = None
-        #     else:
-        #         self.node.get_logger().warn("Control already started, please stop the control first by pressing BACK.")
-        #     return
-        # elif key == BoosterJoyButton.Button_RB:  # zero position: RB
-        #     self.node.get_logger().info("Zero position control...")
-        #     if not self.control_started:
-        #         self.goto_zero_position()
-        #         self.control_start_time = None
-        #     else:
-        #         self.node.get_logger().warn("Control already started, please stop the control first by pressing BACK.")
-        #     return
-        # elif key == BoosterJoyButton.Button_BACK:  # stop: BACK
-        #     self.node.get_logger().info("Stopping control...")
-        #     future = self.stop_control()
-        #     self.control_start_time = None
-        #     return
-        # elif key == (BoosterJoyButton.Button_LT | BoosterJoyButton.Button_BACK):
-        #     self.control_start_time = None
-        # else:
-        #     # Set key only for unknown key combinations
-        #     self.joy_key = key
-        
 
-        self.true_count = sum([
+        self.key_count = sum([
             joy_msg.a, joy_msg.b, joy_msg.x, joy_msg.y,
             joy_msg.lb, joy_msg.rb, joy_msg.lt, joy_msg.rt,
             joy_msg.ls, joy_msg.rs, joy_msg.back, joy_msg.start,
@@ -211,13 +195,13 @@ class RobotClient:
             joy_msg.hat_ld, joy_msg.hat_ru, joy_msg.hat_rd
         ])
     
-        if joy_msg.lt and joy_msg.start and self.true_count == 2:  # start: LT + START
+        if joy_msg.lt and joy_msg.start and self.key_count == 2:  # start: LT + START
             self.node.get_logger().info("Starting control...")
             if not self.control_started:
                 future = self.init_control()
                 self.control_start_time = time_now + self._default_duration
             return
-        elif joy_msg.lb and self.true_count == 1:  # ready position: LB
+        elif joy_msg.lb and self.key_count == 1:  # ready position: LB
             self.node.get_logger().info("Ready position control...")
             if not self.control_started:
                 self.goto_default_position()
@@ -225,7 +209,7 @@ class RobotClient:
             else:
                 self.node.get_logger().warn("Control already started, please stop the control first by pressing BACK.")
             return
-        elif joy_msg.rb and self.true_count == 1:  # zero position: RB
+        elif joy_msg.rb and self.key_count == 1:  # zero position: RB
             self.node.get_logger().info("Zero position control...")
             if not self.control_started:
                 self.goto_zero_position()
@@ -233,23 +217,52 @@ class RobotClient:
             else:
                 self.node.get_logger().warn("Control already started, please stop the control first by pressing BACK.")
             return
-        elif joy_msg.back and self.true_count == 1:  # stop: BACK
+        elif joy_msg.back and self.key_count == 1:  # stop: BACK
             self.node.get_logger().info("Stopping control...")
             future = self.stop_control()
             self.control_start_time = None
             return
-        elif joy_msg.lt and joy_msg.back and self.true_count == 2:  # emergency stop: LT + BACK
+        elif joy_msg.lt and joy_msg.back and self.key_count == 2:  # emergency stop: LT + BACK
             self.control_start_time = None
         else:
             # Set key only for unknown key combinations
             self.joy_key = joy_msg
-
-     
-
-
+  
     def _joy_handler_unitree(self, joy_msg):
-        raise NotImplementedError("Unitree joystick handler is not implemented yet.")
-
+        key = joy_msg.keys
+        time_now = time.time()
+        
+        if (key & (WirelessKey_H1_G1.KEY_L2 | WirelessKey_H1_G1.KEY_START)) == (WirelessKey_H1_G1.KEY_L2 | WirelessKey_H1_G1.KEY_START):
+            self.node.get_logger().info("Starting control...")
+            if not self.control_started:
+                future = self.init_control()
+                self.control_start_time = time_now + self._default_duration
+            return
+        elif (key & (WirelessKey_H1_G1.KEY_L2 | WirelessKey_H1_G1.KEY_UP | WirelessKey_H1_G1.KEY_LEFT)) == (WirelessKey_H1_G1.KEY_L2 | WirelessKey_H1_G1.KEY_UP | WirelessKey_H1_G1.KEY_LEFT):
+            self.node.get_logger().info("Stopping control...")
+            future = self.stop_control()
+            self.control_start_time = None
+            return
+        elif key & WirelessKey_H1_G1.KEY_L1:
+            self.node.get_logger().info("Ready position control...")
+            if not self.control_started:
+                self.goto_default_position()
+                self.control_start_time = None
+            else:
+                self.node.get_logger().warn("Control already started, please stop the control first by pressing BACK.")
+            return
+        elif key & WirelessKey_H1_G1.KEY_R1:
+            self.node.get_logger().info("Zero position control...")
+            if not self.control_started:
+                self.goto_zero_position()
+                self.control_start_time = None
+            else:
+                self.node.get_logger().warn("Control already started, please stop the control first by pressing BACK.")
+            return  
+        else:
+            # Set key only for unknown key combinations
+            self.joy_key = joy_msg
+            
     def send_cmd(self, q_target_pos=None, q_target_vel=None, target_tau=None, target_kp=None, target_kd=None):
         for i in range(self.num_dof):
             self.cmd.motor_cmd[i].q = float(q_target_pos[i]) if q_target_pos is not None else self._default_pos[i]

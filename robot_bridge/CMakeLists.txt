@@ -7,16 +7,8 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-## Chosse build type
+# Choose build type
 set(default_build_type "Release")
-if (NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
-    message(STATUS "Setting build type to '${default_build_type}' as none was specified.")
-    set(CMAKE_BUILD_TYPE "${default_build_type}" CACHE
-            STRING "Choose the type of build." FORCE)
-    # Set the possible values of build type for cmake-gui
-    set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
-            "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
-endif ()
 
 include(GNUInstallDirs)
 
@@ -25,40 +17,40 @@ find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclpy REQUIRED)
 find_package(std_msgs REQUIRED)
+find_package(rosbag2_cpp REQUIRED)
 find_package(Threads REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(bridge_interface REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(sensor_msgs REQUIRED)
 
-include_directories(
-  include
-)
-
-
-# ==============================================================Unitree H1 and G1=============================================================
 find_package(unitree_go REQUIRED)
 find_package(unitree_hg REQUIRED)
 find_package(unitree_api REQUIRED)
 
 
+include_directories(include include/common)
+
+# ==============================================================Unitree H1 and G1=============================================================
 
 add_executable(G1_bridge
   src/bridge_core.cpp
   src/G1_bridge.cpp
   src/g1_node.cpp
+  src/common/motor_crc_hg.cpp
 )
 
 ament_target_dependencies(G1_bridge
+  unitree_go
+  unitree_hg
+  unitree_api
   rclcpp
   std_msgs
   sensor_msgs
   std_srvs
   bridge_interface
+  rosbag2_cpp
   rosidl_default_runtime
-  unitree_go
-  unitree_hg
-  unitree_api
 )
 
 
