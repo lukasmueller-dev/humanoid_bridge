@@ -10,3 +10,9 @@ fi
 if [ -z "$ROS_DISTRO" ]; then
     echo "ROS_DISTRO is not set. Please source ros2"
 fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKSPACE_DIR=$(dirname $(dirname $SCRIPT_DIR))
+
+source $WORKSPACE_DIR/install/setup.bash
+echo "Sourced workspace: $WORKSPACE_DIR"
