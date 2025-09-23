@@ -10,7 +10,7 @@ robot_bridge:
   ros__parameters:
     robot_name: "G1"
     duration: 2.0
-    control_dt: 0.002
+    control_dt: 0.001
     empty_joint_index: -1
     num_joint: 29
     torque_control: false

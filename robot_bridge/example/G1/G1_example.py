@@ -17,6 +17,7 @@ class RobotController:
         self.action = np.zeros(cfg.num_actions, dtype=np.float32)
         # Initialize components
         self.policy = torch.jit.load(cfg.policy_path)
+        self.counter = 0
 
         self.init_pos = np.concatenate([self.config.default_angles, self.config.arm_waist_target]).astype(np.float32)
         self.policy_kp = np.concatenate([self.config.kps, self.config.arm_waist_kps]).astype(np.float32)
@@ -27,7 +28,7 @@ class RobotController:
         self.vx_cmd = 0.0
         self.vy_cmd = 0.0
         self.vyaw_cmd = 0.0
-        print("Please press\n\t \"L2 + START\" to start control, \n\t \"R2 + A\" to start inferrence, \n\t \"L2 + left + up\" to stop control, \n\t \"L1\" for ready position, \n\t \"R1\" for zero position, \n\t \"L2 + select\" for emergency stop.")
+        print("Please press\n\t \"L2 + START\" to start control, \n\t \"R2 + A\" to start inferrence, \n\t \"L2 + left + up\" to stop control, \n\t \"L1\" for ready position, \n\t \"R1\" for zero position.")
 
     def step(self):
         self.check_state()
@@ -35,7 +36,7 @@ class RobotController:
             self.policy_step()  
             
     def policy_step(self):
-        self.robot.time_count  += 1
+        self.counter += 1
         
         q = self.robot.q_pos[self.config.leg_joint2motor_idx]
         dq = self.robot.q_vel[self.config.leg_joint2motor_idx]
@@ -59,7 +60,7 @@ class RobotController:
         dqj_obs = dqj_obs * self.config.dof_vel_scale
         ang_vel = ang_vel * self.config.ang_vel_scale
         period = 0.8
-        count = self.robot.time_count * self.config.control_dt
+        count = self.counter * self.config.control_dt
         phase = count % period / period
         sin_phase = np.sin(2 * np.pi * phase)
         cos_phase = np.cos(2 * np.pi * phase)
@@ -92,11 +93,6 @@ class RobotController:
         self.robot.update_robot_state()
 
         if self.robot.joy_key is not None:
-            if (self.robot.joy_key.keys & (WirelessKey_H1_G1.KEY_L2 | WirelessKey_H1_G1.KEY_SELECT)) == (WirelessKey_H1_G1.KEY_L2 | WirelessKey_H1_G1.KEY_SELECT):  # emergency stop L2 + select
-                self.node.get_logger().info("Emergency stop activated.")
-                self.node.destroy_node()
-                rclpy.shutdown()
-                return
 
             if (self.robot.joy_key.keys & (WirelessKey_H1_G1.KEY_R2 | WirelessKey_H1_G1.KEY_A)) == (WirelessKey_H1_G1.KEY_R2 | WirelessKey_H1_G1.KEY_A):  # start: R2 + A
                 if self.robot.control_started:

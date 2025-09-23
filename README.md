@@ -59,6 +59,7 @@ then launch the bridge interface:
     ros2 run robot_bridge G1_bridge --ros-args --params-file src/humanoid_bridge/robot_bridge/params/G1_config.yaml #if unitree G1
     ros2 run robot_bridge H1_bridge --ros-args --params-file src/humanoid_bridge/robot_bridge/params/H1_config.yaml #if unitree H1
 ```
+For G1 and H1, you need also to press `L2 + R2` for G1, `L2 + B` for H1, to change to the debug mode firstly.
 ### Launch client node
 #### Environment prepare:
 Now the bridge interface is already launched, and initial mode is damping mode.
@@ -106,8 +107,7 @@ Step5: Press `back` to send the `stop service` request for stopping the control,
         checkout damping mode .
 
 #### G1 operation instruction:   
-use two joysticks to control the robot movement. Tilt the left joystick to control the robot translation. Tilt the right joystick to left/right to control the robot yaw rotation. You can see the current velocity in terminal output. 
-In case of emergency, use `L1 + select` to shut client node down. 
+use two joysticks to control the robot movement. Tilt the left joystick to control the robot translation. Tilt the right joystick to left/right to control the robot yaw rotation. You can see the current velocity in terminal output.  
 
 Step1: Press `L2 + start` to send the `start service` request for starting the control, then bridge can start to publish lowcmd     
         if there is lowcmd from client and checkout custom mode, then move to defauft position for standing.

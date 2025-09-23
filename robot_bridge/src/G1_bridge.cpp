@@ -17,6 +17,11 @@ sairol_bridge::G1Bridge::G1Bridge(rclcpp::Node::SharedPtr node) : BridgeCore(nod
     // remoteControlSubscriber_ = nh->create_subscription<unitree_go::msg::WirelessController>(
     //     "/wirelesscontroller", 10, std::bind(&sairol_bridge::G1Bridge::wireless_callback, this, std::placeholders::_1));
 
+    while (!checkExternalPublisher_("/lowcmd"))
+    {
+        rclcpp::sleep_for(std::chrono::milliseconds(1000));
+    }
+
     lowCommandPublisher_ = nh->create_publisher<unitree_hg::msg::LowCmd>("/lowcmd", 10); // /joint_ctrl
 
     // Waiting for publisher on topic lowstate
@@ -26,6 +31,21 @@ sairol_bridge::G1Bridge::G1Bridge(rclcpp::Node::SharedPtr node) : BridgeCore(nod
     {
         rclcpp::sleep_for(std::chrono::milliseconds(100));
     }
+}
+
+
+bool sairol_bridge::G1Bridge::checkExternalPublisher_(std::string topic_name)
+{
+    auto publishers_info = nh->get_publishers_info_by_topic(topic_name);
+    int publisher_count = publishers_info.size();
+    if (publisher_count > 0)
+    {
+        RCLCPP_ERROR_STREAM(nh->get_logger(),
+                     "Detected " << publisher_count << " publishers on " << topic_name.c_str() << 
+                     ". Please change to the debug mode by pressing L2 + R2");
+        return false;
+    }
+    return true;
 }
 
 
@@ -80,8 +100,7 @@ void sairol_bridge::G1Bridge::lowStateHandler_(unitree_hg::msg::LowState::Shared
         // update mode machine
     if (mode_machine_ != msg->mode_machine) {
       if (mode_machine_ == 0) {
-        RCLCPP_INFO(nh->get_logger(), "G1 type: %d",
-                    unsigned(msg->mode_machine));
+        RCLCPP_INFO(nh->get_logger(), "G1 type: %d", unsigned(msg->mode_machine));
       }
       mode_machine_ = msg->mode_machine;
     }
@@ -90,7 +109,6 @@ void sairol_bridge::G1Bridge::lowStateHandler_(unitree_hg::msg::LowState::Shared
     {
         RCLCPP_WARN(nh->get_logger(), "IMU base rpy values are too large: [%f, %f]", msg->imu_state.rpy[0], msg->imu_state.rpy[1]);
         controlStarted_ = false;
-        if (controlStarted_) controlStarted_ = false;
     }
     // Update the last state time using the same clock source
     last_state_time_ = nh->get_clock()->now();
@@ -130,8 +148,8 @@ void sairol_bridge::G1Bridge::publishLowCommand_()
         if (1e-6 < cmdInterpOrder_ && cmdInterpOrder_ < 1.0 - 1e-6)
         {
             // Low pass filter for cmd
-            cmd.q = cmd.q * cmdInterpOrder_ + cmdParams_[i].q_0 * (1 - cmdInterpOrder_);
-            cmd.dq = cmd.dq * cmdInterpOrder_ + cmdParams_[i].dq_0 * (1 - cmdInterpOrder_);
+            cmd.q = last_cmd.q * cmdInterpOrder_ + cmdParams_[i].q_0 * (1 - cmdInterpOrder_);
+            cmd.dq = last_cmd.dq * cmdInterpOrder_ + cmdParams_[i].dq_0 * (1 - cmdInterpOrder_);
         }
         else {
             // Interpolation

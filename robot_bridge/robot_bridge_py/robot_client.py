@@ -14,8 +14,7 @@ from scipy.spatial.transform import Rotation as R
 
 def rpy_to_quat(rpy):
     r = R.from_euler('xyz', rpy)  
-    quat_xyzw = r.as_quat()  # return [x, y, z, w]
-    quat = np.array([quat_xyzw[3], quat_xyzw[0], quat_xyzw[1], quat_xyzw[2]])  # reorder [w, x, y, z]
+    quat = r.as_quat(scalar_first=True)  # return [w, x, y, z]
     return quat
 
 
@@ -163,6 +162,7 @@ class RobotClient:
         self._quat = rpy_to_quat(low_state_msg.imu_state.rpy)
         
     def _low_state_handler_unitree(self, low_state_msg):
+        self.time_count += 1
         self._quat = low_state_msg.imu_state.quaternion
         self._angular_velocity = low_state_msg.imu_state.gyroscope
         self._angular_acceleration = low_state_msg.imu_state.accelerometer
