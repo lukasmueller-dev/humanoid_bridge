@@ -17,15 +17,22 @@ cd booster_robotics_sdk
 ```
 Afer that you can follow the `README` of booster_robotics_sdk to build and prepare the python environment for T1.
 
+
+
+
 Prepare the library for G1 robot:
 ```bash
-conda create -n {YOUR_ENV} python=3.10
+conda create -n {YOUR_ENV} python=3.10 # this is for ros2 humble, if on board using foxy, please use 3.8
 conda activate {YOUR_ENV}
-conda install pytorch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1 pytorch-cuda=12.1 -c pytorch -c nvidia
+
+conda install pytorch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1 pytorch-cuda=12.1 -c pytorch -c nvidia # if you connect the robot with cable and deploy it on your PC.
+pip3 install --no-cache https://developer.download.nvidia.com/compute/redist/jp/v511/pytorch/torch-2.0.0a0+fe05266f.nv23.04-cp38-cp38-linux_aarch64.whl #if you deploy it on board with ros2 foxy.
+
 cd ~
 git clone https://github.com/unitreerobotics/unitree_sdk2_python.git
 cd unitree_sdk2_python
-pip install -e .
+export CYCLONEDDS_HOME=$HOME/cyclonedds/install # Just for on board
+pip3 install -e .
 ```
 
 
@@ -41,6 +48,7 @@ git clone git@github.com:DFKI-SAIROL/humanoid_bridge.git
 Build the package:
 ```bash
 cd ..
+sourse /opt/ros/humble/setup.bash
 colcon build #if T1
 colcon build --cmake-args -DBUILD_BOOSTER_T1=OFF # if H1 or G1 
 ```
@@ -48,11 +56,15 @@ colcon build --cmake-args -DBUILD_BOOSTER_T1=OFF # if H1 or G1
 
 ## Operation guide 
 ### Launch bridge interface
-Open a terminal for bridge interface:
+Open a terminal for bridge interface, for T1:
 ```bash
     cd ~/sairol_ws
-    source src/humanoid_bridge/setup_booster.sh #if booster T1
-    source src/humanoid_bridge/setup_unitree.sh #if unitree G1 or H1
+    source src/humanoid_bridge/setup_booster.sh 
+```
+For unitree G1 or H1. Modify the net port like enp$s0 here according to your net configuration before source it if you connect the robot with cable:
+```bash
+    cd ~/sairol_ws
+    source src/humanoid_bridge/setup_unitree.sh 
 ```
 then launch the bridge interface:
 ```bash
@@ -74,6 +86,11 @@ Next you can launch your client node. Here we have provided an example for your 
 If T1, you need more installation:
 ```bash
     cd example/T1
+    pip install -r requirements.txt
+```
+If G1, you need more installation:
+```bash
+    cd example/G1
     pip install -r requirements.txt
 ```
 #### Client node:

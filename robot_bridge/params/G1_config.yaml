@@ -1,9 +1,9 @@
 # remote control:
 # start control: LT + START
-# stop control: back
-# Ready position: LB
-# Zero position: RB
-# Emergency stop: LT + BACK
+# stop control: L2 +up + left
+# Ready position: L1
+# Zero position: R1
+
 
 
 robot_bridge:
