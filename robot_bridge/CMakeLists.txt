@@ -133,39 +133,40 @@ install(
 
 # ==============================================================Booster T1===================================================================================
 
-find_package(booster_interface REQUIRED)
+option(BUILD_BOOSTER_T1 "Build Booster T1 bridge" ON)
 
-add_executable(T1_bridge
-  src/t1_node.cpp
-  src/bridge_core.cpp
-  src/T1_bridge.cpp
-)
+if(BUILD_BOOSTER_T1)
+  find_package(booster_interface REQUIRED)
 
+  add_executable(T1_bridge
+    src/t1_node.cpp
+    src/bridge_core.cpp
+    src/T1_bridge.cpp
+  )
 
-set(BOOSTER_INCLUDE_PATH "$ENV{HOME}/library/booster/include")
+  set(BOOSTER_INCLUDE_PATH "$ENV{HOME}/library/booster/include")
 
-target_include_directories(T1_bridge
-  PUBLIC
-    ${BOOSTER_INCLUDE_PATH}
+  target_include_directories(T1_bridge
+    PUBLIC
+      ${BOOSTER_INCLUDE_PATH}
+      ${CMAKE_CURRENT_SOURCE_DIR}/include
+  )
 
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
-)
+  ament_target_dependencies(T1_bridge
+    rclcpp
+    std_msgs
+    sensor_msgs
+    std_srvs
+    bridge_interface
+    booster_interface
+    rosidl_default_runtime 
+  )
 
-ament_target_dependencies(T1_bridge
-  rclcpp
-  std_msgs
-  sensor_msgs
-  std_srvs
-  bridge_interface
-  booster_interface
-  rosidl_default_runtime 
-)
-
-
-install(
-  TARGETS T1_bridge
-  RUNTIME DESTINATION lib/${PROJECT_NAME}
-)
+  install(
+    TARGETS T1_bridge
+    RUNTIME DESTINATION lib/${PROJECT_NAME}
+  )
+endif()
 
 
 # ==============================================================test node cmake==============================================================================

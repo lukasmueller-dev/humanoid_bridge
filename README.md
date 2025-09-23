@@ -41,7 +41,8 @@ git clone git@github.com:DFKI-SAIROL/humanoid_bridge.git
 Build the package:
 ```bash
 cd ..
-colcon build
+colcon build #if T1
+colcon build --cmake-args -DBUILD_BOOSTER_T1=OFF # if H1 or G1 
 ```
 
 
