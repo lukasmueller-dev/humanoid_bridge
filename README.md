@@ -8,6 +8,7 @@ It receives commands from the client node, decides whether to perform command in
 ---
 
 ## Installation
+
 Prepare the library for T1 robot:
 ```bash
 cd ~
@@ -20,12 +21,12 @@ Afer that you can follow the `README` of booster_robotics_sdk to build and prepa
 
 
 
-Prepare the library for G1 robot:
+Prepare the library for G1 and H1 robot:
 ```bash
 conda create -n {YOUR_ENV} python=3.10 # this is for ros2 humble, if on board using foxy, please use 3.8
 conda activate {YOUR_ENV}
 
-conda install pytorch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1 pytorch-cuda=12.1 -c pytorch -c nvidia # if you connect the robot with cable and deploy it on your PC.
+conda install pytorch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1 pytorch-cuda=12.1 -c pytorch -c nvidia # if you connect the robot with cable and deploy it on your PC with ros hummble.
 pip3 install --no-cache https://developer.download.nvidia.com/compute/redist/jp/v511/pytorch/torch-2.0.0a0+fe05266f.nv23.04-cp38-cp38-linux_aarch64.whl #if you deploy it on board with ros2 foxy.
 
 cd ~
@@ -34,6 +35,11 @@ cd unitree_sdk2_python
 export CYCLONEDDS_HOME=$HOME/cyclonedds/install # Just for on board
 pip3 install -e .
 ```
+
+
+
+
+
 
 
 Then create your own workspace in your home and enter its `src` folder, for example:
@@ -48,7 +54,7 @@ git clone git@github.com:DFKI-SAIROL/humanoid_bridge.git
 Build the package:
 ```bash
 cd ..
-sourse /opt/ros/humble/setup.bash
+source /opt/ros/humble/setup.bash
 colcon build #if T1
 colcon build --cmake-args -DBUILD_BOOSTER_T1=OFF # if H1 or G1 
 ```
@@ -72,7 +78,8 @@ then launch the bridge interface:
     ros2 run robot_bridge G1_bridge --ros-args --params-file src/humanoid_bridge/robot_bridge/params/G1_config.yaml #if unitree G1
     ros2 run robot_bridge H1_bridge --ros-args --params-file src/humanoid_bridge/robot_bridge/params/H1_config.yaml #if unitree H1
 ```
-For G1 and H1, you need also to press `L2 + R2` for G1, `L2 + B` for H1, to change to the debug mode firstly.
+For G1 and H1, you need also to press `L2 + R2`, to change to the debug mode firstly.
+
 ### Launch client node
 #### Environment prepare:
 Now the bridge interface is already launched, and initial mode is damping mode.
@@ -91,6 +98,11 @@ If T1, you need more installation:
 If G1, you need more installation:
 ```bash
     cd example/G1
+    pip install -r requirements.txt
+```
+If H1, you need more installation:
+```bash
+    cd example/H1
     pip install -r requirements.txt
 ```
 #### Client node:
@@ -125,6 +137,21 @@ Step5: Press `back` to send the `stop service` request for stopping the control,
         checkout damping mode .
 
 #### G1 operation instruction:   
+use two joysticks to control the robot movement. Tilt the left joystick to control the robot translation. Tilt the right joystick to left/right to control the robot yaw rotation. You can see the current velocity in terminal output.  
+
+Step1: Press `L2 + start` to send the `start service` request for starting the control, then bridge can start to publish lowcmd     
+        if there is lowcmd from client and checkout custom mode, then move to defauft position for standing.
+
+Step2: Lower the robot’s body and make its feet touch the ground.
+
+Step3: Press `R2 + A` to start the policy inference, then robot can use policy to keep standing.
+
+Step4: Use keyboad (w,s,a,d,space) to control the robot
+
+Step5: Press `L2 + up + left` to send the `stop service` request for stopping the control, then bridge can stop to publish any lowcmd and 
+        checkout damping mode .
+
+#### H1 operation instruction:   
 use two joysticks to control the robot movement. Tilt the left joystick to control the robot translation. Tilt the right joystick to left/right to control the robot yaw rotation. You can see the current velocity in terminal output.  
 
 Step1: Press `L2 + start` to send the `start service` request for starting the control, then bridge can start to publish lowcmd     

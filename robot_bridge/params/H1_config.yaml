@@ -32,6 +32,16 @@ robot_bridge:
                   "RightShoulderPitch", "RightShoulderRoll", "RightShoulderYaw", "RightElbow",
                   "LeftShoulderPitch", "LeftShoulderRoll", "LeftShoulderYaw", "LeftElbow"]
 
+    ready_q: [ 
+              0.0,  -0.1,  0.3,  
+              0.0,  -0.1,  0.3,
+              0.0,   0.0,  0.0,
+              0.0,  -0.2, -0.2,
+              0.0,   0.0,  0.0,  0.0,
+              0.0,   0.0,  0.0,  0.0
+             ]
+
+
     RightHipRoll:
       idx: 0
       q_min: -0.43

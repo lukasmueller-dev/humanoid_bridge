@@ -115,6 +115,35 @@ class RobotClient:
                                          1, 1, 1, 
                                          2, 2, 2, 2, 1, 1, 1,
                                          2, 2, 2, 2, 1, 1, 1])
+        elif self.robot_type == "H1": 
+            from unitree_go.msg import LowState
+            from unitree_go.msg import WirelessController as JoyMsg
+            state_topic_name = '/lowstate'
+            joy_topic_name = '/wirelesscontroller'
+            low_state_handler = self._low_state_handler_unitree
+            joy_handler = self._joy_handler_unitree
+            
+            self._default_pos = np.array([ 0.0, -0.1,  0.3,  
+                                           0.0, -0.1,  0.3,
+                                           0.0,  0.0,  0.0,
+                                           0.0, -0.2, -0.2,
+                                           0.0,  0.0,  0.0, 0.0,
+                                           0.0,  0.0,  0.0, 0.0]) 
+                                           
+   
+            self._default_kp =  np.array([150, 150, 200, 
+                                          150, 150, 200, 
+                                          300, 150, 150,
+                                            0,  40,  40,
+                                          100, 100, 50, 50, 
+                                          100, 100, 50, 50])
+            
+            self._default_kd = np.array([2, 2, 4,
+                                         2, 2, 4,
+                                         3, 2, 2,
+                                         0, 2, 2,
+                                         2, 2, 2, 2,
+                                         2, 2, 2, 2])
 
         self.low_state_subscription = self.node.create_subscription(LowState, state_topic_name, low_state_handler, 1)
         self.joystick_subscription = self.node.create_subscription(JoyMsg, joy_topic_name, joy_handler, 1)

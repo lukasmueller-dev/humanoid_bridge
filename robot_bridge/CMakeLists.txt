@@ -59,6 +59,37 @@ install(
   RUNTIME DESTINATION lib/${PROJECT_NAME}
 )
 
+
+
+add_executable(H1_bridge
+  src/bridge_core.cpp
+  src/H1_bridge.cpp
+  src/h1_node.cpp
+  src/common/motor_crc.cpp
+)
+
+ament_target_dependencies(H1_bridge
+  unitree_go
+  unitree_hg
+  unitree_api
+  rclcpp
+  std_msgs
+  sensor_msgs
+  std_srvs
+  bridge_interface
+  rosbag2_cpp
+  rosidl_default_runtime
+)
+
+
+install(
+  TARGETS H1_bridge
+  RUNTIME DESTINATION lib/${PROJECT_NAME}
+)
+
+
+
+
 # set(UNITREE_SDK_PATH $ENV{HOME}/library/unitree)
 
 # # Import Libraries for unitree_sdk2

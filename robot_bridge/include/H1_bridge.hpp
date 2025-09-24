@@ -7,10 +7,10 @@
 #include <algorithm>
 #include "bridge_core.hpp"
 #include "sensor_msgs/msg/joy.hpp"
-#include "unitree_hg/msg/low_cmd.hpp"
-#include "unitree_hg/msg/low_state.hpp"
-#include "unitree_hg/msg/motor_cmd.hpp"
-#include "common/motor_crc_hg.h"
+#include "unitree_go/msg/low_cmd.hpp"
+#include "unitree_go/msg/low_state.hpp"
+#include "unitree_go/msg/motor_cmd.hpp"
+#include "common/motor_crc.h"
 #include "unitree_go/msg/wireless_controller.hpp"
 
 
@@ -38,9 +38,9 @@ enum WirelessKey_H1_G1 : uint32_t
 };
 enum PRorAB { PR = 0, AB = 1 };
 
-class G1Bridge : public BridgeCore {
+class H1Bridge : public BridgeCore {
 public:
-    explicit G1Bridge(rclcpp::Node::SharedPtr node);
+    explicit H1Bridge(rclcpp::Node::SharedPtr node);
     void stop() override;
 
 private:
@@ -48,18 +48,18 @@ private:
     void wireless_callback(unitree_go::msg::WirelessController::SharedPtr data);
     void publishLowCommand_();
     void publishLowCommandOLD_();
-    void lowStateHandler_(unitree_hg::msg::LowState::SharedPtr message);
+    void lowStateHandler_(unitree_go::msg::LowState::SharedPtr message);
     bool initControl_(bridge_interface::msg::RobotCmd default_cmd) override;
     void finishControl_() override; 
     bool checkExternalPublisher_(std::string topic_name);
 
-    rclcpp::Subscription<unitree_hg::msg::LowState>::SharedPtr lowStateSubscriber_;
+    rclcpp::Subscription<unitree_go::msg::LowState>::SharedPtr lowStateSubscriber_;
     rclcpp::Subscription<unitree_go::msg::WirelessController>::SharedPtr remoteControlSubscriber_;
-    rclcpp::Publisher<unitree_hg::msg::LowCmd>::SharedPtr lowCommandPublisher_;
-    int mode_machine_{0};
-
+    rclcpp::Publisher<unitree_go::msg::LowCmd>::SharedPtr lowCommandPublisher_;
+    
 
     
+
 
 };
 }
