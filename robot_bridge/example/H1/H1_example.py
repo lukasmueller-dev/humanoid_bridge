@@ -61,9 +61,10 @@ class RobotController:
         if self.config.imu_type == "torso":
             # h1 and h1_2 imu is on the torso
             # imu data needs to be transformed to the pelvis frame
-            waist_yaw = self.robot.low_state.motor_state[self.config.arm_waist_joint2motor_idx[0]].q
-            waist_yaw_omega = self.robot.low_state.motor_state[self.config.arm_waist_joint2motor_idx[0]].dq
+            waist_yaw = self.robot.q_pos[self.config.arm_waist_joint2motor_idx[0]]
+            waist_yaw_omega = self.robot.q_vel[self.config.arm_waist_joint2motor_idx[0]]
             quat, ang_vel = transform_imu_data(waist_yaw=waist_yaw, waist_yaw_omega=waist_yaw_omega, imu_quat=quat, imu_omega=ang_vel)
+
 
         # create observation
         gravity_orientation = get_gravity_orientation(quat)

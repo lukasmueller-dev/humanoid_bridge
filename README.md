@@ -74,7 +74,7 @@ For unitree G1 or H1. Modify the net port like enp$s0 here according to your net
 ```
 then launch the bridge interface:
 ```bash
-    ros2 run robot_bridge T1_bridge --ros-args --params-file src/humanoid_bridge/robot_bridge/params/T1_config.yaml  #if booster T1
+    ros2 run robot_bridge T1_bridge --ros-args --params-file src/humanoid_bridge/robot_bridge/params/T1_config.yaml #if booster T1
     ros2 run robot_bridge G1_bridge --ros-args --params-file src/humanoid_bridge/robot_bridge/params/G1_config.yaml #if unitree G1
     ros2 run robot_bridge H1_bridge --ros-args --params-file src/humanoid_bridge/robot_bridge/params/H1_config.yaml #if unitree H1
 ```
@@ -167,7 +167,7 @@ Step5: Press `L2 + up + left` to send the `stop service` request for stopping th
         checkout damping mode .
 
 ### Notes
-For step 1 you can also use your own joints position for initial joints position with ros2 service command instead of remote controller:
+For step 1 you can also use your own joints position for initial joints position with ros2 service command instead of remote controller, for T1 such as:
 ```bash
     ros2 service call /start_control bridge_interface/srv/SetDefaultPosition "{
         default_position: [0, 0,
