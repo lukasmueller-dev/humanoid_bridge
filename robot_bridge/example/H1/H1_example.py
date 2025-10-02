@@ -122,7 +122,7 @@ class RobotController:
                     self.vyaw_cmd = 0.0
                     self.node.get_logger().info("Agent started.")
                 else:
-                    self.node.get_logger().warn("Please start the control first by pressing LT + START.")
+                    self.node.get_logger().warn("Please start the control first by pressing L2 + START.")
 
             if self.agent_started:
                 self.vx_cmd = self.robot.remote_controller.ly

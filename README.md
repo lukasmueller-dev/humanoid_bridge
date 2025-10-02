@@ -122,7 +122,7 @@ Then open a new terminal for client node:
 With this example you can use remote controller to select the mode and:
 
 #### T1 operation instruction:
- use `D-pad (up, down, left, right)` to control the robot movement and press down either `joystick` to stop the movement. Tilt the right joystick to left/right to control the robot yaw rotation. You can see the current velocity in terminal output. 
+ use `left joystick` to control the robot movement and press down either `joystick` to stop the movement. Tilt the `right joystick` to left/right to control the robot yaw rotation. You can see the current velocity in terminal output. 
 In case of emergency, use `LT + Back` to switch the mode forcefully to damping mode. 
 
 Step1: Press `LT + start` to send the `start service` request for starting the control, then bridge can start to publish lowcmd     
@@ -138,7 +138,7 @@ Step5: Press `back` to send the `stop service` request for stopping the control,
         checkout damping mode .
 
 #### G1 operation instruction:   
-use two joysticks to control the robot movement. Tilt the left joystick to control the robot translation. Tilt the right joystick to left/right to control the robot yaw rotation. You can see the current velocity in terminal output.  
+use two joysticks to control the robot movement. Tilt the `left joystick` to control the robot translation. Tilt the `right joystick` to left/right to control the robot yaw rotation. You can see the current velocity in terminal output.  
 
 Step1: Press `L2 + start` to send the `start service` request for starting the control, then bridge can start to publish lowcmd     
         if there is lowcmd from client and checkout custom mode, then move to defauft position for standing.
@@ -153,7 +153,7 @@ Step5: Press `L2 + up + left` to send the `stop service` request for stopping th
         checkout damping mode .
 
 #### H1 operation instruction:   
-use two joysticks to control the robot movement. Tilt the left joystick to control the robot translation. Tilt the right joystick to left/right to control the robot yaw rotation. You can see the current velocity in terminal output.  
+use two joysticks to control the robot movement. Tilt the `left joystick` to control the robot translation. Tilt the `right joystick` to left/right to control the robot yaw rotation. You can see the current velocity in terminal output.  
 
 Step1: Press `L2 + start` to send the `start service` request for starting the control, then bridge can start to publish lowcmd     
         if there is lowcmd from client and checkout custom mode, then move to defauft position for standing.
