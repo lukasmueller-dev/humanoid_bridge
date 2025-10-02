@@ -2,7 +2,7 @@ import rclpy
 import time
 import numpy as np
 import yaml
-from robot_bridge_py.robot_client import RobotClient,WirelessKey_H1_G1
+from robot_bridge_py.robot_client import RobotClient, KeyMap # ,WirelessKey_H1_G1
 from enum import Enum
 import torch
 from utils.rotation_helper import get_gravity_orientation, transform_imu_data
@@ -114,7 +114,7 @@ class RobotController:
 
         if self.robot.joy_key is not None:
 
-            if (self.robot.joy_key.keys & (WirelessKey_H1_G1.KEY_R2 | WirelessKey_H1_G1.KEY_A)) == (WirelessKey_H1_G1.KEY_R2 | WirelessKey_H1_G1.KEY_A):  # start: R2 + A
+            if self.robot.remote_controller.is_exact_combo(self.robot.joy_key, [KeyMap.R2, KeyMap.A]):  # start: R2 + A
                 if self.robot.control_started:
                     self.agent_started = True
                     self.vx_cmd = 0.0
@@ -125,9 +125,9 @@ class RobotController:
                     self.node.get_logger().warn("Please start the control first by pressing LT + START.")
 
             if self.agent_started:
-                self.vx_cmd = self.robot.joy_key.ly
-                self.vy_cmd = self.robot.joy_key.lx * -1
-                self.vyaw_cmd = self.robot.joy_key.rx * -1
+                self.vx_cmd = self.robot.remote_controller.ly
+                self.vy_cmd = self.robot.remote_controller.lx * -1
+                self.vyaw_cmd = self.robot.remote_controller.rx * -1
 
                 self.vx_cmd = self.vx_cmd * 0.5
                 self.vy_cmd = self.vy_cmd * 0.5
@@ -139,7 +139,7 @@ class RobotController:
                 self.vyaw_cmd = 0.0
 
             self.robot.joy_key = None  # Reset joy_key
-            self.robot.joy_axes = np.zeros(6, dtype=np.float32)
+
 
         if not self.robot.control_started:
             self.agent_started = False

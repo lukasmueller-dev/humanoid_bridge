@@ -130,7 +130,6 @@ class RobotController:
 
             self.robot.joy_key = None  # Reset joy_key
             self.robot.key_count = 0 # Reset true_count after processing
-            self.robot.joy_axes = np.zeros(6, dtype=np.float32)
 
         if not self.robot.control_started:
             self.agent_started = False

@@ -11,6 +11,7 @@ from rclpy.node import Node
 from rclpy.client import Client as ROSClient
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+import struct
 
 def rpy_to_quat(rpy):
     r = R.from_euler('xyz', rpy)  
@@ -18,21 +19,65 @@ def rpy_to_quat(rpy):
     return quat
 
 
-class WirelessKey_H1_G1:
-    KEY_R1     = 1 << 0
-    KEY_L1     = 1 << 1
-    KEY_START  = 1 << 2
-    KEY_SELECT = 1 << 3
-    KEY_R2     = 1 << 4
-    KEY_L2     = 1 << 5
-    KEY_A      = 1 << 8
-    KEY_B      = 1 << 9
-    KEY_X      = 1 << 10
-    KEY_Y      = 1 << 11
-    KEY_UP     = 1 << 12
-    KEY_RIGHT  = 1 << 13
-    KEY_DOWN   = 1 << 14
-    KEY_LEFT   = 1 << 15
+# class WirelessKey_H1_G1:
+#     KEY_R1     = 1 << 0
+#     KEY_L1     = 1 << 1
+#     KEY_START  = 1 << 2
+#     KEY_SELECT = 1 << 3
+#     KEY_R2     = 1 << 4
+#     KEY_L2     = 1 << 5
+#     KEY_A      = 1 << 8
+#     KEY_B      = 1 << 9
+#     KEY_X      = 1 << 10
+#     KEY_Y      = 1 << 11
+#     KEY_UP     = 1 << 12
+#     KEY_RIGHT  = 1 << 13
+#     KEY_DOWN   = 1 << 14
+#     KEY_LEFT   = 1 << 15
+
+class KeyMap:
+    R1 = 0
+    L1 = 1
+    start = 2
+    select = 3
+    R2 = 4
+    L2 = 5
+    F1 = 6
+    F2 = 7
+    A = 8
+    B = 9
+    X = 10
+    Y = 11
+    up = 12
+    right = 13
+    down = 14
+    left = 15
+
+
+class RemoteController:
+    def __init__(self):
+        self.lx = 0
+        self.ly = 0
+        self.rx = 0
+        self.ry = 0
+        self.button = [0] * 16
+
+    def set(self, data):
+        # wireless_remote
+        keys = struct.unpack("H", data[2:4])[0]
+        for i in range(16):
+            self.button[i] = (keys & (1 << i)) >> i
+        self.lx = struct.unpack("f", data[4:8])[0]
+        self.rx = struct.unpack("f", data[8:12])[0]
+        self.ry = struct.unpack("f", data[12:16])[0]
+        self.ly = struct.unpack("f", data[20:24])[0]
+
+    def is_exact_combo(self, buttons, combo_keys):
+        return (
+            all(buttons[k] for k in combo_keys) and
+            not any(buttons[i] for i in range(len(buttons)) if i not in combo_keys)
+        )
+
 
 
 class RobotClient:
@@ -89,13 +134,16 @@ class RobotClient:
                                         7.5, 7.5, 3., 5.5, 0.5, 0.5,
                                         7.5, 7.5, 3., 5.5, 0.5, 0.5])
             self.key_count = 0
+            
+            self.joystick_subscription = self.node.create_subscription(JoyMsg, joy_topic_name, joy_handler, 1)
+            
         elif self.robot_type == "G1": 
             from unitree_hg.msg import LowState
             from unitree_go.msg import WirelessController as JoyMsg
             state_topic_name = '/lowstate'
-            joy_topic_name = '/wirelesscontroller'
+            # joy_topic_name = '/wirelesscontroller'
             low_state_handler = self._low_state_handler_unitree
-            joy_handler = self._joy_handler_unitree
+            # joy_handler = self._joy_handler_unitree
             
             self._default_pos = np.array([-0.1,  0.0,  0.0,  0.3, -0.2, 0.0, 
                                           -0.1,  0.0,  0.0,  0.3, -0.2, 0.0,
@@ -114,13 +162,16 @@ class RobotClient:
                                          1, 1, 1, 
                                          2, 2, 2, 2, 1, 1, 1,
                                          2, 2, 2, 2, 1, 1, 1])
+            
+            self.remote_controller = RemoteController()
+            
         elif self.robot_type == "H1": 
             from unitree_go.msg import LowState
             from unitree_go.msg import WirelessController as JoyMsg
             state_topic_name = '/lowstate'
-            joy_topic_name = '/wirelesscontroller'
+            # joy_topic_name = '/wirelesscontroller'
             low_state_handler = self._low_state_handler_unitree
-            joy_handler = self._joy_handler_unitree
+            # joy_handler = self._joy_handler_unitree
             
             self._default_pos = np.array([ 0.0, -0.1,  0.3,  
                                            0.0, -0.1,  0.3,
@@ -143,10 +194,11 @@ class RobotClient:
                                          0, 2, 2,
                                          2, 2, 2, 2,
                                          2, 2, 2, 2])
+            
+            self.remote_controller = RemoteController()
 
         self.low_state_subscription = self.node.create_subscription(LowState, state_topic_name, low_state_handler, 1)
-        self.joystick_subscription = self.node.create_subscription(JoyMsg, joy_topic_name, joy_handler, 1)
-
+        # self.joystick_subscription = self.node.create_subscription(JoyMsg, joy_topic_name, joy_handler, 1)
         self.low_cmd_publisher = self.node.create_publisher(RobotCmd, '/robot_cmd', 1)
         
         self.start_control_client = self.node.create_client(SetDefaultPosition, '/start_control')
@@ -200,7 +252,45 @@ class RobotClient:
                 self._q_pos[i] = motor.q
                 self._q_vel[i] = motor.dq
                 self._tau[i] = motor.tau_est
-    
+
+        # Handle joystick input
+        self.remote_controller.set(low_state_msg.wireless_remote)
+        
+        time_now = time.time()
+        
+        buttons = self.remote_controller.button
+        
+        if self.remote_controller.is_exact_combo(buttons, [KeyMap.L2, KeyMap.start]):
+            self.node.get_logger().info("Starting control...")
+            if not self.control_started:
+                future = self.init_control()
+                self.control_start_time = time_now + self._default_duration
+            return
+        elif self.remote_controller.is_exact_combo(buttons, [KeyMap.L2, KeyMap.up, KeyMap.left]):
+            self.node.get_logger().info("Stopping control...")
+            future = self.stop_control()
+            self.control_start_time = None
+            return
+        elif self.remote_controller.is_exact_combo(buttons, [KeyMap.L1]):
+            self.node.get_logger().info("Ready position control...")
+            if not self.control_started:
+                self.goto_default_position()
+                self.control_start_time = None
+            else:
+                self.node.get_logger().warn("Control already started, please stop the control first by pressing BACK.")
+            return
+        elif self.remote_controller.is_exact_combo(buttons, [KeyMap.R1]):
+            self.node.get_logger().info("Zero position control...")
+            if not self.control_started:
+                self.goto_zero_position()
+                self.control_start_time = None
+            else:
+                self.node.get_logger().warn("Control already started, please stop the control first by pressing BACK.")
+            return  
+        else:
+            # Set key only for unknown key combinations
+            self.joy_key = buttons
+
     def update_robot_state(self):
         time_now = time.time()
         if self.control_start_time is not None and time_now > self.control_start_time:
@@ -256,40 +346,40 @@ class RobotClient:
             # Set key only for unknown key combinations
             self.joy_key = joy_msg
   
-    def _joy_handler_unitree(self, joy_msg):
-        key = joy_msg.keys
-        time_now = time.time()
+    # def _joy_handler_unitree(self, joy_msg):
+    #     key = joy_msg.keys
+    #     time_now = time.time()
         
-        if (key & (WirelessKey_H1_G1.KEY_L2 | WirelessKey_H1_G1.KEY_START)) == (WirelessKey_H1_G1.KEY_L2 | WirelessKey_H1_G1.KEY_START):
-            self.node.get_logger().info("Starting control...")
-            if not self.control_started:
-                future = self.init_control()
-                self.control_start_time = time_now + self._default_duration
-            return
-        elif (key & (WirelessKey_H1_G1.KEY_L2 | WirelessKey_H1_G1.KEY_UP | WirelessKey_H1_G1.KEY_LEFT)) == (WirelessKey_H1_G1.KEY_L2 | WirelessKey_H1_G1.KEY_UP | WirelessKey_H1_G1.KEY_LEFT):
-            self.node.get_logger().info("Stopping control...")
-            future = self.stop_control()
-            self.control_start_time = None
-            return
-        elif key & WirelessKey_H1_G1.KEY_L1:
-            self.node.get_logger().info("Ready position control...")
-            if not self.control_started:
-                self.goto_default_position()
-                self.control_start_time = None
-            else:
-                self.node.get_logger().warn("Control already started, please stop the control first by pressing BACK.")
-            return
-        elif key & WirelessKey_H1_G1.KEY_R1:
-            self.node.get_logger().info("Zero position control...")
-            if not self.control_started:
-                self.goto_zero_position()
-                self.control_start_time = None
-            else:
-                self.node.get_logger().warn("Control already started, please stop the control first by pressing BACK.")
-            return  
-        else:
-            # Set key only for unknown key combinations
-            self.joy_key = joy_msg
+    #     if (key & (WirelessKey_H1_G1.KEY_L2 | WirelessKey_H1_G1.KEY_START)) == (WirelessKey_H1_G1.KEY_L2 | WirelessKey_H1_G1.KEY_START):
+    #         self.node.get_logger().info("Starting control...")
+    #         if not self.control_started:
+    #             future = self.init_control()
+    #             self.control_start_time = time_now + self._default_duration
+    #         return
+    #     elif (key & (WirelessKey_H1_G1.KEY_L2 | WirelessKey_H1_G1.KEY_UP | WirelessKey_H1_G1.KEY_LEFT)) == (WirelessKey_H1_G1.KEY_L2 | WirelessKey_H1_G1.KEY_UP | WirelessKey_H1_G1.KEY_LEFT):
+    #         self.node.get_logger().info("Stopping control...")
+    #         future = self.stop_control()
+    #         self.control_start_time = None
+    #         return
+    #     elif key & WirelessKey_H1_G1.KEY_L1:
+    #         self.node.get_logger().info("Ready position control...")
+    #         if not self.control_started:
+    #             self.goto_default_position()
+    #             self.control_start_time = None
+    #         else:
+    #             self.node.get_logger().warn("Control already started, please stop the control first by pressing BACK.")
+    #         return
+    #     elif key & WirelessKey_H1_G1.KEY_R1:
+    #         self.node.get_logger().info("Zero position control...")
+    #         if not self.control_started:
+    #             self.goto_zero_position()
+    #             self.control_start_time = None
+    #         else:
+    #             self.node.get_logger().warn("Control already started, please stop the control first by pressing BACK.")
+    #         return  
+    #     else:
+    #         # Set key only for unknown key combinations
+    #         self.joy_key = joy_msg
             
     def send_cmd(self, q_target_pos=None, q_target_vel=None, target_tau=None, target_kp=None, target_kd=None):
         for i in range(self.num_dof):

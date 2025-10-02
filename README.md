@@ -27,7 +27,8 @@ conda create -n {YOUR_ENV} python=3.10 # this is for ros2 humble, if on board us
 conda activate {YOUR_ENV}
 
 conda install pytorch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1 pytorch-cuda=12.1 -c pytorch -c nvidia # if you connect the robot with cable and deploy it on your PC with ros hummble.
-pip3 install --no-cache https://developer.download.nvidia.com/compute/redist/jp/v511/pytorch/torch-2.0.0a0+fe05266f.nv23.04-cp38-cp38-linux_aarch64.whl #if you deploy it on board with ros2 foxy.
+pip3 install --no-cache https://developer.download.nvidia.com/compute/redist/jp/v511/pytorch/torch-2.0.0a0+fe05266f.nv23.04-cp38-cp38-linux_aarch64.whl #if you deploy it on board with ros2 foxy in G1.
+pip install torch torchvision torchaudio #if you deploy it on board with ros2 foxy in H1.
 
 cd ~
 git clone https://github.com/unitreerobotics/unitree_sdk2_python.git
