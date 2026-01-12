@@ -125,7 +125,7 @@ With this example you can use remote controller to select the mode and:
  use `left joystick` to control the robot movement and press down either `joystick` to stop the movement. Tilt the `right joystick` to left/right to control the robot yaw rotation. You can see the current velocity in terminal output. 
 In case of emergency, use `LT + Back` to switch the mode forcefully to damping mode. 
 
-Step1: Press `LT + start` to send the `start service` request for starting the control, then bridge can start to publish lowcmd     
+Step1: Press `LT + RT + Start` to send the `start service` request for starting the control, then bridge can start to publish lowcmd     
         if there is lowcmd from client and checkout custom mode, then move to defauft position for standing.
 
 Step2: Lower the robot’s body and make its feet touch the ground.

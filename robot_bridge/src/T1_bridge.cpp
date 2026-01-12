@@ -70,7 +70,7 @@ void sairol_bridge::T1Bridge::wireless_callback(sensor_msgs::msg::Joy::SharedPtr
     if (buttons[8]) key |= Button_BACK;
     if (buttons[9]) key |= Button_START;
 
-    if (key == (Button_LT | Button_START))  // start: LT + START
+    if (key == (Button_LT | Button_RT | Button_START))  // start: LT + RT + START
     {
         RCLCPP_INFO(nh->get_logger(), "Starting control...");
         initControl_(bridge_interface::msg::RobotCmd());

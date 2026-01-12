@@ -215,8 +215,8 @@ robot_bridge:
 
       dq_limit: 18.8
       tau_limit: 24.0      
-      kp: 400.0
-      kd: 0.5
+      kp: 50.0
+      kd: 3.0
       if_strong_joint: false
       if_parallel_joint: true
 
@@ -230,8 +230,8 @@ robot_bridge:
 
       dq_limit: 12.4
       tau_limit: 15.0      
-      kp: 400.0
-      kd: 0.5
+      kp: 50.0
+      kd: 3.0
       if_strong_joint: false
       if_parallel_joint: true
 
@@ -289,8 +289,8 @@ robot_bridge:
 
       dq_limit: 18.8
       tau_limit: 24.0      
-      kp: 400.0
-      kd: 0.5 
+      kp: 50.0
+      kd: 3.0 
       if_strong_joint: false
       if_parallel_joint: true
 
@@ -304,7 +304,7 @@ robot_bridge:
 
       dq_limit: 12.4
       tau_limit: 15.0  
-      kp: 400.0
-      kd: 0.5 
+      kp: 50.0
+      kd: 3.0 
       if_strong_joint: false
       if_parallel_joint: true
