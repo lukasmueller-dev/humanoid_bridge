@@ -313,7 +313,7 @@ class RobotClient:
             joy_msg.hat_ld, joy_msg.hat_ru, joy_msg.hat_rd
         ])
     
-        if joy_msg.lt and joy_msg.start and self.key_count == 2:  # start: LT + START
+        if joy_msg.lt and joy_msg.rt and joy_msg.start and self.key_count == 3:  # start: LT + RT + START
             self.node.get_logger().info("Starting control...")
             if not self.control_started:
                 future = self.init_control()

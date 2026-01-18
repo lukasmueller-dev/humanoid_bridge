@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
+cmake_minimum_required(VERSION 3.15)
 project(robot_bridge)
 
 
@@ -14,6 +14,7 @@ include(GNUInstallDirs)
 
 # find dependencies
 find_package(ament_cmake REQUIRED)
+find_package(ament_cmake_python REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclpy REQUIRED)
 find_package(std_msgs REQUIRED)
@@ -23,7 +24,7 @@ find_package(std_srvs REQUIRED)
 find_package(bridge_interface REQUIRED)
 find_package(rosidl_default_generators REQUIRED)
 find_package(sensor_msgs REQUIRED)
-
+find_package(rosidl_default_runtime REQUIRED)
 find_package(unitree_go REQUIRED)
 find_package(unitree_hg REQUIRED)
 find_package(unitree_api REQUIRED)
@@ -80,6 +81,8 @@ ament_target_dependencies(H1_bridge
   rosbag2_cpp
   rosidl_default_runtime
 )
+
+ament_python_install_package(robot_bridge_py)
 
 
 install(

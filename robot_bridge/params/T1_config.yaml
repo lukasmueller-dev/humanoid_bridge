@@ -37,8 +37,8 @@ robot_bridge:
               0.2, -1.35, 0.0, -0.5,
               0.2, 1.35, 0.0, 0.5,
               0.0,
-              -0.2, 0.0, 0.0, 0.4, -0.25, 0.0,
-              -0.2, 0.0, 0.0, 0.4, -0.25, 0.0]
+              -0.2, 0.0, 0.0, 0.5, -0.25, 0.0,
+              -0.2, 0.0, 0.0, 0.5, -0.25, 0.0]
               
     HeadYaw:
       idx: 0
@@ -215,8 +215,8 @@ robot_bridge:
 
       dq_limit: 18.8
       tau_limit: 24.0      
-      kp: 50.0
-      kd: 3.0
+      kp: 200.0
+      kd: 5.0
       if_strong_joint: false
       if_parallel_joint: true
 
@@ -230,8 +230,8 @@ robot_bridge:
 
       dq_limit: 12.4
       tau_limit: 15.0      
-      kp: 50.0
-      kd: 3.0
+      kp: 200.0
+      kd: 5.0
       if_strong_joint: false
       if_parallel_joint: true
 
@@ -289,8 +289,8 @@ robot_bridge:
 
       dq_limit: 18.8
       tau_limit: 24.0      
-      kp: 50.0
-      kd: 3.0 
+      kp: 200.0
+      kd: 5.0
       if_strong_joint: false
       if_parallel_joint: true
 
@@ -304,7 +304,7 @@ robot_bridge:
 
       dq_limit: 12.4
       tau_limit: 15.0  
-      kp: 50.0
-      kd: 3.0 
+      kp: 200.0
+      kd: 5.0
       if_strong_joint: false
       if_parallel_joint: true
