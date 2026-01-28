@@ -67,7 +67,7 @@ namespace sairol_bridge
         void update_();
         virtual void publishLowCommand_() = 0;
         virtual bool initControl_(bridge_interface::msg::RobotCmd default_cmd) = 0;
-        bool checkCommand_();
+        bool checkCommand_(bridge_interface::msg::RobotCmd::SharedPtr robotCommand);
         bool checkState_();
         virtual void finishControl_() = 0;
 

@@ -25,7 +25,7 @@ namespace sairol_bridge
         cmdParams_.resize(numJoint_);
 
         desiredSubscriber_ = nh->create_subscription<bridge_interface::msg::RobotCmd>(
-            "/robot_cmd", 10, std::bind(&BridgeCore::robotCmdCallBack_, this, _1));
+            "/robot_cmd", 1, std::bind(&BridgeCore::robotCmdCallBack_, this, _1));
 
         // startControlService_ = nh->create_service<std_srvs::srv::Trigger>(
         //     "start_control", std::bind(&BridgeCore::startControlServiceCB_, this, _1, _2));
@@ -205,7 +205,6 @@ namespace sairol_bridge
 
     void BridgeCore::robotCmdCallBack_(bridge_interface::msg::RobotCmd::SharedPtr message)
     {
-        lowCommandDesired_.motor_cmd = message->motor_cmd;
         auto duration = message->duration;
         auto interpolation_order = message->interpolation_order;
         auto hold_position = message->hold_position;
@@ -216,8 +215,9 @@ namespace sairol_bridge
             return;
         }
 
-        if (checkCommand_())
+        if (checkCommand_(message))
         {   
+            lowCommandDesired_.motor_cmd = message->motor_cmd;
             receivedCmd_ = true;
             calculateInterpolationParams_(duration, interpolation_order, hold_position);
         }
@@ -403,10 +403,10 @@ namespace sairol_bridge
         return true;
     }
 
-    bool BridgeCore::checkCommand_()
+    bool BridgeCore::checkCommand_(bridge_interface::msg::RobotCmd::SharedPtr robotCommand)
     {
         // Check if the command message has valid data
-        if (lowCommandDesired_.motor_cmd.size() != numJoint_)
+        if (robotCommand->motor_cmd.size() != numJoint_)
         {
             RCLCPP_ERROR(nh->get_logger(),
                          "Command check failed: motor_cmd size mismatch. Expected %ld, got %ld.",
@@ -416,16 +416,28 @@ namespace sairol_bridge
         int any_value_clipped = -1;
         for (size_t i = 0; i < numJoint_; ++i)
         {
-            auto &cmd = lowCommandDesired_.motor_cmd[i];
+            auto &cmd = robotCommand->motor_cmd[i];
             auto &joint_info = joints_[i];
             // Check for invalid numbers
             if (!std::isfinite(cmd.q) || !std::isfinite(cmd.dq) ||
                 !std::isfinite(cmd.tau) || !std::isfinite(cmd.kp) ||
                 !std::isfinite(cmd.kd))
             {
-                RCLCPP_WARN_ONCE(nh->get_logger(),
-                                 "Command check failed: motor_cmd[%lu] contains invalid (NaN/Inf) values.", i);
+                RCLCPP_ERROR(nh->get_logger(),
+                                 "Command check failed: motorCmd[%lu] contains invalid (NaN/Inf) values.", i);
                 return false; // Can't clip NaN/Inf, so still return false
+            }
+
+            if (abs(cmd.q) > 50 || abs(cmd.dq) > 1e2 ||
+                abs(cmd.tau) > 1e3 || abs(cmd.kp) > 1e4 ||
+                abs(cmd.kd) > 1e3)
+            {
+                RCLCPP_ERROR(nh->get_logger(),
+                                 "Command check failed: motorCmd[%lu] contains unreasonably large values.", i);
+                RCLCPP_ERROR(nh->get_logger(),
+                                 "Values - q: %.3f, dq: %.3f, tau: %.3f, kp: %.3f, kd: %.3f",
+                                 cmd.q, cmd.dq, cmd.tau, cmd.kp, cmd.kd);
+                return false; // Values too large, likely an error
             }
 
             // Check gains
