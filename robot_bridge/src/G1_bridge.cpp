@@ -120,6 +120,10 @@ void sairol_bridge::G1Bridge::lowStateHandler_(unitree_hg::msg::LowState::Shared
         currentState_.motor_state[i].tau_est = msg->motor_state[i].tau_est;
     }
 
+    imu_.rpy = msg->imu_state.rpy;
+    imu_.gyroscope = msg->imu_state.gyroscope;
+    imu_.accelerometer = msg->imu_state.accelerometer;
+    imu_.quaternion = msg->imu_state.quaternion;
 }
 
 void sairol_bridge::G1Bridge::publishLowCommand_()

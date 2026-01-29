@@ -400,6 +400,12 @@ namespace sairol_bridge
             }
         }
 
+        if (std::abs(imu_.rpy[0]) > imu_rpy_threshold_ || std::abs(imu_.rpy[1]) > imu_rpy_threshold_)
+        {
+            RCLCPP_WARN(nh->get_logger(), "IMU base rpy values are too large: [%f, %f]", imu_.rpy[0], imu_.rpy[1]);
+            return false;
+        }
+
         return true;
     }
 

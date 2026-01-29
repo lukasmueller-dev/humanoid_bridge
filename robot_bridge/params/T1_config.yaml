@@ -67,7 +67,7 @@ robot_bridge:
       q_min: -3.281
       q_max: 1.187
       dq_limit: 18.84
-      tau_limit: 10.0      
+      tau_limit: 18.0      
       kp: 40.0
       kd: 0.5
       if_strong_joint: false
@@ -78,7 +78,7 @@ robot_bridge:
       q_min: -1.640
       q_max: 1.536
       dq_limit: 18.84
-      tau_limit: 10.0      
+      tau_limit: 18.0      
       kp: 50.0
       kd: 1.5
       if_strong_joint: false
@@ -89,7 +89,7 @@ robot_bridge:
       q_min: -2.234
       q_max: 2.234
       dq_limit: 18.84
-      tau_limit: 10.0      
+      tau_limit: 18.0      
       kp: 20.0
       kd: 0.2
       if_strong_joint: false
@@ -100,7 +100,7 @@ robot_bridge:
       q_min: -2.094
       q_max: 0.035
       dq_limit: 18.84
-      tau_limit: 10.0
+      tau_limit: 18.0
       kp: 10.0
       kd: 0.2
       if_strong_joint: false
@@ -111,7 +111,7 @@ robot_bridge:
       q_min: -3.281
       q_max: 1.187
       dq_limit: 18.84
-      tau_limit: 10.0      
+      tau_limit: 18.0      
       kp: 40.0
       kd: 0.5
       if_strong_joint: false
@@ -122,7 +122,7 @@ robot_bridge:
       q_min: -1.536
       q_max: 1.640
       dq_limit: 18.84
-      tau_limit: 10.0
+      tau_limit: 18.0
       kp: 50.0
       kd: 1.5
       if_strong_joint: false
@@ -133,7 +133,7 @@ robot_bridge:
       q_min: -2.234
       q_max: 2.234
       dq_limit: 18.84
-      tau_limit: 10.0
+      tau_limit: 18.0
       kp: 20.0
       kd: 0.2
       if_strong_joint: false
@@ -144,7 +144,7 @@ robot_bridge:
       q_min: 0.000
       q_max: 2.094
       dq_limit: 18.84
-      tau_limit: 10.0
+      tau_limit: 18.0
       kp: 10.0
       kd: 0.2 
       if_strong_joint: false
@@ -155,7 +155,7 @@ robot_bridge:
       q_min: -1.012
       q_max: 1.012
       dq_limit: 10.88
-      tau_limit: 30.0      
+      tau_limit: 25.0      
       kp: 100.0
       kd: 5.0
       if_strong_joint: true
@@ -166,7 +166,7 @@ robot_bridge:
       q_min: -2.059
       q_max: 2.059
       dq_limit: 12.5
-      tau_limit: 60.0      
+      tau_limit: 45.0      
       kp: 350.0
       kd: 7.5
       if_strong_joint: true
@@ -188,7 +188,7 @@ robot_bridge:
       q_min: -1.012
       q_max: 1.012
       dq_limit: 10.9
-      tau_limit: 30.0      
+      tau_limit: 25.0      
       kp: 180.0
       kd: 3.0
       if_strong_joint: true
@@ -240,7 +240,7 @@ robot_bridge:
       q_min: -2.059
       q_max: 2.059
       dq_limit: 12.5
-      tau_limit: 60.0     
+      tau_limit: 45.0     
       kp: 350.0
       kd: 7.5
       if_strong_joint: true
@@ -262,7 +262,7 @@ robot_bridge:
       q_min: -1.012
       q_max: 1.012
       dq_limit: 10.9
-      tau_limit: 30.0      
+      tau_limit: 25.0      
       kp: 180.0
       kd: 3.0
       if_strong_joint: true
@@ -303,7 +303,7 @@ robot_bridge:
       q_max: 0.785
 
       dq_limit: 12.4
-      tau_limit: 15.0  
+      tau_limit: 24.0  
       kp: 200.0
       kd: 5.0
       if_strong_joint: false

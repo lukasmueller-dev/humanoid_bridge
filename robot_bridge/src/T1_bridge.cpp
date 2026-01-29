@@ -108,13 +108,7 @@ void sairol_bridge::T1Bridge::wireless_callback(sensor_msgs::msg::Joy::SharedPtr
 }
 
 void sairol_bridge::T1Bridge::lowStateHandler_(booster_interface::msg::LowState::SharedPtr msg)
-{        
-    if (std::abs(msg->imu_state.rpy[0]) > imu_rpy_threshold_ || std::abs(msg->imu_state.rpy[1]) > imu_rpy_threshold_)
-    {
-        RCLCPP_WARN(nh->get_logger(), "IMU base rpy values are too large: [%f, %f]", msg->imu_state.rpy[0], msg->imu_state.rpy[1]);
-        controlStarted_ = false;
-        switch_to_damping_mode();
-    }
+{
     // Update the last state time using the same clock source
     last_state_time_ = nh->get_clock()->now();
     for (size_t i = 0; i < msg->motor_state_serial.size(); ++i)
@@ -124,6 +118,9 @@ void sairol_bridge::T1Bridge::lowStateHandler_(booster_interface::msg::LowState:
         currentState_.motor_state[i].ddq = msg->motor_state_serial[i].ddq;
         currentState_.motor_state[i].tau_est = msg->motor_state_serial[i].tau_est;
     }
+    imu_.rpy = msg->imu_state.rpy;
+    imu_.gyroscope = msg->imu_state.gyro;
+    imu_.accelerometer = msg->imu_state.acc;
 }
 
 void sairol_bridge::T1Bridge::publishLowCommand_()
