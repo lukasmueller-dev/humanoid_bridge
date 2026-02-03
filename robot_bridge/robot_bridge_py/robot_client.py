@@ -12,6 +12,8 @@ from rclpy.client import Client as ROSClient
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 import struct
+from copy import copy
+
 
 def rpy_to_quat(rpy):
     r = R.from_euler('xyz', rpy)  
@@ -61,6 +63,8 @@ class RemoteController:
         self.rx = 0
         self.ry = 0
         self.button = [0] * 16
+        self.last_button = [0] * 16
+        self.new_event = False
 
     def set(self, data):
         # wireless_remote
@@ -71,6 +75,12 @@ class RemoteController:
         self.rx = struct.unpack("f", data[8:12])[0]
         self.ry = struct.unpack("f", data[12:16])[0]
         self.ly = struct.unpack("f", data[20:24])[0]
+
+        if self.button != self.last_button:
+            self.last_button = copy(self.button)
+            self.new_event = True
+        else:
+            self.new_event = False
 
     def is_exact_combo(self, buttons, combo_keys):
         return (
@@ -255,41 +265,41 @@ class RobotClient:
 
         # Handle joystick input
         self.remote_controller.set(low_state_msg.wireless_remote)
-        
-        time_now = time.time()
-        
-        buttons = self.remote_controller.button
-        
-        if self.remote_controller.is_exact_combo(buttons, [KeyMap.L2, KeyMap.start]):
-            self.node.get_logger().info("Starting control...")
-            if not self.control_started:
-                future = self.init_control()
-                self.control_start_time = time_now + self._default_duration
-            return
-        elif self.remote_controller.is_exact_combo(buttons, [KeyMap.L2, KeyMap.up, KeyMap.left]):
-            self.node.get_logger().info("Stopping control...")
-            future = self.stop_control()
-            self.control_start_time = None
-            return
-        elif self.remote_controller.is_exact_combo(buttons, [KeyMap.L1]):
-            self.node.get_logger().info("Ready position control...")
-            if not self.control_started:
-                self.goto_default_position()
+        if self.remote_controller.new_event:
+            time_now = time.time()
+            
+            buttons = self.remote_controller.button
+            
+            if self.remote_controller.is_exact_combo(buttons, [KeyMap.L2, KeyMap.start]):
+                self.node.get_logger().info("Starting control...")
+                if not self.control_started:
+                    future = self.init_control()
+                    self.control_start_time = time_now + self._default_duration
+                return
+            elif self.remote_controller.is_exact_combo(buttons, [KeyMap.L2, KeyMap.up, KeyMap.left]):
+                self.node.get_logger().info("Stopping control...")
+                future = self.stop_control()
                 self.control_start_time = None
+                return
+            elif self.remote_controller.is_exact_combo(buttons, [KeyMap.L1]):
+                self.node.get_logger().info("Ready position control...")
+                if not self.control_started:
+                    self.goto_default_position()
+                    self.control_start_time = None
+                else:
+                    self.node.get_logger().warn("Control already started, please stop the control first by pressing BACK.")
+                return
+            elif self.remote_controller.is_exact_combo(buttons, [KeyMap.R1]):
+                self.node.get_logger().info("Zero position control...")
+                if not self.control_started:
+                    self.goto_zero_position()
+                    self.control_start_time = None
+                else:
+                    self.node.get_logger().warn("Control already started, please stop the control first by pressing BACK.")
+                return  
             else:
-                self.node.get_logger().warn("Control already started, please stop the control first by pressing BACK.")
-            return
-        elif self.remote_controller.is_exact_combo(buttons, [KeyMap.R1]):
-            self.node.get_logger().info("Zero position control...")
-            if not self.control_started:
-                self.goto_zero_position()
-                self.control_start_time = None
-            else:
-                self.node.get_logger().warn("Control already started, please stop the control first by pressing BACK.")
-            return  
-        else:
-            # Set key only for unknown key combinations
-            self.joy_key = buttons
+                # Set key only for unknown key combinations
+                self.joy_key = buttons
 
     def update_robot_state(self):
         time_now = time.time()
