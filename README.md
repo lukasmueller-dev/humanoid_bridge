@@ -115,8 +115,8 @@ Then open a new terminal for client node:
     source src/humanoid_bridge/setup_unitree.sh #if unitree G1 or H1
     
     python src/humanoid_bridge/robot_bridge/example/T1/T1_example.py #if booster T1
-    python src/humanoid_bridge/robot_bridge/example/G1/G1_example.py #if booster G1
-    python src/humanoid_bridge/robot_bridge/example/H1/H1_example.py #if booster H1
+    python src/humanoid_bridge/robot_bridge/example/G1/G1_example.py #if unitree G1
+    python src/humanoid_bridge/robot_bridge/example/H1/H1_example.py #if unitree H1
 ```
 
 With this example you can use remote controller to select the mode and:
