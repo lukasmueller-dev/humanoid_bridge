@@ -265,9 +265,10 @@ class RobotClient:
 
         # Handle joystick input
         self.remote_controller.set(low_state_msg.wireless_remote)
+        self.joy_key = self.remote_controller.button
+        
         if self.remote_controller.new_event:
             time_now = time.time()
-            
             buttons = self.remote_controller.button
             
             if self.remote_controller.is_exact_combo(buttons, [KeyMap.L2, KeyMap.start]):
@@ -297,9 +298,6 @@ class RobotClient:
                 else:
                     self.node.get_logger().warn("Control already started, please stop the control first by pressing BACK.")
                 return  
-            else:
-                # Set key only for unknown key combinations
-                self.joy_key = buttons
 
     def update_robot_state(self):
         time_now = time.time()
