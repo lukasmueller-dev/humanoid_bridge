@@ -123,23 +123,22 @@ class RobotController:
                     self.node.get_logger().info("Agent started.")
                 else:
                     self.node.get_logger().warn("Please start the control first by pressing L2 + START.")
-
-            if self.agent_started:
-                self.vx_cmd = self.robot.remote_controller.ly
-                self.vy_cmd = self.robot.remote_controller.lx * -1
-                self.vyaw_cmd = self.robot.remote_controller.rx * -1
-
-                self.vx_cmd = self.vx_cmd * 0.5
-                self.vy_cmd = self.vy_cmd * 0.5
-                self.vyaw_cmd = self.vyaw_cmd * 0.4
-                print(f"Velocity commands - vx: {self.vx_cmd}, vy: {self.vy_cmd}, vyaw: {self.vyaw_cmd}")
-            else:
-                self.vx_cmd = 0.0
-                self.vy_cmd = 0.0
-                self.vyaw_cmd = 0.0
-
+            
             self.robot.joy_key = None  # Reset joy_key
+        
+        if self.agent_started:
+            self.vx_cmd = self.robot.remote_controller.ly
+            self.vy_cmd = self.robot.remote_controller.lx * -1
+            self.vyaw_cmd = self.robot.remote_controller.rx * -1
 
+            self.vx_cmd = self.vx_cmd * 0.5
+            self.vy_cmd = self.vy_cmd * 0.5
+            self.vyaw_cmd = self.vyaw_cmd * 0.4
+            print(f"Velocity commands - vx: {self.vx_cmd}, vy: {self.vy_cmd}, vyaw: {self.vyaw_cmd}")
+        else:
+            self.vx_cmd = 0.0
+            self.vy_cmd = 0.0
+            self.vyaw_cmd = 0.0
 
         if not self.robot.control_started:
             self.agent_started = False
