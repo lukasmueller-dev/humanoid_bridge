@@ -147,6 +147,14 @@ class RobotClient:
             
             self.joystick_subscription = self.node.create_subscription(JoyMsg, joy_topic_name, joy_handler, 1)
             
+            print("Key mapping for Booster robot:"
+                  "\n- Start control: LT + RT + START"
+                  "\n- Ready position: LB"
+                  "\n- Zero position: RB"
+                  "\n- Stop control: BACK"
+                  "\n- Emergency stop: LT + BACK"
+                  )
+            
         elif self.robot_type == "G1": 
             from unitree_hg.msg import LowState
             from unitree_go.msg import WirelessController as JoyMsg
@@ -174,6 +182,12 @@ class RobotClient:
                                          2, 2, 2, 2, 1, 1, 1])
             
             self.remote_controller = RemoteController()
+            print("Key mapping for Unitree G1 robot:"
+                  "\n- Start control: L2 + START"
+                  "\n- Stop control: L2 + UP + LEFT"
+                  "\n- Ready position: L1"
+                  "\n- Zero position: R1"
+                  )
             
         elif self.robot_type == "H1": 
             from unitree_go.msg import LowState
@@ -206,6 +220,12 @@ class RobotClient:
                                          2, 2, 2, 2])
             
             self.remote_controller = RemoteController()
+            print("Key mapping for Unitree H1 robot:"
+                  "\n- Start control: L2 + START"
+                  "\n- Stop control: L2 + UP + LEFT"
+                  "\n- Ready position: L1"
+                  "\n- Zero position: R1"
+                  )
 
         self.low_state_subscription = self.node.create_subscription(LowState, state_topic_name, low_state_handler, 1)
         # self.joystick_subscription = self.node.create_subscription(JoyMsg, joy_topic_name, joy_handler, 1)
@@ -278,7 +298,8 @@ class RobotClient:
                 return
             elif self.remote_controller.is_exact_combo(buttons, [KeyMap.L2, KeyMap.up, KeyMap.left]):
                 self.node.get_logger().info("Stopping control...")
-                future = self.stop_control()
+                # Stop control is done in the Robot Bridge.
+                # future = self.stop_control()
                 self.control_start_time = None
                 return
             elif self.remote_controller.is_exact_combo(buttons, [KeyMap.L1]):

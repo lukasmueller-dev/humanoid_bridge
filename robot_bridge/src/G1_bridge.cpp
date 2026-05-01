@@ -14,8 +14,8 @@ sairol_bridge::G1Bridge::G1Bridge(rclcpp::Node::SharedPtr node) : BridgeCore(nod
     lowStateSubscriber_ = nh->create_subscription<unitree_hg::msg::LowState>(
         "/lowstate", 1, std::bind(&sairol_bridge::G1Bridge::lowStateHandler_, this, std::placeholders::_1));
 
-    // remoteControlSubscriber_ = nh->create_subscription<unitree_go::msg::WirelessController>(
-    //     "/wirelesscontroller", 10, std::bind(&sairol_bridge::G1Bridge::wireless_callback, this, std::placeholders::_1));
+    remoteControlSubscriber_ = nh->create_subscription<unitree_go::msg::WirelessController>(
+        "/wirelesscontroller", 10, std::bind(&sairol_bridge::G1Bridge::wireless_callback, this, std::placeholders::_1));
 
     while (!checkExternalPublisher_("/lowcmd"))
     {
@@ -64,34 +64,41 @@ void sairol_bridge::G1Bridge::wireless_callback(unitree_go::msg::WirelessControl
 {
     uint32_t key = data->keys;
 
-    if ((key & (KEY_L2 | KEY_START)) == (KEY_L2 | KEY_START))  // L2 + START : start control
-    {
-        RCLCPP_INFO(nh->get_logger(), "Starting control...");
-        initControl_(bridge_interface::msg::RobotCmd());
-        return;
-    }
-    else if ((key & (KEY_L2 | KEY_UP | KEY_LEFT)) == (KEY_L2 | KEY_UP | KEY_LEFT))  // L2 + UP + LEFT : stop control
+    if ((key & (KEY_L2 | KEY_UP | KEY_LEFT)) == (KEY_L2 | KEY_UP | KEY_LEFT))  // L2 + UP + LEFT : stop control
     {
         RCLCPP_INFO(nh->get_logger(), "Stopping control...");
         if (controlStarted_) controlStarted_ = false;
         return;
     }
-    else if (key & KEY_L1)  //L1 : Ready position
-    {
-        RCLCPP_INFO(nh->get_logger(), "Ready position control...");
-        if (!controlStarted_) initControl_(bridge_interface::msg::RobotCmd());
-        readyPositionControl_();
-        calculateInterpolationParams_(duration_, 1, true);
-        return;
-    }
-    else if (key & KEY_R1)  // R1 : Zero position
-    {
-        RCLCPP_INFO(nh->get_logger(), "Zero position control...");
-        if (!controlStarted_) initControl_(bridge_interface::msg::RobotCmd());
-        zeroPositionControl_();
-        calculateInterpolationParams_(duration_, 1, true);
-        return;
-    }
+
+    // if ((key & (KEY_L2 | KEY_START)) == (KEY_L2 | KEY_START))  // L2 + START : start control
+    // {
+    //     RCLCPP_INFO(nh->get_logger(), "Starting control...");
+    //     initControl_(bridge_interface::msg::RobotCmd());
+    //     return;
+    // }
+    // else if ((key & (KEY_L2 | KEY_UP | KEY_LEFT)) == (KEY_L2 | KEY_UP | KEY_LEFT))  // L2 + UP + LEFT : stop control
+    // {
+    //     RCLCPP_INFO(nh->get_logger(), "Stopping control...");
+    //     if (controlStarted_) controlStarted_ = false;
+    //     return;
+    // }
+    // else if (key & KEY_L1)  //L1 : Ready position
+    // {
+    //     RCLCPP_INFO(nh->get_logger(), "Ready position control...");
+    //     if (!controlStarted_) initControl_(bridge_interface::msg::RobotCmd());
+    //     readyPositionControl_();
+    //     calculateInterpolationParams_(duration_, 1, true);
+    //     return;
+    // }
+    // else if (key & KEY_R1)  // R1 : Zero position
+    // {
+    //     RCLCPP_INFO(nh->get_logger(), "Zero position control...");
+    //     if (!controlStarted_) initControl_(bridge_interface::msg::RobotCmd());
+    //     zeroPositionControl_();
+    //     calculateInterpolationParams_(duration_, 1, true);
+    //     return;
+    // }
 
 }
 
