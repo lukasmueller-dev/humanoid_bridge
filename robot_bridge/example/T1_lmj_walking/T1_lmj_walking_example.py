@@ -1,4 +1,7 @@
+import json
 import time
+from datetime import datetime
+from pathlib import Path
 
 import numpy as np
 import rclpy
@@ -39,6 +42,14 @@ class RobotController:
         self.vx_cmd = 0.0
         self.vy_cmd = 0.0
         self.vyaw_cmd = 0.0
+        self.debug_step_count = 0
+        debug_dir = Path(__file__).resolve().parent / "debug_logs"
+        debug_dir.mkdir(parents=True, exist_ok=True)
+        model_name = "".join(
+            char if char.isalnum() or char in ("-", "_") else "_" for char in self.policy.actor_path.stem
+        )
+        debug_path = debug_dir / f"lmj_debug_{model_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jsonl"
+        self.debug_log = debug_path.open("w", encoding="utf-8")
         print(
             "Please press\n"
             "\t \"LT + RT + START\" to start bridge control,\n"
@@ -59,19 +70,46 @@ class RobotController:
             self.policy_start_time = time.monotonic()
         time_now = time.monotonic() - self.policy_start_time
 
+        q_pos = np.asarray(self.robot.q_pos, dtype=np.float32).copy()
+        q_vel = np.asarray(self.robot.q_vel, dtype=np.float32).copy()
+        raw_command = np.array([self.vx_cmd, self.vy_cmd, self.vyaw_cmd], dtype=np.float32)
         projected_gravity = projected_gravity_from_quat_wxyz(self.robot.quat)
         q_des = self.policy.inference(
             time_now=time_now,
-            dof_pos=self.robot.q_pos,
-            dof_vel=self.robot.q_vel,
+            dof_pos=q_pos,
+            dof_vel=q_vel,
             base_ang_vel=self.robot.angular_velocity,
             projected_gravity=projected_gravity,
             vx=self.vx_cmd,
             vy=self.vy_cmd,
             vyaw=self.vyaw_cmd,
         )
+        self.debug_step_count += 1
+        self.debug_log.write(
+            json.dumps(
+                {
+                    "step": self.debug_step_count,
+                    "wall_time": datetime.now().isoformat(timespec="milliseconds"),
+                    "policy_time": float(time_now),
+                    "model": self.policy.actor_model,
+                    "model_path": str(self.policy.actor_path),
+                    "command": raw_command.tolist(),
+                    "smoothed_command": self.policy.smoothed_commands.tolist(),
+                    "qpos": q_pos.tolist(),
+                    "qvel": q_vel.tolist(),
+                    "action": self.policy.last_action.tolist(),
+                    "q_des": q_des.tolist(),
+                }
+            )
+            + "\n"
+        )
+        self.debug_log.flush()
 
         self.robot.send_cmd(q_target_pos=q_des, target_kp=self.policy_kp, target_kd=self.policy_kd)
+
+    def close_debug_log(self):
+        if not self.debug_log.closed:
+            self.debug_log.close()
 
     def _start_agent(self):
         self.agent_started = True
@@ -141,7 +179,10 @@ if __name__ == "__main__":
     node = rclpy.create_node("t1_lmj_walking_node")
     controller = RobotController(node, policy_cfg)
 
-    rclpy.spin(node)
+    try:
+        rclpy.spin(node)
+    finally:
+        controller.close_debug_log()
 
     node.destroy_node()
     rclpy.shutdown()

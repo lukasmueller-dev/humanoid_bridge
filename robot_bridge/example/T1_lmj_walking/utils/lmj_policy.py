@@ -204,8 +204,9 @@ class LMJWalkingPolicy:
         self.damping = _as_vector("common.damping", cfg["common"]["damping"], ACTION_DIM)
 
         policy_cfg = cfg["policy"]
-        actor_path = self._resolve_example_path(policy_cfg["actor_path"])
-        self.actor = NumpyActor.from_npz(actor_path)
+        self.actor_model = str(policy_cfg["actor_path"])
+        self.actor_path = self._resolve_example_path(self.actor_model)
+        self.actor = NumpyActor.from_npz(self.actor_path)
         self.actor.action_clip = float(policy_cfg["control"].get("clip_actions", self.actor.action_clip))
         self.gait_frequency = float(policy_cfg["gait_frequency"])
         self.goal_height = float(policy_cfg["goal_height"])
