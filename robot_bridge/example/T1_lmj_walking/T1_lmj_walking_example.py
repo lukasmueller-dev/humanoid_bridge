@@ -1,4 +1,6 @@
+import hashlib
 import json
+import math
 import time
 from datetime import datetime
 from pathlib import Path
@@ -7,7 +9,7 @@ import numpy as np
 import rclpy
 import yaml
 from robot_bridge_py.robot_client import RobotClient
-from utils.lmj_policy import LMJWalkingPolicy, projected_gravity_from_quat_wxyz
+from utils.lmj_policy import JOINT_NAMES, LMJWalkingPolicy, normalize_actor_observation, projected_gravity_from_quat_wxyz
 
 
 class RobotController:
@@ -43,6 +45,7 @@ class RobotController:
         self.vy_cmd = 0.0
         self.vyaw_cmd = 0.0
         self.debug_step_count = 0
+        self.last_policy_time = None
         debug_dir = Path(__file__).resolve().parent / "debug_logs"
         debug_dir.mkdir(parents=True, exist_ok=True)
         model_name = "".join(
@@ -50,6 +53,7 @@ class RobotController:
         )
         debug_path = debug_dir / f"lmj_debug_{model_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jsonl"
         self.debug_log = debug_path.open("w", encoding="utf-8")
+        self._write_debug_metadata()
         print(
             "Please press\n"
             "\t \"LT + RT + START\" to start bridge control,\n"
@@ -69,43 +73,141 @@ class RobotController:
         if self.policy_start_time is None:
             self.policy_start_time = time.monotonic()
         time_now = time.monotonic() - self.policy_start_time
+        loop_dt = None if self.last_policy_time is None else time_now - self.last_policy_time
 
         q_pos = np.asarray(self.robot.q_pos, dtype=np.float32).copy()
         q_vel = np.asarray(self.robot.q_vel, dtype=np.float32).copy()
+        quat_wxyz = np.asarray(self.robot.quat, dtype=np.float32).copy()
+        base_ang_vel = np.asarray(self.robot.angular_velocity, dtype=np.float32).copy()
+        last_action_input = self.policy.last_action.copy()
         raw_command = np.array([self.vx_cmd, self.vy_cmd, self.vyaw_cmd], dtype=np.float32)
-        projected_gravity = projected_gravity_from_quat_wxyz(self.robot.quat)
+        projected_gravity = projected_gravity_from_quat_wxyz(quat_wxyz)
         q_des = self.policy.inference(
             time_now=time_now,
             dof_pos=q_pos,
             dof_vel=q_vel,
-            base_ang_vel=self.robot.angular_velocity,
+            base_ang_vel=base_ang_vel,
             projected_gravity=projected_gravity,
             vx=self.vx_cmd,
             vy=self.vy_cmd,
             vyaw=self.vyaw_cmd,
         )
+        obs_81 = self.policy.last_observation.copy()
+        norm_obs_81 = normalize_actor_observation(obs_81, self.policy.actor.mean, self.policy.actor.var)
+        raw_action_preclip = self._actor_forward_raw_from_normalized(norm_obs_81)
+        action_postclip = self.policy.last_action.copy()
+        q_des_preclip = self.policy.default_dof_pos + self.policy.action_scale * action_postclip
+        clip_mask_low = q_des_preclip < self.policy.target_qpos_lower
+        clip_mask_high = q_des_preclip > self.policy.target_qpos_upper
+        smoothed_command = self.policy.smoothed_commands.copy()
+        effective_gait_frequency = 0.0 if np.linalg.norm(smoothed_command) < 1.0e-8 else self.policy.gait_frequency
+        gait_process = math.fmod(float(time_now) * effective_gait_frequency, 1.0)
+        goal_6 = obs_81[-6:]
+
         self.debug_step_count += 1
         self.debug_log.write(
             json.dumps(
                 {
+                    "event": "policy_step",
                     "step": self.debug_step_count,
                     "wall_time": datetime.now().isoformat(timespec="milliseconds"),
                     "policy_time": float(time_now),
+                    "loop_dt": None if loop_dt is None else float(loop_dt),
                     "model": self.policy.actor_model,
                     "model_path": str(self.policy.actor_path),
                     "command": raw_command.tolist(),
-                    "smoothed_command": self.policy.smoothed_commands.tolist(),
+                    "smoothed_command": smoothed_command.tolist(),
+                    "quat_wxyz": quat_wxyz.tolist(),
+                    "projected_gravity": projected_gravity.tolist(),
+                    "base_ang_vel": base_ang_vel.tolist(),
                     "qpos": q_pos.tolist(),
                     "qvel": q_vel.tolist(),
-                    "action": self.policy.last_action.tolist(),
+                    "last_action_input": last_action_input.tolist(),
+                    "obs_81": obs_81.tolist(),
+                    "norm_obs_81": norm_obs_81.tolist(),
+                    "goal_6": goal_6.tolist(),
+                    "gait_process": float(gait_process),
+                    "effective_gait_frequency": float(effective_gait_frequency),
+                    "raw_action_preclip": raw_action_preclip.tolist(),
+                    "action_postclip": action_postclip.tolist(),
+                    "action": action_postclip.tolist(),
+                    "q_des_preclip": q_des_preclip.tolist(),
                     "q_des": q_des.tolist(),
+                    "clip_mask_low": clip_mask_low.tolist(),
+                    "clip_mask_high": clip_mask_high.tolist(),
+                    "qpos_minus_default": (q_pos - self.policy.default_dof_pos).tolist(),
+                    "q_des_minus_qpos": (q_des - q_pos).tolist(),
+                }
+            )
+            + "\n"
+        )
+        self.debug_log.flush()
+        self.last_policy_time = time_now
+
+        self.robot.send_cmd(q_target_pos=q_des, target_kp=self.policy_kp, target_kd=self.policy_kd)
+
+    def _write_debug_metadata(self):
+        actor_indices = []
+        with np.load(self.policy.actor_path, allow_pickle=False) as actor_data:
+            if "actor_indices" in actor_data.files:
+                actor_indices = np.asarray(actor_data["actor_indices"], dtype=np.int64).tolist()
+
+        self.debug_log.write(
+            json.dumps(
+                {
+                    "event": "metadata",
+                    "wall_time": datetime.now().isoformat(timespec="milliseconds"),
+                    "model": self.policy.actor_model,
+                    "model_path": str(self.policy.actor_path),
+                    "actor_sha256": self._sha256_file(self.policy.actor_path),
+                    "actor_indices": actor_indices,
+                    "joint_names": JOINT_NAMES,
+                    "default_qpos": self.policy.default_dof_pos.tolist(),
+                    "kp": self.policy_kp.tolist(),
+                    "kd": self.policy_kd.tolist(),
+                    "action_scale": float(self.policy.action_scale),
+                    "action_clip": float(self.policy.actor.action_clip),
+                    "target_qpos_lower": self.policy.target_qpos_lower.tolist(),
+                    "target_qpos_upper": self.policy.target_qpos_upper.tolist(),
+                    "mean_81": self.policy.actor.mean.tolist(),
+                    "var_81": self.policy.actor.var.tolist(),
+                    "mean_81_min": float(np.min(self.policy.actor.mean)),
+                    "mean_81_max": float(np.max(self.policy.actor.mean)),
+                    "var_81_min": float(np.min(self.policy.actor.var)),
+                    "var_81_max": float(np.max(self.policy.actor.var)),
+                    "gait_frequency": float(self.policy.gait_frequency),
+                    "goal_height": float(self.policy.goal_height),
+                    "command_rate_limit_per_step": float(self.policy.command_rate_limit),
+                    "command_step": {
+                        "x": self.command_step_x,
+                        "y": self.command_step_y,
+                        "yaw": self.command_step_yaw,
+                    },
+                    "command_limit": {
+                        "x": [self.vx_min, self.vx_max],
+                        "y": [self.vy_min, self.vy_max],
+                        "yaw": [self.vyaw_min, self.vyaw_max],
+                    },
+                    "parallel_mech_indexes": self.cfg.get("mech", {}).get("parallel_mech_indexes", []),
                 }
             )
             + "\n"
         )
         self.debug_log.flush()
 
-        self.robot.send_cmd(q_target_pos=q_des, target_kp=self.policy_kp, target_kd=self.policy_kd)
+    def _actor_forward_raw_from_normalized(self, norm_obs):
+        x = np.asarray(norm_obs, dtype=np.float32)
+        for kernel, bias in self.policy.actor.weights[:-1]:
+            x = self.policy.actor.activation(x @ kernel + bias)
+        kernel, bias = self.policy.actor.weights[-1]
+        return (x @ kernel + bias).astype(np.float32)
+
+    def _sha256_file(self, path):
+        digest = hashlib.sha256()
+        with path.open("rb") as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
 
     def close_debug_log(self):
         if not self.debug_log.closed:
@@ -114,6 +216,7 @@ class RobotController:
     def _start_agent(self):
         self.agent_started = True
         self.policy_start_time = time.monotonic()
+        self.last_policy_time = None
         self.vx_cmd = 0.0
         self.vy_cmd = 0.0
         self.vyaw_cmd = 0.0
@@ -168,6 +271,7 @@ class RobotController:
         if not self.robot.control_started:
             self.agent_started = False
             self.policy_start_time = None
+            self.last_policy_time = None
             self._stop_agent_commands()
 
 
