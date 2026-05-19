@@ -26,8 +26,8 @@ common:
   ]
 
 policy:
-  actor_path: "models/PPOJax2_actor_81d.npz"
-  source_checkpoint_path: "models/PPOJax2_saved.pkl"
+  actor_path: "models/randomize_floor_9s2us1c2_actor_81d.npz"
+  source_checkpoint_path: "models/randomize_floor_9s2us1c2.pkl"
   num_actions: 23
   num_observations: 81
   gait_frequency: 1.25
