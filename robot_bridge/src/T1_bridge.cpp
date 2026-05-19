@@ -20,6 +20,7 @@ constexpr std::array<const char *, 4> kT1LowCmdDebugJointNames = {
     "Right_Ankle_Pitch",
     "Right_Ankle_Roll",
 };
+constexpr uint64_t kT1LowCmdDebugSampleEveryPublishes = 10;
 
 bool isDebugJoint(int joint_index)
 {
@@ -105,6 +106,8 @@ public:
             metadata["log_path"] = path_.string();
             metadata["debug_joint_indices"] = kT1LowCmdDebugJointIndices;
             metadata["debug_joint_names"] = kT1LowCmdDebugJointNames;
+            metadata["sample_every_publishes"] = kT1LowCmdDebugSampleEveryPublishes;
+            metadata["always_log_events"] = {"dq_clipped", "torque_control_tau_clipped", "q_torque_limit_clipped", "parallel_tau_clipped"};
             metadata["note"] = "T1 bridge final low-level ankle command debug log.";
             stream_ << metadata.dump() << "\n";
             stream_.flush();
@@ -386,11 +389,15 @@ void sairol_bridge::T1Bridge::publishLowCommand_()
             cmd.kp = 0.0;
         }
 
-        if (debug_joint && debug_logger.isOpen())
+        const bool debug_sample_publish = debug_publish_sequence % kT1LowCmdDebugSampleEveryPublishes == 0;
+        const bool debug_event_triggered = dq_clipped || torque_control_tau_clipped || q_torque_limit_clipped || parallel_tau_clipped;
+        if (debug_joint && debug_logger.isOpen() && (debug_sample_publish || debug_event_triggered))
         {
             json row;
             row["event"] = "lowcmd_publish";
             row["publish_sequence"] = debug_publish_sequence;
+            row["sampled_publish"] = debug_sample_publish;
+            row["event_triggered"] = debug_event_triggered;
             row["ros_time"] = current.seconds();
             row["joint_index"] = i;
             row["joint_name"] = debugJointName(i);
