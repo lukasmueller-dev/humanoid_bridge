@@ -16,6 +16,7 @@ SPEC.loader.exec_module(lmj_policy)
 EXAMPLE_DIR = MODULE_PATH.parents[1]
 RUN_NAME = "parajoints_slippery_ankle_noise_armmult_yawdrift_m0p2_1p2b"
 JOINT_WRAPPER_RUN_NAME = "joint_wrapper_tm4xonfx"
+SLIPPERY_FLOOR_KP50_RUN_NAME = "slippery_floor_kp50_jpiazpg2"
 
 
 def load_example_module():
@@ -171,6 +172,22 @@ def test_joint_wrapper_deployment_config_selects_run_model_and_ankle_gains():
     assert cfg["common"]["stiffness"][21:23] == [50.0, 50.0]
     assert cfg["common"]["damping"][15:17] == [1.0, 1.0]
     assert cfg["common"]["damping"][21:23] == [3.0, 3.0]
+
+
+def test_slippery_floor_kp50_deployment_config_selects_run_model_and_symmetric_ankle_gains():
+    cfg_path = EXAMPLE_DIR / "configs" / f"T1_lmj_walking_{SLIPPERY_FLOOR_KP50_RUN_NAME}.yaml"
+
+    with cfg_path.open("r", encoding="utf-8") as f:
+        cfg = yaml.load(f.read(), Loader=yaml.FullLoader)
+
+    assert cfg["policy"]["actor_path"] == f"models/{SLIPPERY_FLOOR_KP50_RUN_NAME}_actor_81d.npz"
+    assert cfg["policy"]["source_checkpoint_path"] == f"models/{SLIPPERY_FLOOR_KP50_RUN_NAME}.pkl"
+    assert (EXAMPLE_DIR / cfg["policy"]["actor_path"]).is_file()
+    assert (EXAMPLE_DIR / cfg["policy"]["source_checkpoint_path"]).is_file()
+    assert cfg["common"]["stiffness"][15:17] == [50.0, 50.0]
+    assert cfg["common"]["stiffness"][21:23] == [50.0, 50.0]
+    assert cfg["common"]["damping"][15:17] == [1.0, 1.0]
+    assert cfg["common"]["damping"][21:23] == [1.0, 1.0]
 
 
 def test_t1_lmj_example_accepts_config_argument_with_default():
