@@ -1,13 +1,37 @@
 import importlib.util
+import sys
+import types
 from pathlib import Path
 
 import numpy as np
+import yaml
 
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "utils" / "lmj_policy.py"
 SPEC = importlib.util.spec_from_file_location("lmj_policy", MODULE_PATH)
 lmj_policy = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(lmj_policy)
+
+
+EXAMPLE_DIR = MODULE_PATH.parents[1]
+RUN_NAME = "parajoints_slippery_ankle_noise_armmult_yawdrift_m0p2_1p2b"
+
+
+def load_example_module():
+    rclpy_stub = types.ModuleType("rclpy")
+    robot_bridge_py_stub = types.ModuleType("robot_bridge_py")
+    robot_client_stub = types.ModuleType("robot_bridge_py.robot_client")
+    robot_client_stub.RobotClient = object
+    sys.modules["rclpy"] = rclpy_stub
+    sys.modules["robot_bridge_py"] = robot_bridge_py_stub
+    sys.modules["robot_bridge_py.robot_client"] = robot_client_stub
+    sys.path.insert(0, str(EXAMPLE_DIR))
+
+    module_path = EXAMPLE_DIR / "T1_lmj_walking_example.py"
+    spec = importlib.util.spec_from_file_location("T1_lmj_walking_example", module_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_build_actor_observation_uses_expected_81d_sequence():
@@ -114,3 +138,29 @@ def test_numpy_actor_normalizes_before_forwarding_layers():
     action = actor(obs)
 
     np.testing.assert_allclose(action, expected.astype(np.float32), rtol=1e-6)
+
+
+def test_parajoints_deployment_config_selects_run_model_and_ankle_gains():
+    cfg_path = EXAMPLE_DIR / "configs" / f"T1_lmj_walking_{RUN_NAME}.yaml"
+
+    with cfg_path.open("r", encoding="utf-8") as f:
+        cfg = yaml.load(f.read(), Loader=yaml.FullLoader)
+
+    assert cfg["policy"]["actor_path"] == f"models/{RUN_NAME}_actor_81d.npz"
+    assert cfg["policy"]["source_checkpoint_path"] == f"models/{RUN_NAME}.pkl"
+    assert (EXAMPLE_DIR / cfg["policy"]["actor_path"]).is_file()
+    assert (EXAMPLE_DIR / cfg["policy"]["source_checkpoint_path"]).is_file()
+    assert cfg["common"]["stiffness"][15:17] == [50.0, 50.0]
+    assert cfg["common"]["stiffness"][21:23] == [50.0, 50.0]
+    assert cfg["common"]["damping"][15:17] == [1.0, 1.0]
+    assert cfg["common"]["damping"][21:23] == [3.0, 3.0]
+
+
+def test_t1_lmj_example_accepts_config_argument_with_default():
+    module = load_example_module()
+
+    default_args = module.parse_args([])
+    custom_args = module.parse_args(["--config", "configs/custom.yaml"])
+
+    assert default_args.config == module.DEFAULT_CONFIG_FILE
+    assert custom_args.config == "configs/custom.yaml"

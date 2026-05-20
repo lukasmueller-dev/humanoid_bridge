@@ -1,3 +1,4 @@
+import argparse
 import hashlib
 import json
 import math
@@ -10,6 +11,29 @@ import rclpy
 import yaml
 from robot_bridge_py.robot_client import RobotClient
 from utils.lmj_policy import JOINT_NAMES, LMJWalkingPolicy, normalize_actor_observation, projected_gravity_from_quat_wxyz
+
+
+DEFAULT_CONFIG_FILE = "src/humanoid_bridge/robot_bridge/example/T1_lmj_walking/configs/T1_lmj_walking.yaml"
+
+
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(description="Run the Booster T1 LMJ walking policy bridge.")
+    parser.add_argument(
+        "--config",
+        default=DEFAULT_CONFIG_FILE,
+        help="Path to the LMJ walking YAML config. Relative paths are checked from cwd, then this example directory.",
+    )
+    return parser.parse_args(argv)
+
+
+def resolve_config_path(config_path):
+    path = Path(config_path).expanduser()
+    if path.is_absolute() or path.exists():
+        return path
+    example_relative = Path(__file__).resolve().parent / path
+    if example_relative.exists():
+        return example_relative
+    return path
 
 
 class RobotController:
@@ -276,9 +300,10 @@ class RobotController:
 
 
 if __name__ == "__main__":
+    args = parse_args()
     rclpy.init()
-    cfg_file = "src/humanoid_bridge/robot_bridge/example/T1_lmj_walking/configs/T1_lmj_walking.yaml"
-    with open(cfg_file, "r", encoding="utf-8") as f:
+    cfg_file = resolve_config_path(args.config)
+    with cfg_file.open("r", encoding="utf-8") as f:
         policy_cfg = yaml.load(f.read(), Loader=yaml.FullLoader)
     node = rclpy.create_node("t1_lmj_walking_node")
     controller = RobotController(node, policy_cfg)
