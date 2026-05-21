@@ -30,6 +30,7 @@ class RobotController:
             joint_indices=cfg["startup"]["arm_joint_indices"],
             duration_s=cfg["startup"]["arm_ramp_duration_s"],
         )
+        self.arm_joint_indices = self.arm_startup_ramp.joint_indices
         
         self.agent_started = False
         self.vx_cmd = 0.0
@@ -39,17 +40,8 @@ class RobotController:
 
     def step(self):
         self.check_state()
-        if self.robot.control_started and self.arm_startup_ramp.active:
-            self.arm_startup_step()
-        elif self.robot.control_started and self.agent_started:
+        if self.robot.control_started and self.agent_started:
             self.policy_step()  
-            
-    def arm_startup_step(self):
-        q_des, done = self.arm_startup_ramp.sample(time.monotonic())
-        self.robot.send_cmd(q_target_pos=q_des, target_kp=self.policy_kp, target_kd=self.policy_kd)
-        if done:
-            self.agent_started = True
-            self.node.get_logger().info("Arm startup ramp finished. Agent started.")
 
     def policy_step(self):
         time_now = self.robot.time_count / 500.
@@ -65,6 +57,11 @@ class RobotController:
             vy=self.vy_cmd,
             vyaw=self.vyaw_cmd,
         )
+        if self.arm_startup_ramp.active:
+            arm_q_des, done = self.arm_startup_ramp.sample(time.monotonic())
+            q_des[self.arm_joint_indices] = arm_q_des[self.arm_joint_indices]
+            if done:
+                self.node.get_logger().info("Arm startup ramp finished.")
         
         self.robot.send_cmd(q_target_pos=q_des, target_kp=self.policy_kp, target_kd=self.policy_kd)
     
@@ -111,12 +108,12 @@ class RobotController:
         if self.robot.joy_key is not None:
             if self.robot.joy_key.lt and self.robot.joy_key.a and self.robot.key_count == 2:  # start: LT + A
                 if self.robot.control_started:
-                    self.agent_started = False
+                    self.agent_started = True
                     self.arm_startup_ramp.start(self.robot.q_pos, self.init_pos, time.monotonic())
                     self.vx_cmd = 0.0
                     self.vy_cmd = 0.0
                     self.vyaw_cmd = 0.0
-                    self.node.get_logger().info("Starting arm ramp to tray pose.")
+                    self.node.get_logger().info("Agent started. Ramping arms to tray pose.")
                 else:
                     self.node.get_logger().warn("Please start the control first by pressing LT + START.")
 
