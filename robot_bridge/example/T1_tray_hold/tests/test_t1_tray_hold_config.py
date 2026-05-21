@@ -14,6 +14,16 @@ TRAY_UPPER_BODY_QPOS = [
     0.0,
     1.5708,
 ]
+RAISED_FRONT_TRAY_UPPER_BODY_QPOS = [
+    -1.5708,
+    -1.5708,
+    0.0,
+    0.0,
+    -1.5708,
+    1.5708,
+    0.0,
+    0.0,
+]
 NORMAL_READY_UPPER_BODY_QPOS = [
     0.25,
     -1.4,
@@ -43,6 +53,7 @@ def test_tray_hold_config_fixes_upper_body_for_tray_and_uses_lower_body_policy()
     assert cfg["prepare"]["default_qpos"][10] == 0.0
     assert cfg["startup"]["arm_joint_indices"] == list(range(2, 10))
     assert cfg["startup"]["arm_ramp_duration_s"] == 3.0
+    assert cfg["startup"]["raised_front_tray_qpos"] == RAISED_FRONT_TRAY_UPPER_BODY_QPOS
 
 
 def test_tray_hold_policy_only_applies_actions_to_lower_body_targets():
@@ -63,3 +74,14 @@ def test_tray_hold_controller_overlays_arm_ramp_while_policy_runs():
     assert "if self.robot.control_started and self.agent_started:" in controller_src
     assert "if self.arm_startup_ramp.active:" in controller_src
     assert "q_des[self.arm_joint_indices] =" in controller_src
+
+
+def test_tray_hold_controller_supports_second_lta_raise_only_at_zero_command():
+    controller_src = (EXAMPLE_DIR / "T1_tray_hold_example.py").read_text(encoding="utf-8")
+
+    assert "ArmPoseMode" in controller_src
+    assert "choose_lta_action(" in controller_src
+    assert "self.raised_front_tray_pos" in controller_src
+    assert "raise_front" in controller_src
+    assert "arm_ramp_active=self.arm_startup_ramp.active" in controller_src
+    assert "zero velocity command" in controller_src
