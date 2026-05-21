@@ -31,6 +31,7 @@ class RobotController:
             duration_s=cfg["startup"]["arm_ramp_duration_s"],
         )
         self.arm_joint_indices = self.arm_startup_ramp.joint_indices
+        self.arm_hold_pos = np.array(self.init_pos, dtype=np.float32, copy=True)
         self.raised_front_tray_pos = np.array(self.init_pos, dtype=np.float32, copy=True)
         self.raised_front_tray_pos[self.arm_joint_indices] = np.array(
             cfg["startup"]["raised_front_tray_qpos"],
@@ -68,11 +69,14 @@ class RobotController:
             q_des[self.arm_joint_indices] = arm_q_des[self.arm_joint_indices]
             if done:
                 self.node.get_logger().info(f"Arm ramp finished: {self.arm_mode.value}.")
+        else:
+            q_des[self.arm_joint_indices] = self.arm_hold_pos[self.arm_joint_indices]
         
         self.robot.send_cmd(q_target_pos=q_des, target_kp=self.policy_kp, target_kd=self.policy_kd)
 
     def start_arm_ramp(self, target_pos, arm_mode):
-        self.arm_startup_ramp.start(self.robot.q_pos, target_pos, time.monotonic())
+        self.arm_hold_pos = np.array(target_pos, dtype=np.float32, copy=True)
+        self.arm_startup_ramp.start(self.robot.q_pos, self.arm_hold_pos, time.monotonic())
         self.arm_mode = arm_mode
     
     def convert_quat_to_rot_mat(self, quat):
@@ -136,10 +140,11 @@ class RobotController:
                 elif lta_action == "raise_front":
                     self.start_arm_ramp(self.raised_front_tray_pos, next_arm_mode)
                     self.node.get_logger().info("Ramping arms to raised front tray pose.")
+                elif lta_action == "lower_tray":
+                    self.start_arm_ramp(self.init_pos, next_arm_mode)
+                    self.node.get_logger().info("Ramping arms back to tray pose.")
                 elif lta_action == "require_zero_velocity":
-                    self.node.get_logger().warn("Please set a zero velocity command before raising the arms.")
-                elif lta_action == "already_raised":
-                    self.node.get_logger().info("Arms are already in raised front tray pose.")
+                    self.node.get_logger().warn("Please set a zero velocity command before moving the arms.")
                 elif lta_action == "wait_for_arm_ramp":
                     self.node.get_logger().warn("Please wait for the current arm ramp to finish.")
                 elif lta_action == "require_control":
@@ -178,6 +183,7 @@ class RobotController:
         if not self.robot.control_started:
             self.agent_started = False
             self.arm_mode = ArmPoseMode.READY
+            self.arm_hold_pos = np.array(self.init_pos, dtype=np.float32, copy=True)
             self.arm_startup_ramp.cancel()
 
 

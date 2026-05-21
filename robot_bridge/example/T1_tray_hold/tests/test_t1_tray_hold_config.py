@@ -85,3 +85,12 @@ def test_tray_hold_controller_supports_second_lta_raise_only_at_zero_command():
     assert "raise_front" in controller_src
     assert "arm_ramp_active=self.arm_startup_ramp.active" in controller_src
     assert "zero velocity command" in controller_src
+
+
+def test_tray_hold_controller_persists_arm_hold_target_after_ramp_finishes():
+    controller_src = (EXAMPLE_DIR / "T1_tray_hold_example.py").read_text(encoding="utf-8")
+
+    assert "self.arm_hold_pos" in controller_src
+    assert "self.arm_hold_pos[self.arm_joint_indices]" in controller_src
+    assert "q_des[self.arm_joint_indices] = self.arm_hold_pos[self.arm_joint_indices]" in controller_src
+    assert "lower_tray" in controller_src

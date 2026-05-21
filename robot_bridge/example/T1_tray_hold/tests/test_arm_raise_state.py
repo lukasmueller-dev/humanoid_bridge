@@ -85,6 +85,22 @@ def test_lta_waits_for_current_arm_ramp_before_raise_front():
     assert next_mode == ArmPoseMode.TRAY
 
 
+def test_lta_lowers_back_to_tray_when_already_raised_and_command_is_zero():
+    _require_arm_raise_state()
+
+    action, next_mode = choose_lta_action(
+        control_started=True,
+        agent_started=True,
+        arm_mode=ArmPoseMode.RAISED_FRONT,
+        vx=0.0,
+        vy=0.0,
+        vyaw=0.0,
+    )
+
+    assert action == "lower_tray"
+    assert next_mode == ArmPoseMode.TRAY
+
+
 def test_velocity_command_zero_uses_small_tolerance():
     _require_arm_raise_state()
 

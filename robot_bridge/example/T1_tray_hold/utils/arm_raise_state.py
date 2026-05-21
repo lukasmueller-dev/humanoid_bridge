@@ -24,5 +24,5 @@ def choose_lta_action(control_started, agent_started, arm_mode, vx, vy, vyaw, ar
     if mode == ArmPoseMode.TRAY:
         return "raise_front", ArmPoseMode.RAISED_FRONT
     if mode == ArmPoseMode.RAISED_FRONT:
-        return "already_raised", mode
+        return "lower_tray", ArmPoseMode.TRAY
     return "start_tray", ArmPoseMode.TRAY
