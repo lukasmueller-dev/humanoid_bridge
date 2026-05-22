@@ -1,5 +1,9 @@
 from pathlib import Path
+import importlib.util
+import sys
+import types
 
+import numpy as np
 import yaml
 
 
@@ -34,6 +38,74 @@ NORMAL_READY_UPPER_BODY_QPOS = [
     0.0,
     0.5,
 ]
+
+
+class _FakeLogger:
+    def info(self, _msg):
+        pass
+
+    def warn(self, _msg):
+        pass
+
+
+class _FakeNode:
+    def create_timer(self, *_args, **_kwargs):
+        return None
+
+    def get_logger(self):
+        return _FakeLogger()
+
+
+class _FakeRobotClient:
+    def __init__(self, node, robot_type, num_dof, control_frequency, interpolation_order):
+        self.node = node
+        self.robot_type = robot_type
+        self.num_dof = num_dof
+        self.control_frequency = control_frequency
+        self.interpolation_order = interpolation_order
+        self.control_started = True
+        self.joy_key = None
+        self.key_count = 0
+        self.q_pos = np.zeros(num_dof, dtype=np.float32)
+        self.q_vel = np.zeros(num_dof, dtype=np.float32)
+        self.angular_velocity = np.zeros(3, dtype=np.float32)
+        self.quat = np.array([1.0, 0.0, 0.0, 0.0], dtype=np.float32)
+        self.default_cmd_calls = []
+
+    def set_default_cmd(self, default_pos=None, default_kp=None, default_kd=None):
+        self.default_pos = np.array(default_pos, dtype=np.float32, copy=True)
+        self.default_kp = np.array(default_kp, dtype=np.float32, copy=True)
+        self.default_kd = np.array(default_kd, dtype=np.float32, copy=True)
+        self.default_cmd_calls.append((self.default_pos, self.default_kp, self.default_kd))
+
+    def update_robot_state(self):
+        pass
+
+
+class _FakePolicy:
+    def __init__(self, cfg):
+        self.cfg = cfg
+
+
+def load_tray_hold_controller_module():
+    robot_bridge_py_stub = types.ModuleType("robot_bridge_py")
+    robot_client_stub = types.ModuleType("robot_bridge_py.robot_client")
+    robot_client_stub.RobotClient = _FakeRobotClient
+    policy_stub = types.ModuleType("utils.policy")
+    policy_stub.Policy = _FakePolicy
+    rclpy_stub = types.ModuleType("rclpy")
+
+    sys.modules["robot_bridge_py"] = robot_bridge_py_stub
+    sys.modules["robot_bridge_py.robot_client"] = robot_client_stub
+    sys.modules["utils.policy"] = policy_stub
+    sys.modules["rclpy"] = rclpy_stub
+    sys.path.insert(0, str(EXAMPLE_DIR))
+
+    module_path = EXAMPLE_DIR / "T1_tray_hold_example.py"
+    spec = importlib.util.spec_from_file_location("T1_tray_hold_example", module_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def test_tray_hold_config_fixes_upper_body_for_tray_and_uses_lower_body_policy():
@@ -94,3 +166,32 @@ def test_tray_hold_controller_persists_arm_hold_target_after_ramp_finishes():
     assert "self.arm_hold_pos[self.arm_joint_indices]" in controller_src
     assert "q_des[self.arm_joint_indices] = self.arm_hold_pos[self.arm_joint_indices]" in controller_src
     assert "lower_tray" in controller_src
+
+
+def test_tray_hold_controller_resets_to_prepare_state_when_control_stops():
+    module = load_tray_hold_controller_module()
+    cfg_path = EXAMPLE_DIR / "configs" / "T1_tray_hold.yaml"
+    with cfg_path.open("r", encoding="utf-8") as f:
+        cfg = yaml.load(f.read(), Loader=yaml.FullLoader)
+    controller = module.RobotController(_FakeNode(), cfg)
+    controller.agent_started = True
+    controller.vx_cmd = 0.2
+    controller.vy_cmd = -0.1
+    controller.vyaw_cmd = 0.3
+    controller.arm_mode = module.ArmPoseMode.RAISED_FRONT
+    controller.arm_hold_pos = np.array(controller.raised_front_tray_pos, dtype=np.float32, copy=True)
+    controller.arm_startup_ramp.active = True
+    controller.robot.control_started = False
+
+    controller.check_state()
+
+    assert controller.agent_started is False
+    assert controller.vx_cmd == 0.0
+    assert controller.vy_cmd == 0.0
+    assert controller.vyaw_cmd == 0.0
+    assert controller.arm_mode == module.ArmPoseMode.READY
+    assert controller.arm_startup_ramp.active is False
+    np.testing.assert_allclose(controller.arm_hold_pos, controller.prepare_pos)
+    np.testing.assert_allclose(controller.robot.default_pos, controller.prepare_pos)
+    np.testing.assert_allclose(controller.robot.default_kp, controller.prepare_kp)
+    np.testing.assert_allclose(controller.robot.default_kd, controller.prepare_kd)

@@ -78,6 +78,20 @@ class RobotController:
         self.arm_hold_pos = np.array(target_pos, dtype=np.float32, copy=True)
         self.arm_startup_ramp.start(self.robot.q_pos, self.arm_hold_pos, time.monotonic())
         self.arm_mode = arm_mode
+
+    def reset_to_prepare_state(self):
+        self.agent_started = False
+        self.vx_cmd = 0.0
+        self.vy_cmd = 0.0
+        self.vyaw_cmd = 0.0
+        self.arm_mode = ArmPoseMode.READY
+        self.arm_hold_pos = np.array(self.prepare_pos, dtype=np.float32, copy=True)
+        self.arm_startup_ramp.cancel()
+        self.robot.set_default_cmd(
+            default_pos=self.prepare_pos,
+            default_kp=self.prepare_kp,
+            default_kd=self.prepare_kd,
+        )
     
     def convert_quat_to_rot_mat(self, quat):
         """
@@ -181,10 +195,7 @@ class RobotController:
             self.robot.key_count = 0 # Reset true_count after processing
 
         if not self.robot.control_started:
-            self.agent_started = False
-            self.arm_mode = ArmPoseMode.READY
-            self.arm_hold_pos = np.array(self.init_pos, dtype=np.float32, copy=True)
-            self.arm_startup_ramp.cancel()
+            self.reset_to_prepare_state()
 
 
 if __name__ == "__main__":
