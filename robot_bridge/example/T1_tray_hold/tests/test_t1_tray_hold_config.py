@@ -5,14 +5,14 @@ import yaml
 
 EXAMPLE_DIR = Path(__file__).resolve().parents[1]
 TRAY_UPPER_BODY_QPOS = [
-    0.0,
+    -0.5236,
     -1.5708,
     0.0,
-    -1.5708,
-    0.0,
+    -1.0472,
+    -0.5236,
     1.5708,
     0.0,
-    1.5708,
+    1.0472,
 ]
 RAISED_FRONT_TRAY_UPPER_BODY_QPOS = [
     -1.5708,
