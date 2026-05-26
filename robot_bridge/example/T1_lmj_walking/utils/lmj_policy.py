@@ -5,9 +5,17 @@ import numpy as np
 
 
 ACTOR_OBSERVATION_DIM = 81
+ACTOR_OBSERVATION_DIM_WITH_HEIGHT = 81
+ACTOR_OBSERVATION_DIM_WITHOUT_HEIGHT = 80
+SUPPORTED_ACTOR_OBSERVATION_DIMS = (ACTOR_OBSERVATION_DIM_WITHOUT_HEIGHT, ACTOR_OBSERVATION_DIM_WITH_HEIGHT)
 ACTION_DIM = 23
 FULL_OBSERVATION_DIM = 159
+FULL_OBSERVATION_DIM_WITH_HEIGHT = 159
+FULL_OBSERVATION_DIM_WITHOUT_HEIGHT = 158
+SUPPORTED_FULL_OBSERVATION_DIMS = (FULL_OBSERVATION_DIM_WITHOUT_HEIGHT, FULL_OBSERVATION_DIM_WITH_HEIGHT)
 DEFAULT_ACTOR_INDICES = np.arange(78, 159, dtype=np.int64)
+DEFAULT_INCLUDE_HEIGHT_IN_OBS = True
+POLICY_OBSERVATION_START_INDEX = 78
 
 JOINT_NAMES = [
     "AAHead_yaw",
@@ -43,6 +51,25 @@ def _as_vector(name, values, length):
     return arr
 
 
+def _as_supported_actor_vector(name, values):
+    arr = np.asarray(values, dtype=np.float32)
+    if arr.ndim != 1 or arr.shape[0] not in SUPPORTED_ACTOR_OBSERVATION_DIMS:
+        raise ValueError(
+            f"{name} must be a 1-D vector with length {SUPPORTED_ACTOR_OBSERVATION_DIMS}, got {arr.shape}"
+        )
+    return arr
+
+
+def expected_actor_indices(observation_dim):
+    if observation_dim not in SUPPORTED_ACTOR_OBSERVATION_DIMS:
+        raise ValueError(f"Unsupported actor observation dim: {observation_dim}")
+    return np.arange(
+        POLICY_OBSERVATION_START_INDEX,
+        POLICY_OBSERVATION_START_INDEX + int(observation_dim),
+        dtype=np.int64,
+    )
+
+
 def elu(x):
     return np.where(x > 0.0, x, np.expm1(x))
 
@@ -72,18 +99,32 @@ def projected_gravity_from_quat_wxyz(quat):
 
 
 def slice_actor_running_stats(full_mean, full_var, actor_indices=DEFAULT_ACTOR_INDICES):
-    full_mean = _as_vector("full_mean", full_mean, FULL_OBSERVATION_DIM)
-    full_var = _as_vector("full_var", full_var, FULL_OBSERVATION_DIM)
+    full_mean = np.asarray(full_mean, dtype=np.float32)
+    full_var = np.asarray(full_var, dtype=np.float32)
+    if full_mean.ndim != 1 or full_mean.shape[0] not in SUPPORTED_FULL_OBSERVATION_DIMS:
+        raise ValueError(
+            f"full_mean must be a 1-D vector with length {SUPPORTED_FULL_OBSERVATION_DIMS}, got {full_mean.shape}"
+        )
+    if full_var.shape != full_mean.shape:
+        raise ValueError(f"full_var shape {full_var.shape} does not match full_mean shape {full_mean.shape}")
     actor_indices = np.asarray(actor_indices, dtype=np.int64)
-    if actor_indices.shape != (ACTOR_OBSERVATION_DIM,):
-        raise ValueError(f"actor_indices must have shape ({ACTOR_OBSERVATION_DIM},), got {actor_indices.shape}")
+    if actor_indices.ndim != 1 or actor_indices.shape[0] not in SUPPORTED_ACTOR_OBSERVATION_DIMS:
+        raise ValueError(
+            f"actor_indices must be a 1-D vector with length {SUPPORTED_ACTOR_OBSERVATION_DIMS}, got {actor_indices.shape}"
+        )
+    if not np.array_equal(actor_indices, expected_actor_indices(actor_indices.shape[0])):
+        raise ValueError("actor_indices must select the contiguous policy+goal tail")
+    if actor_indices[-1] >= full_mean.shape[0]:
+        raise ValueError(f"actor_indices exceed full observation dim {full_mean.shape[0]}")
     return full_mean[actor_indices].astype(np.float32), full_var[actor_indices].astype(np.float32)
 
 
 def normalize_actor_observation(obs, mean, var):
-    obs = _as_vector("obs", obs, ACTOR_OBSERVATION_DIM)
-    mean = _as_vector("mean", mean, ACTOR_OBSERVATION_DIM)
-    var = _as_vector("var", var, ACTOR_OBSERVATION_DIM)
+    obs = _as_supported_actor_vector("obs", obs)
+    mean = _as_supported_actor_vector("mean", mean)
+    var = _as_supported_actor_vector("var", var)
+    if obs.shape != mean.shape or obs.shape != var.shape:
+        raise ValueError(f"obs, mean, and var must have the same shape, got {obs.shape}, {mean.shape}, {var.shape}")
     return ((obs - mean) / np.sqrt(var + 1.0e-8)).astype(np.float32)
 
 
@@ -97,6 +138,7 @@ def build_actor_observation(
     time_now,
     goal_height,
     gait_frequency,
+    include_height_in_obs=DEFAULT_INCLUDE_HEIGHT_IN_OBS,
 ):
     projected_gravity = _as_vector("projected_gravity", projected_gravity, 3)
     dof_pos = _as_vector("dof_pos", dof_pos, ACTION_DIM)
@@ -108,17 +150,16 @@ def build_actor_observation(
     effective_gait_frequency = 0.0 if np.linalg.norm(command) < 1.0e-8 else float(gait_frequency)
     gait_process = math.fmod(float(time_now) * effective_gait_frequency, 1.0)
     phase_scale = 1.0 if effective_gait_frequency > 1.0e-8 else 0.0
-    goal = np.array(
+    goal_values = [command[0], command[1], command[2]]
+    if include_height_in_obs:
+        goal_values.append(float(goal_height))
+    goal_values.extend(
         [
-            command[0],
-            command[1],
-            command[2],
-            float(goal_height),
             math.cos(2.0 * math.pi * gait_process) * phase_scale,
             math.sin(2.0 * math.pi * gait_process) * phase_scale,
-        ],
-        dtype=np.float32,
+        ]
     )
+    goal = np.array(goal_values, dtype=np.float32)
 
     obs = np.concatenate(
         [
@@ -130,8 +171,9 @@ def build_actor_observation(
             goal,
         ]
     ).astype(np.float32)
-    if obs.shape != (ACTOR_OBSERVATION_DIM,):
-        raise RuntimeError(f"Built observation has shape {obs.shape}, expected ({ACTOR_OBSERVATION_DIM},)")
+    expected_dim = ACTOR_OBSERVATION_DIM_WITH_HEIGHT if include_height_in_obs else ACTOR_OBSERVATION_DIM_WITHOUT_HEIGHT
+    if obs.shape != (expected_dim,):
+        raise RuntimeError(f"Built observation has shape {obs.shape}, expected ({expected_dim},)")
     return obs
 
 
@@ -143,8 +185,11 @@ class NumpyActor:
         ]
         if not self.weights:
             raise ValueError("weights must contain at least one layer")
-        self.mean = _as_vector("mean", mean, ACTOR_OBSERVATION_DIM)
-        self.var = _as_vector("var", var, ACTOR_OBSERVATION_DIM)
+        self.mean = _as_supported_actor_vector("mean", mean)
+        self.var = _as_supported_actor_vector("var", var)
+        if self.var.shape != self.mean.shape:
+            raise ValueError(f"var shape {self.var.shape} does not match mean shape {self.mean.shape}")
+        self.observation_dim = int(self.mean.shape[0])
         self.activation_name = str(activation)
         self.activation = _activation(self.activation_name)
         self.action_clip = float(action_clip)
@@ -154,9 +199,13 @@ class NumpyActor:
     def from_npz(cls, path):
         with np.load(path, allow_pickle=False) as data:
             actor_indices = np.asarray(data["actor_indices"], dtype=np.int64)
-            if not np.array_equal(actor_indices, DEFAULT_ACTOR_INDICES):
+            if actor_indices.ndim != 1 or actor_indices.shape[0] not in SUPPORTED_ACTOR_OBSERVATION_DIMS:
                 raise ValueError(
-                    "Actor artifact does not use the expected contiguous policy+goal indices 78:159"
+                    f"Actor artifact observation dim must be one of {SUPPORTED_ACTOR_OBSERVATION_DIMS}, got {actor_indices.shape}"
+                )
+            if not np.array_equal(actor_indices, expected_actor_indices(actor_indices.shape[0])):
+                raise ValueError(
+                    "Actor artifact does not use the expected contiguous policy+goal tail indices"
                 )
             weights = []
             layer_idx = 0
@@ -173,7 +222,7 @@ class NumpyActor:
             )
 
     def _validate_shapes(self):
-        expected_in = ACTOR_OBSERVATION_DIM
+        expected_in = self.observation_dim
         for idx, (kernel, bias) in enumerate(self.weights):
             if kernel.ndim != 2:
                 raise ValueError(f"kernel_{idx} must be 2-D, got {kernel.shape}")
@@ -208,6 +257,23 @@ class LMJWalkingPolicy:
         self.actor_path = self._resolve_example_path(self.actor_model)
         self.actor = NumpyActor.from_npz(self.actor_path)
         self.actor.action_clip = float(policy_cfg["control"].get("clip_actions", self.actor.action_clip))
+        self.include_height_in_obs = bool(policy_cfg.get("include_height_in_obs", DEFAULT_INCLUDE_HEIGHT_IN_OBS))
+        expected_actor_dim = (
+            ACTOR_OBSERVATION_DIM_WITH_HEIGHT
+            if self.include_height_in_obs
+            else ACTOR_OBSERVATION_DIM_WITHOUT_HEIGHT
+        )
+        if self.actor.observation_dim != expected_actor_dim:
+            raise ValueError(
+                f"Config include_height_in_obs={self.include_height_in_obs} expects actor dim "
+                f"{expected_actor_dim}, got {self.actor.observation_dim}"
+            )
+        configured_num_observations = int(policy_cfg.get("num_observations", self.actor.observation_dim))
+        if configured_num_observations != self.actor.observation_dim:
+            raise ValueError(
+                f"Config num_observations={configured_num_observations} does not match actor dim "
+                f"{self.actor.observation_dim}"
+            )
         self.gait_frequency = float(policy_cfg["gait_frequency"])
         self.goal_height = float(policy_cfg["goal_height"])
         self.action_scale = float(policy_cfg["control"]["action_scale"])
@@ -225,7 +291,7 @@ class LMJWalkingPolicy:
         self.smoothed_commands = np.zeros(3, dtype=np.float32)
         self.last_action = np.zeros(ACTION_DIM, dtype=np.float32)
         self.dof_targets = np.copy(self.default_dof_pos)
-        self.last_observation = np.zeros(ACTOR_OBSERVATION_DIM, dtype=np.float32)
+        self.last_observation = np.zeros(self.actor.observation_dim, dtype=np.float32)
 
     def _resolve_example_path(self, path):
         path = Path(path).expanduser()
@@ -258,6 +324,7 @@ class LMJWalkingPolicy:
             time_now=time_now,
             goal_height=self.goal_height,
             gait_frequency=self.gait_frequency,
+            include_height_in_obs=self.include_height_in_obs,
         )
         action = self.actor(obs)
         self.last_observation[:] = obs

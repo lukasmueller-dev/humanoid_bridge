@@ -19,6 +19,7 @@ JOINT_WRAPPER_RUN_NAME = "joint_wrapper_tm4xonfx"
 SLIPPERY_FLOOR_KP50_RUN_NAME = "slippery_floor_kp50_jpiazpg2"
 SYMANKLE_YAWDRIFT_RUN_NAME = "t1_no_parajoints_slippery_ankle_noise_symankle_yawdrift_m0p75_1p2b_hfa93i45"
 HFA93I45_PLUS_PUSH_RUN_NAME = "hfa93i45_plus_push_full"
+FACTS_CONTEXT_DISABLED_RUN_NAME = "v0_2_A0_context_disabled_full_dr_1p2B"
 
 
 def load_example_module():
@@ -70,6 +71,55 @@ def test_build_actor_observation_uses_expected_81d_sequence():
     np.testing.assert_allclose(obs[80], np.sin(2.0 * np.pi * 0.125), rtol=1e-6)
 
 
+def test_build_actor_observation_can_omit_height_for_80d_sequence():
+    gravity = np.array([0.1, 0.2, -0.97], dtype=np.float32)
+    dof_pos = np.linspace(-0.3, 0.3, 23, dtype=np.float32)
+    dof_vel = np.linspace(-2.0, 2.0, 23, dtype=np.float32)
+    base_ang_vel = np.array([0.4, -0.5, 0.6], dtype=np.float32)
+    last_action = np.linspace(-1.0, 1.0, 23, dtype=np.float32)
+    command = np.array([0.3, -0.2, 0.4], dtype=np.float32)
+
+    obs = lmj_policy.build_actor_observation(
+        projected_gravity=gravity,
+        dof_pos=dof_pos,
+        dof_vel=dof_vel,
+        base_ang_vel=base_ang_vel,
+        last_action=last_action,
+        command=command,
+        time_now=0.1,
+        goal_height=0.68,
+        gait_frequency=1.5,
+        include_height_in_obs=False,
+    )
+
+    assert obs.shape == (80,)
+    np.testing.assert_allclose(obs[0:3], gravity)
+    np.testing.assert_allclose(obs[3:26], dof_pos)
+    np.testing.assert_allclose(obs[26:29], base_ang_vel)
+    np.testing.assert_allclose(obs[29:52], dof_vel * 0.1)
+    np.testing.assert_allclose(obs[52:75], last_action)
+    np.testing.assert_allclose(obs[75:78], command)
+    np.testing.assert_allclose(obs[78], np.cos(2.0 * np.pi * 0.15), rtol=1e-6)
+    np.testing.assert_allclose(obs[79], np.sin(2.0 * np.pi * 0.15), rtol=1e-6)
+
+
+def test_build_actor_observation_includes_height_by_default():
+    obs = lmj_policy.build_actor_observation(
+        projected_gravity=np.array([0.0, 0.0, -1.0], dtype=np.float32),
+        dof_pos=np.zeros(23, dtype=np.float32),
+        dof_vel=np.zeros(23, dtype=np.float32),
+        base_ang_vel=np.zeros(3, dtype=np.float32),
+        last_action=np.zeros(23, dtype=np.float32),
+        command=np.array([0.1, 0.0, 0.0], dtype=np.float32),
+        time_now=0.0,
+        goal_height=0.67,
+        gait_frequency=1.25,
+    )
+
+    assert obs.shape == (81,)
+    assert obs[78] == np.float32(0.67)
+
+
 def test_build_actor_observation_zeros_phase_for_stand_command():
     obs = lmj_policy.build_actor_observation(
         projected_gravity=np.array([0.0, 0.0, -1.0], dtype=np.float32),
@@ -99,6 +149,19 @@ def test_slice_actor_running_stats_selects_policy_goal_tail():
     assert var.shape == (81,)
     np.testing.assert_array_equal(mean, np.arange(78, 159, dtype=np.float32))
     np.testing.assert_array_equal(var, np.arange(79, 160, dtype=np.float32))
+
+
+def test_slice_actor_running_stats_supports_policy_goal_tail_without_height():
+    full_mean = np.arange(158, dtype=np.float32)
+    full_var = np.arange(158, dtype=np.float32) + 1.0
+    actor_indices = np.arange(78, 158)
+
+    mean, var = lmj_policy.slice_actor_running_stats(full_mean, full_var, actor_indices)
+
+    assert mean.shape == (80,)
+    assert var.shape == (80,)
+    np.testing.assert_array_equal(mean, np.arange(78, 158, dtype=np.float32))
+    np.testing.assert_array_equal(var, np.arange(79, 159, dtype=np.float32))
 
 
 def test_numpy_actor_normalizes_before_forwarding_layers():
@@ -142,6 +205,30 @@ def test_numpy_actor_normalizes_before_forwarding_layers():
     action = actor(obs)
 
     np.testing.assert_allclose(action, expected.astype(np.float32), rtol=1e-6)
+
+
+def test_numpy_actor_supports_80d_observations_without_height():
+    first_kernel = np.zeros((80, 2), dtype=np.float32)
+    first_kernel[0, :] = [1.0, -1.0]
+    final_kernel = np.zeros((2, 23), dtype=np.float32)
+    final_kernel[:, 0] = [1.0, -2.0]
+    actor = lmj_policy.NumpyActor(
+        weights=[
+            (first_kernel, np.zeros(2, dtype=np.float32)),
+            (final_kernel, np.zeros(23, dtype=np.float32)),
+        ],
+        mean=np.zeros(80, dtype=np.float32),
+        var=np.ones(80, dtype=np.float32),
+        activation="elu",
+        action_clip=1.0,
+    )
+
+    obs = np.zeros(80, dtype=np.float32)
+    obs[0] = 0.5
+    action = actor(obs)
+
+    assert action.shape == (23,)
+    assert actor.observation_dim == 80
 
 
 def test_parajoints_deployment_config_selects_run_model_and_ankle_gains():
@@ -246,6 +333,53 @@ def test_hfa93i45_plus_push_full_deployment_config_matches_training_control_sett
     assert cfg["policy"]["control"]["clip_actions"] == 1.0
     assert cfg["policy"]["gait_frequency"] == 1.25
     assert cfg["policy"]["goal_height"] == 0.67
+    assert cfg["command"]["limit"] == {
+        "x": [-0.2, 0.3],
+        "y": [-0.2, 0.2],
+        "yaw": [-0.3, 0.3],
+    }
+
+
+def test_facts_context_disabled_deployment_config_matches_80d_training_settings():
+    cfg_path = EXAMPLE_DIR / "configs" / f"T1_lmj_walking_{FACTS_CONTEXT_DISABLED_RUN_NAME}.yaml"
+
+    with cfg_path.open("r", encoding="utf-8") as f:
+        cfg = yaml.load(f.read(), Loader=yaml.FullLoader)
+
+    assert cfg["policy"]["actor_path"] == f"models/{FACTS_CONTEXT_DISABLED_RUN_NAME}_actor_80d.npz"
+    assert cfg["policy"]["source_checkpoint_path"] == f"models/{FACTS_CONTEXT_DISABLED_RUN_NAME}.pkl"
+    assert (EXAMPLE_DIR / cfg["policy"]["actor_path"]).is_file()
+    assert (EXAMPLE_DIR / cfg["policy"]["source_checkpoint_path"]).is_file()
+    assert cfg["policy"]["include_height_in_obs"] is False
+    assert cfg["policy"]["num_observations"] == 80
+    assert cfg["common"]["stiffness"] == [
+        20.0, 20.0,
+        20.0, 20.0, 20.0, 20.0,
+        20.0, 20.0, 20.0, 20.0,
+        200.0,
+        200.0, 200.0, 200.0, 200.0, 50.0, 50.0,
+        200.0, 200.0, 200.0, 200.0, 50.0, 50.0,
+    ]
+    assert cfg["common"]["damping"] == [
+        0.2, 0.2,
+        0.5, 0.5, 0.5, 0.5,
+        0.5, 0.5, 0.5, 0.5,
+        5.0,
+        5.0, 5.0, 5.0, 5.0, 1.0, 1.0,
+        5.0, 5.0, 5.0, 5.0, 1.0, 1.0,
+    ]
+    assert cfg["common"]["default_qpos"] == [
+        0.0, 0.0,
+        0.2, -1.35, 0.0, -0.5,
+        0.2, 1.35, 0.0, 0.5,
+        0.0,
+        -0.2, 0.0, 0.0, 0.4, -0.25, 0.0,
+        -0.2, 0.0, 0.0, 0.4, -0.25, 0.0,
+    ]
+    assert cfg["policy"]["control"]["action_scale"] == 1.0
+    assert cfg["policy"]["control"]["clip_actions"] == 1.0
+    assert cfg["policy"]["gait_frequency"] == 1.5
+    assert cfg["policy"]["goal_height"] == 0.68
     assert cfg["command"]["limit"] == {
         "x": [-0.2, 0.3],
         "y": [-0.2, 0.2],

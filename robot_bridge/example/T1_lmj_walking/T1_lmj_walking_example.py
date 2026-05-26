@@ -126,7 +126,8 @@ class RobotController:
         smoothed_command = self.policy.smoothed_commands.copy()
         effective_gait_frequency = 0.0 if np.linalg.norm(smoothed_command) < 1.0e-8 else self.policy.gait_frequency
         gait_process = math.fmod(float(time_now) * effective_gait_frequency, 1.0)
-        goal_6 = obs_81[-6:]
+        goal_dim = 6 if self.policy.include_height_in_obs else 5
+        goal = obs_81[-goal_dim:]
 
         self.debug_step_count += 1
         self.debug_log.write(
@@ -149,7 +150,8 @@ class RobotController:
                     "last_action_input": last_action_input.tolist(),
                     "obs_81": obs_81.tolist(),
                     "norm_obs_81": norm_obs_81.tolist(),
-                    "goal_6": goal_6.tolist(),
+                    "goal": goal.tolist(),
+                    "goal_dim": goal_dim,
                     "gait_process": float(gait_process),
                     "effective_gait_frequency": float(effective_gait_frequency),
                     "raw_action_preclip": raw_action_preclip.tolist(),
@@ -191,6 +193,8 @@ class RobotController:
                     "kd": self.policy_kd.tolist(),
                     "action_scale": float(self.policy.action_scale),
                     "action_clip": float(self.policy.actor.action_clip),
+                    "actor_observation_dim": int(self.policy.actor.observation_dim),
+                    "include_height_in_obs": bool(self.policy.include_height_in_obs),
                     "target_qpos_lower": self.policy.target_qpos_lower.tolist(),
                     "target_qpos_upper": self.policy.target_qpos_upper.tolist(),
                     "mean_81": self.policy.actor.mean.tolist(),
