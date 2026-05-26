@@ -1,0 +1,271 @@
+import argparse
+import hashlib
+import json
+import time
+from datetime import datetime
+from pathlib import Path
+
+import numpy as np
+import rclpy
+import yaml
+from robot_bridge_py.robot_client import RobotClient
+from utils.balance_board_policy import (
+    JOINT_NAMES,
+    BalanceBoardPolicy,
+    normalize_observation,
+    projected_gravity_from_quat_wxyz,
+)
+
+
+DEFAULT_CONFIG_FILE = "src/humanoid_bridge/robot_bridge/example/t1_balance_board/configs/t1_balance_board.yaml"
+
+
+def parse_args(argv=None):
+    parser = argparse.ArgumentParser(description="Run the Booster T1 balance-board policy bridge.")
+    parser.add_argument(
+        "--config",
+        default=DEFAULT_CONFIG_FILE,
+        help="Path to the balance-board YAML config. Relative paths are checked from cwd, then this example directory.",
+    )
+    return parser.parse_args(argv)
+
+
+def resolve_config_path(config_path):
+    path = Path(config_path).expanduser()
+    if path.is_absolute() or path.exists():
+        return path
+    example_relative = Path(__file__).resolve().parent / path
+    if example_relative.exists():
+        return example_relative
+    return path
+
+
+class RobotController:
+    def __init__(self, node, cfg):
+        self.node = node
+        self.cfg = cfg
+        self.robot = RobotClient(
+            node=self.node,
+            robot_type="T1",
+            num_dof=23,
+            control_frequency=50.0,
+            interpolation_order=0.8,
+        )
+        self.timer = self.node.create_timer(0.02, self.step)
+        self.policy = BalanceBoardPolicy(cfg=cfg)
+
+        self.init_pos = np.array(cfg["common"]["default_qpos"], dtype=np.float32)
+        self.policy_kp = np.array(cfg["common"]["stiffness"], dtype=np.float32)
+        self.policy_kd = np.array(cfg["common"]["damping"], dtype=np.float32)
+        self.robot.set_default_cmd(default_pos=self.init_pos, default_kp=self.policy_kp, default_kd=self.policy_kd)
+
+        self.agent_started = False
+        self.policy_start_time = None
+        self.last_policy_time = None
+        self.debug_step_count = 0
+        debug_dir = Path(__file__).resolve().parent / "debug_logs"
+        debug_dir.mkdir(parents=True, exist_ok=True)
+        model_name = "".join(
+            char if char.isalnum() or char in ("-", "_") else "_" for char in self.policy.actor_path.stem
+        )
+        debug_path = debug_dir / f"balance_board_debug_{model_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jsonl"
+        self.debug_log = debug_path.open("w", encoding="utf-8")
+        self._write_debug_metadata()
+        print(
+            "Please press\n"
+            "\t \"LT + RT + START\" to start bridge control in the balance-board initial pose,\n"
+            "\t \"LT + A\" to start balance-board inference,\n"
+            "\t \"BACK\" to stop control,\n"
+            "\t \"LB\" for ready position,\n"
+            "\t \"RB\" for zero position,\n"
+            "\t \"LT + BACK\" for emergency stop."
+        )
+
+    def step(self):
+        self.check_state()
+        if self.robot.control_started and self.agent_started:
+            self.policy_step()
+
+    def policy_step(self):
+        if self.policy_start_time is None:
+            self.policy_start_time = time.monotonic()
+        time_now = time.monotonic() - self.policy_start_time
+        loop_dt = None if self.last_policy_time is None else time_now - self.last_policy_time
+
+        q_pos = np.asarray(self.robot.q_pos, dtype=np.float32).copy()
+        q_vel = np.asarray(self.robot.q_vel, dtype=np.float32).copy()
+        quat_wxyz = np.asarray(self.robot.quat, dtype=np.float32).copy()
+        base_ang_vel = np.asarray(self.robot.angular_velocity, dtype=np.float32).copy()
+        last_action_input = self.policy.last_action.copy()
+        last_policy_prediction_input = self.policy.policy_prediction.copy()
+        projected_gravity = projected_gravity_from_quat_wxyz(quat_wxyz)
+
+        q_des = self.policy.inference(
+            dof_pos=q_pos,
+            dof_vel=q_vel,
+            base_ang_vel=base_ang_vel,
+            projected_gravity=projected_gravity,
+        )
+        obs_97 = self.policy.last_actor_observation.copy()
+        norm_obs_97 = normalize_observation(obs_97, self.policy.actor.mean, self.policy.actor.var)
+        raw_action_preclip = self._actor_forward_raw_from_normalized(norm_obs_97)
+        action_postclip = self.policy.last_action.copy()
+        q_des_preclip = self.policy.default_dof_pos + self.policy.action_scale * action_postclip
+        clip_mask_low = q_des_preclip < self.policy.target_qpos_lower
+        clip_mask_high = q_des_preclip > self.policy.target_qpos_upper
+
+        self.debug_step_count += 1
+        self.debug_log.write(
+            json.dumps(
+                {
+                    "event": "policy_step",
+                    "step": self.debug_step_count,
+                    "wall_time": datetime.now().isoformat(timespec="milliseconds"),
+                    "policy_time": float(time_now),
+                    "loop_dt": None if loop_dt is None else float(loop_dt),
+                    "model": self.policy.actor_model,
+                    "model_path": str(self.policy.actor_path),
+                    "predictor_path": str(self.policy.predictor_path),
+                    "quat_wxyz": quat_wxyz.tolist(),
+                    "projected_gravity": projected_gravity.tolist(),
+                    "base_ang_vel": base_ang_vel.tolist(),
+                    "qpos": q_pos.tolist(),
+                    "qvel": q_vel.tolist(),
+                    "last_action_input": last_action_input.tolist(),
+                    "last_policy_prediction_input": last_policy_prediction_input.tolist(),
+                    "obs_97": obs_97.tolist(),
+                    "norm_obs_97": norm_obs_97.tolist(),
+                    "policy_prediction": self.policy.policy_prediction.tolist(),
+                    "raw_action_preclip": raw_action_preclip.tolist(),
+                    "action_postclip": action_postclip.tolist(),
+                    "action": action_postclip.tolist(),
+                    "q_des_preclip": q_des_preclip.tolist(),
+                    "q_des": q_des.tolist(),
+                    "clip_mask_low": clip_mask_low.tolist(),
+                    "clip_mask_high": clip_mask_high.tolist(),
+                    "qpos_minus_default": (q_pos - self.policy.default_dof_pos).tolist(),
+                    "q_des_minus_qpos": (q_des - q_pos).tolist(),
+                }
+            )
+            + "\n"
+        )
+        self.debug_log.flush()
+        self.last_policy_time = time_now
+
+        self.robot.send_cmd(q_target_pos=q_des, target_kp=self.policy_kp, target_kd=self.policy_kd)
+
+    def _write_debug_metadata(self):
+        with np.load(self.policy.actor_path, allow_pickle=False) as actor_data:
+            actor_indices = np.asarray(actor_data["actor_indices"], dtype=np.int64).tolist()
+        with np.load(self.policy.predictor_path, allow_pickle=False) as predictor_data:
+            history_obs_indices = np.asarray(predictor_data["history_obs_indices"], dtype=np.int64).tolist()
+            predictor_obs_indices = np.asarray(predictor_data["predictor_obs_indices"], dtype=np.int64).tolist()
+            policy_prediction_obs_indices = np.asarray(
+                predictor_data["policy_prediction_obs_indices"],
+                dtype=np.int64,
+            ).tolist()
+
+        self.debug_log.write(
+            json.dumps(
+                {
+                    "event": "metadata",
+                    "wall_time": datetime.now().isoformat(timespec="milliseconds"),
+                    "model": self.policy.actor_model,
+                    "model_path": str(self.policy.actor_path),
+                    "actor_sha256": self._sha256_file(self.policy.actor_path),
+                    "predictor_path": str(self.policy.predictor_path),
+                    "predictor_sha256": self._sha256_file(self.policy.predictor_path),
+                    "actor_indices": actor_indices,
+                    "history_obs_indices": history_obs_indices,
+                    "predictor_obs_indices": predictor_obs_indices,
+                    "policy_prediction_obs_indices": policy_prediction_obs_indices,
+                    "joint_names": JOINT_NAMES,
+                    "default_qpos": self.policy.default_dof_pos.tolist(),
+                    "kp": self.policy_kp.tolist(),
+                    "kd": self.policy_kd.tolist(),
+                    "action_scale": float(self.policy.action_scale),
+                    "action_clip": float(self.policy.actor.action_clip),
+                    "actor_observation_dim": int(self.policy.actor.observation_dim),
+                    "full_observation_dim": 191,
+                    "history_length": int(self.policy.predictor.history_length),
+                    "target_qpos_lower": self.policy.target_qpos_lower.tolist(),
+                    "target_qpos_upper": self.policy.target_qpos_upper.tolist(),
+                    "mean_97": self.policy.actor.mean.tolist(),
+                    "var_97": self.policy.actor.var.tolist(),
+                    "mean_97_min": float(np.min(self.policy.actor.mean)),
+                    "mean_97_max": float(np.max(self.policy.actor.mean)),
+                    "var_97_min": float(np.min(self.policy.actor.var)),
+                    "var_97_max": float(np.max(self.policy.actor.var)),
+                    "goal_height": float(self.policy.goal_height),
+                    "parallel_mech_indexes": self.cfg.get("mech", {}).get("parallel_mech_indexes", []),
+                }
+            )
+            + "\n"
+        )
+        self.debug_log.flush()
+
+    def _actor_forward_raw_from_normalized(self, norm_obs):
+        x = np.asarray(norm_obs, dtype=np.float32)
+        for kernel, bias in self.policy.actor.weights[:-1]:
+            x = self.policy.actor.activation(x @ kernel + bias)
+        kernel, bias = self.policy.actor.weights[-1]
+        return (x @ kernel + bias).astype(np.float32)
+
+    def _sha256_file(self, path):
+        digest = hashlib.sha256()
+        with path.open("rb") as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    def close_debug_log(self):
+        if not self.debug_log.closed:
+            self.debug_log.close()
+
+    def _start_agent(self):
+        self.agent_started = True
+        self.policy_start_time = time.monotonic()
+        self.last_policy_time = None
+        self.policy.reset()
+        self.node.get_logger().info("Balance-board agent started.")
+
+    def reset_to_prepare_state(self):
+        self.agent_started = False
+        self.policy_start_time = None
+        self.last_policy_time = None
+        self.policy.reset()
+        self.robot.set_default_cmd(default_pos=self.init_pos, default_kp=self.policy_kp, default_kd=self.policy_kd)
+
+    def check_state(self):
+        self.robot.update_robot_state()
+
+        if self.robot.joy_key is not None:
+            if self.robot.joy_key.lt and self.robot.joy_key.a and self.robot.key_count == 2:
+                if self.robot.control_started:
+                    self._start_agent()
+                else:
+                    self.node.get_logger().warn("Start bridge control first with LT + RT + START.")
+
+            self.robot.joy_key = None
+            self.robot.key_count = 0
+
+        if not self.robot.control_started:
+            self.reset_to_prepare_state()
+
+
+if __name__ == "__main__":
+    args = parse_args()
+    rclpy.init()
+    cfg_file = resolve_config_path(args.config)
+    with cfg_file.open("r", encoding="utf-8") as f:
+        policy_cfg = yaml.load(f.read(), Loader=yaml.FullLoader)
+    node = rclpy.create_node("t1_balance_board_node")
+    controller = RobotController(node, policy_cfg)
+
+    try:
+        rclpy.spin(node)
+    finally:
+        controller.close_debug_log()
+
+    node.destroy_node()
+    rclpy.shutdown()
