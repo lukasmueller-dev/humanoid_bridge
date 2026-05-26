@@ -232,6 +232,66 @@ def test_numpy_actor_supports_80d_observations_without_height():
     assert actor.observation_dim == 80
 
 
+def test_lmj_walking_policy_can_lock_configured_joints_to_default(monkeypatch):
+    class StaticActor:
+        observation_dim = lmj_policy.ACTOR_OBSERVATION_DIM_WITH_HEIGHT
+        action_clip = 1.0
+
+        def __init__(self, action):
+            self.action = np.asarray(action, dtype=np.float32)
+
+        def __call__(self, obs):
+            return np.copy(self.action)
+
+    default_qpos = np.linspace(-0.2, 0.2, lmj_policy.ACTION_DIM, dtype=np.float32)
+    actor_action = np.linspace(-0.5, 0.5, lmj_policy.ACTION_DIM, dtype=np.float32)
+    fixed_indexes = list(range(10))
+    actor = StaticActor(actor_action)
+    monkeypatch.setattr(lmj_policy.NumpyActor, "from_npz", classmethod(lambda cls, path: actor))
+
+    cfg = {
+        "common": {
+            "dt": 0.002,
+            "default_qpos": default_qpos.tolist(),
+            "stiffness": [1.0] * lmj_policy.ACTION_DIM,
+            "damping": [0.1] * lmj_policy.ACTION_DIM,
+        },
+        "policy": {
+            "actor_path": "models/fake_actor.npz",
+            "num_observations": lmj_policy.ACTOR_OBSERVATION_DIM_WITH_HEIGHT,
+            "gait_frequency": 1.25,
+            "goal_height": 0.67,
+            "control": {
+                "action_scale": 1.0,
+                "clip_actions": 1.0,
+                "decimation": 10,
+                "fixed_default_joint_indexes": fixed_indexes,
+                "target_qpos_lower": [-10.0] * lmj_policy.ACTION_DIM,
+                "target_qpos_upper": [10.0] * lmj_policy.ACTION_DIM,
+            },
+        },
+    }
+    policy = lmj_policy.LMJWalkingPolicy(cfg)
+
+    targets = policy.inference(
+        time_now=0.0,
+        dof_pos=np.zeros(lmj_policy.ACTION_DIM, dtype=np.float32),
+        dof_vel=np.zeros(lmj_policy.ACTION_DIM, dtype=np.float32),
+        base_ang_vel=np.zeros(3, dtype=np.float32),
+        projected_gravity=np.array([0.0, 0.0, -1.0], dtype=np.float32),
+        vx=0.1,
+        vy=0.0,
+        vyaw=0.0,
+    )
+
+    np.testing.assert_allclose(targets[fixed_indexes], default_qpos[fixed_indexes])
+    np.testing.assert_allclose(
+        targets[10:],
+        default_qpos[10:] + actor_action[10:],
+    )
+    np.testing.assert_allclose(policy.last_action, actor_action)
+
+
 def test_parajoints_deployment_config_selects_run_model_and_ankle_gains():
     cfg_path = EXAMPLE_DIR / "configs" / f"T1_lmj_walking_{RUN_NAME}.yaml"
 
@@ -379,6 +439,7 @@ def test_facts_context_disabled_deployment_config_matches_80d_training_settings(
     ]
     assert cfg["policy"]["control"]["action_scale"] == 1.0
     assert cfg["policy"]["control"]["clip_actions"] == 1.0
+    assert cfg["policy"]["control"]["fixed_default_joint_indexes"] == list(range(10))
     assert cfg["policy"]["gait_frequency"] == 1.5
     assert cfg["policy"]["goal_height"] == 0.68
     assert cfg["command"]["limit"] == {
@@ -426,6 +487,7 @@ def test_mx_id_vanilla_ppo_deployment_config_matches_80d_training_settings():
     ]
     assert cfg["policy"]["control"]["action_scale"] == 1.0
     assert cfg["policy"]["control"]["clip_actions"] == 1.0
+    assert cfg["policy"]["control"]["fixed_default_joint_indexes"] == list(range(10))
     assert cfg["policy"]["gait_frequency"] == 1.5
     assert cfg["policy"]["goal_height"] == 0.68
     assert cfg["command"]["limit"] == {

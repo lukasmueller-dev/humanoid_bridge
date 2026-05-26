@@ -51,6 +51,17 @@ def _as_vector(name, values, length):
     return arr
 
 
+def _as_index_vector(name, values, length):
+    arr = np.asarray(values, dtype=np.int64)
+    if arr.ndim != 1:
+        raise ValueError(f"{name} must be a 1-D index vector, got {arr.shape}")
+    if np.any(arr < 0) or np.any(arr >= length):
+        raise ValueError(f"{name} contains indices outside [0, {length})")
+    if len(np.unique(arr)) != arr.shape[0]:
+        raise ValueError(f"{name} must not contain duplicate indices")
+    return arr
+
+
 def _as_supported_actor_vector(name, values):
     arr = np.asarray(values, dtype=np.float32)
     if arr.ndim != 1 or arr.shape[0] not in SUPPORTED_ACTOR_OBSERVATION_DIMS:
@@ -286,6 +297,11 @@ class LMJWalkingPolicy:
         self.target_qpos_upper = _as_vector(
             "policy.control.target_qpos_upper", policy_cfg["control"]["target_qpos_upper"], ACTION_DIM
         )
+        self.fixed_default_joint_indexes = _as_index_vector(
+            "policy.control.fixed_default_joint_indexes",
+            policy_cfg["control"].get("fixed_default_joint_indexes", []),
+            ACTION_DIM,
+        )
 
         self.commands = np.zeros(3, dtype=np.float32)
         self.smoothed_commands = np.zeros(3, dtype=np.float32)
@@ -332,4 +348,5 @@ class LMJWalkingPolicy:
 
         self.dof_targets[:] = self.default_dof_pos + self.action_scale * action
         self.dof_targets[:] = np.clip(self.dof_targets, self.target_qpos_lower, self.target_qpos_upper)
+        self.dof_targets[self.fixed_default_joint_indexes] = self.default_dof_pos[self.fixed_default_joint_indexes]
         return self.dof_targets
