@@ -16,6 +16,17 @@ SPEC.loader.exec_module(balance_board_policy)
 
 EXAMPLE_DIR = MODULE_PATH.parents[1]
 RUN_NAME = "balance_board_r14_easyDR_20260525_223940_CEST"
+NOMINAL_FLAT_BOARD_OBS = np.array(
+    [
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0,
+        0.0, 0.0,
+        0.09, 0.09, 0.09, 0.09,
+        0.09,
+    ],
+    dtype=np.float32,
+)
 
 
 def load_example_module(robot_client_cls=object):
@@ -119,7 +130,7 @@ def test_build_full_observation_uses_training_191d_layout():
     np.testing.assert_allclose(obs[104:107], base_ang_vel)
     np.testing.assert_allclose(obs[107:130], dof_vel * 0.1)
     np.testing.assert_allclose(obs[130:153], last_action)
-    np.testing.assert_allclose(obs[153:169], np.zeros(16, dtype=np.float32))
+    np.testing.assert_allclose(obs[153:169], NOMINAL_FLAT_BOARD_OBS)
     np.testing.assert_allclose(obs[169:185], policy_prediction)
     np.testing.assert_allclose(obs[185:191], np.array([0.0, 0.0, 0.0, 0.755, 0.0, 0.0], dtype=np.float32))
 
@@ -194,6 +205,7 @@ def test_balance_board_config_matches_training_control_settings():
     ]
     assert cfg["policy"]["control"]["action_scale"] == 1.0
     assert cfg["policy"]["control"]["clip_actions"] == 1.0
+    assert cfg["balance_board"]["raw_observation_source"] == "nominal_flat"
     assert cfg["debug"]["enabled"] is True
 
 
@@ -217,6 +229,32 @@ def test_balance_board_policy_smoke_updates_prediction_and_clips_targets():
     assert policy.history_initialized is True
     assert np.all(q_des >= policy.target_qpos_lower)
     assert np.all(q_des <= policy.target_qpos_upper)
+
+
+def test_balance_board_policy_initializes_history_with_nominal_flat_board_observation():
+    cfg_path = EXAMPLE_DIR / "configs" / "t1_balance_board.yaml"
+    with cfg_path.open("r", encoding="utf-8") as f:
+        cfg = yaml.load(f.read(), Loader=yaml.FullLoader)
+
+    policy = balance_board_policy.BalanceBoardPolicy(cfg)
+    policy.inference(
+        dof_pos=np.asarray(cfg["common"]["default_qpos"], dtype=np.float32),
+        dof_vel=np.zeros(23, dtype=np.float32),
+        base_ang_vel=np.zeros(3, dtype=np.float32),
+        projected_gravity=np.array([0.0, 0.0, -1.0], dtype=np.float32),
+    )
+
+    np.testing.assert_allclose(
+        policy.last_full_observation[
+            balance_board_policy.BALANCE_BOARD_RAW_SLICE
+        ],
+        NOMINAL_FLAT_BOARD_OBS,
+    )
+    np.testing.assert_allclose(
+        policy.history[:, balance_board_policy.BALANCE_BOARD_RAW_SLICE],
+        np.tile(NOMINAL_FLAT_BOARD_OBS, (policy.predictor.history_length, 1)),
+    )
+    np.testing.assert_allclose(policy.last_debug["balance_board_observation"], NOMINAL_FLAT_BOARD_OBS)
 
 
 def test_balance_board_policy_exposes_decoder_debug_snapshot_after_inference():

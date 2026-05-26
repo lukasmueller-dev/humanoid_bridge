@@ -10,6 +10,17 @@ BALANCE_BOARD_OBSERVATION_DIM = 16
 POLICY_PREDICTION_DIM = 16
 GOAL_DIM = 6
 DEFAULT_GOAL_HEIGHT = 0.755
+NOMINAL_FLAT_BALANCE_BOARD_OBSERVATION = np.array(
+    [
+        0.0, 0.0, 1.0,
+        0.0, 0.0, 0.0,
+        0.0, 0.0, 0.0,
+        0.0, 0.0,
+        0.09, 0.09, 0.09, 0.09,
+        0.09,
+    ],
+    dtype=np.float32,
+)
 
 PRIORITIZED_GRAVITY_SLICE = slice(0, 3)
 PRIORITIZED_JOINT_POS_SLICE = slice(3, 26)
@@ -129,7 +140,7 @@ def build_full_observation(
         base_lin_vel = np.zeros(3, dtype=np.float32)
     base_lin_vel = _as_vector("base_lin_vel", base_lin_vel, 3)
     if balance_board_observation is None:
-        balance_board_observation = np.zeros(BALANCE_BOARD_OBSERVATION_DIM, dtype=np.float32)
+        balance_board_observation = NOMINAL_FLAT_BALANCE_BOARD_OBSERVATION
     balance_board_observation = _as_vector(
         "balance_board_observation",
         balance_board_observation,
@@ -388,6 +399,13 @@ class BalanceBoardPolicy:
             )
 
         self.goal_height = float(policy_cfg["goal_height"])
+        balance_board_cfg = cfg.get("balance_board", {})
+        self.raw_observation_source = str(balance_board_cfg.get("raw_observation_source", "nominal_flat"))
+        if self.raw_observation_source not in {"nominal_flat", "zero"}:
+            raise ValueError(
+                "balance_board.raw_observation_source must be 'nominal_flat' or 'zero', "
+                f"got {self.raw_observation_source!r}"
+            )
         self.action_scale = float(policy_cfg["control"]["action_scale"])
         self.policy_interval = float(cfg["common"]["dt"]) * float(policy_cfg["control"]["decimation"])
         self.target_qpos_lower = _as_vector(
@@ -465,6 +483,11 @@ class BalanceBoardPolicy:
         self.history[:-1] = self.history[1:]
         self.history[-1] = full_observation
 
+    def _default_balance_board_observation(self):
+        if self.raw_observation_source == "zero":
+            return np.zeros(BALANCE_BOARD_OBSERVATION_DIM, dtype=np.float32)
+        return NOMINAL_FLAT_BALANCE_BOARD_OBSERVATION.copy()
+
     def inference(
         self,
         dof_pos,
@@ -479,7 +502,7 @@ class BalanceBoardPolicy:
         else:
             base_lin_vel = _as_vector("base_lin_vel", base_lin_vel, 3)
         if balance_board_observation is None:
-            balance_board_observation = np.zeros(BALANCE_BOARD_OBSERVATION_DIM, dtype=np.float32)
+            balance_board_observation = self._default_balance_board_observation()
         else:
             balance_board_observation = _as_vector(
                 "balance_board_observation",

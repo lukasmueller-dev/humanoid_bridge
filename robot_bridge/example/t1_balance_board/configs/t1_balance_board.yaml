@@ -57,8 +57,8 @@ policy:
     ]
 
 balance_board:
-  raw_observation_source: "zero"
-  note: "The deployed bridge has no board state estimator yet; the learned predictor fills policy_prediction_obs from robot history."
+  raw_observation_source: "nominal_flat"
+  note: "No real board state estimator is available yet; use the nominal flat reset board observation from training."
 
 debug:
   enabled: true
