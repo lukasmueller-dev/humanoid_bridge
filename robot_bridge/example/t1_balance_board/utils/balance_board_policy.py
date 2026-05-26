@@ -318,13 +318,25 @@ class BalanceBoardPredictor:
             raise ValueError(
                 f"history must have shape ({self.history_length}, {FULL_OBSERVATION_DIM}), got {history.shape}"
             )
-        x = history[-self.history_length :, self.history_obs_indices].reshape(-1)
+        x = self.select_history_observations(history).reshape(-1)
         for kernel, bias in self.encoder_weights[:-1]:
             x = self.activation(x @ kernel + bias)
         kernel, bias = self.encoder_weights[-1]
         return (x @ kernel + bias).astype(np.float32)
 
+    def select_history_observations(self, history):
+        history = np.asarray(history, dtype=np.float32)
+        if history.shape != (self.history_length, FULL_OBSERVATION_DIM):
+            raise ValueError(
+                f"history must have shape ({self.history_length}, {FULL_OBSERVATION_DIM}), got {history.shape}"
+            )
+        return history[-self.history_length :, self.history_obs_indices].astype(np.float32)
+
     def predict(self, history, obs, action):
+        prediction, _ = self.predict_with_debug(history, obs, action)
+        return prediction
+
+    def predict_with_debug(self, history, obs, action):
         latent = self.encode(history)
         obs = _as_vector("obs", obs, FULL_OBSERVATION_DIM)
         action = _as_vector("action", action, ACTION_DIM)
@@ -332,7 +344,13 @@ class BalanceBoardPredictor:
         for kernel, bias in self.decoder_weights[:-1]:
             x = self.activation(x @ kernel + bias)
         kernel, bias = self.decoder_weights[-1]
-        return (x @ kernel + bias).astype(np.float32)
+        prediction = (x @ kernel + bias).astype(np.float32)
+        decoder_input = np.concatenate([latent, obs, action]).astype(np.float32)
+        return prediction, {
+            "encoder_latent": latent.copy(),
+            "decoder_input": decoder_input,
+            "history_selected": self.select_history_observations(history),
+        }
 
 
 class BalanceBoardPolicy:
@@ -390,6 +408,7 @@ class BalanceBoardPolicy:
         self.dof_targets = np.copy(self.default_dof_pos)
         self.last_full_observation = np.zeros(FULL_OBSERVATION_DIM, dtype=np.float32)
         self.last_actor_observation = np.zeros(ACTOR_OBSERVATION_DIM, dtype=np.float32)
+        self.last_debug = self._empty_debug_snapshot()
 
     def _resolve_example_path(self, path):
         path = Path(path).expanduser()
@@ -408,6 +427,35 @@ class BalanceBoardPolicy:
         self.dof_targets[:] = self.default_dof_pos
         self.last_full_observation[:] = 0.0
         self.last_actor_observation[:] = 0.0
+        self.last_debug = self._empty_debug_snapshot()
+
+    def _empty_debug_snapshot(self):
+        return {
+            "history_initialized_before": False,
+            "history_initialized_after": False,
+            "projected_gravity": np.zeros(3, dtype=np.float32),
+            "dof_pos": np.zeros(ACTION_DIM, dtype=np.float32),
+            "dof_vel": np.zeros(ACTION_DIM, dtype=np.float32),
+            "base_ang_vel": np.zeros(3, dtype=np.float32),
+            "base_lin_vel": np.zeros(3, dtype=np.float32),
+            "balance_board_observation": np.zeros(BALANCE_BOARD_OBSERVATION_DIM, dtype=np.float32),
+            "last_action_input": np.zeros(ACTION_DIM, dtype=np.float32),
+            "policy_prediction_input": np.zeros(POLICY_PREDICTION_DIM, dtype=np.float32),
+            "full_observation": np.zeros(FULL_OBSERVATION_DIM, dtype=np.float32),
+            "actor_observation": np.zeros(ACTOR_OBSERVATION_DIM, dtype=np.float32),
+            "normalized_actor_observation": np.zeros(ACTOR_OBSERVATION_DIM, dtype=np.float32),
+            "action": np.zeros(ACTION_DIM, dtype=np.float32),
+            "q_des_preclip": np.copy(self.default_dof_pos),
+            "q_des": np.copy(self.default_dof_pos),
+            "clip_mask_low": np.zeros(ACTION_DIM, dtype=bool),
+            "clip_mask_high": np.zeros(ACTION_DIM, dtype=bool),
+            "decoder_prediction": np.zeros(POLICY_PREDICTION_DIM, dtype=np.float32),
+            "encoder_latent": np.zeros(64, dtype=np.float32),
+            "decoder_input": np.zeros(278, dtype=np.float32),
+            "history_selected": np.zeros((self.predictor.history_length, ACTOR_OBSERVATION_DIM), dtype=np.float32),
+            "history_latest_full_observation": np.zeros(FULL_OBSERVATION_DIM, dtype=np.float32),
+            "history_latest_actor_observation": np.zeros(ACTOR_OBSERVATION_DIM, dtype=np.float32),
+        }
 
     def _append_history(self, full_observation):
         if not self.history_initialized:
@@ -426,6 +474,21 @@ class BalanceBoardPolicy:
         base_lin_vel=None,
         balance_board_observation=None,
     ):
+        if base_lin_vel is None:
+            base_lin_vel = np.zeros(3, dtype=np.float32)
+        else:
+            base_lin_vel = _as_vector("base_lin_vel", base_lin_vel, 3)
+        if balance_board_observation is None:
+            balance_board_observation = np.zeros(BALANCE_BOARD_OBSERVATION_DIM, dtype=np.float32)
+        else:
+            balance_board_observation = _as_vector(
+                "balance_board_observation",
+                balance_board_observation,
+                BALANCE_BOARD_OBSERVATION_DIM,
+            )
+        history_initialized_before = bool(self.history_initialized)
+        last_action_input = self.last_action.copy()
+        policy_prediction_input = self.policy_prediction.copy()
         full_observation = build_full_observation(
             projected_gravity=projected_gravity,
             dof_pos=dof_pos,
@@ -440,14 +503,48 @@ class BalanceBoardPolicy:
         self._append_history(full_observation)
 
         actor_observation = self.actor.select_observation(full_observation)
+        normalized_actor_observation = normalize_observation(actor_observation, self.actor.mean, self.actor.var)
         action = self.actor(actor_observation)
-        predicted_next_policy = self.predictor.predict(self.history, full_observation, action)
+        predicted_next_policy, predictor_debug = self.predictor.predict_with_debug(
+            self.history,
+            full_observation,
+            action,
+        )
 
         self.last_full_observation[:] = full_observation
         self.last_actor_observation[:] = actor_observation
         self.last_action[:] = action
         self.policy_prediction[:] = predicted_next_policy
 
-        self.dof_targets[:] = self.default_dof_pos + self.action_scale * action
+        q_des_preclip = self.default_dof_pos + self.action_scale * action
+        clip_mask_low = q_des_preclip < self.target_qpos_lower
+        clip_mask_high = q_des_preclip > self.target_qpos_upper
+        self.dof_targets[:] = q_des_preclip
         self.dof_targets[:] = np.clip(self.dof_targets, self.target_qpos_lower, self.target_qpos_upper)
+        self.last_debug = {
+            "history_initialized_before": history_initialized_before,
+            "history_initialized_after": bool(self.history_initialized),
+            "projected_gravity": np.asarray(projected_gravity, dtype=np.float32).copy(),
+            "dof_pos": np.asarray(dof_pos, dtype=np.float32).copy(),
+            "dof_vel": np.asarray(dof_vel, dtype=np.float32).copy(),
+            "base_ang_vel": np.asarray(base_ang_vel, dtype=np.float32).copy(),
+            "base_lin_vel": np.asarray(base_lin_vel, dtype=np.float32).copy(),
+            "balance_board_observation": np.asarray(balance_board_observation, dtype=np.float32).copy(),
+            "last_action_input": last_action_input,
+            "policy_prediction_input": policy_prediction_input,
+            "full_observation": full_observation.copy(),
+            "actor_observation": actor_observation.copy(),
+            "normalized_actor_observation": normalized_actor_observation.copy(),
+            "action": action.copy(),
+            "q_des_preclip": q_des_preclip.astype(np.float32),
+            "q_des": self.dof_targets.copy(),
+            "clip_mask_low": clip_mask_low.copy(),
+            "clip_mask_high": clip_mask_high.copy(),
+            "decoder_prediction": predicted_next_policy.copy(),
+            "encoder_latent": predictor_debug["encoder_latent"].copy(),
+            "decoder_input": predictor_debug["decoder_input"].copy(),
+            "history_selected": predictor_debug["history_selected"].copy(),
+            "history_latest_full_observation": self.history[-1].copy(),
+            "history_latest_actor_observation": self.history[-1, self.actor.actor_indices].copy(),
+        }
         return self.dof_targets

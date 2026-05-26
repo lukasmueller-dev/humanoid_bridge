@@ -10,7 +10,21 @@ import rclpy
 import yaml
 from robot_bridge_py.robot_client import RobotClient
 from utils.balance_board_policy import (
+    BALANCE_BOARD_RAW_SLICE,
+    GOAL_SLICE,
     JOINT_NAMES,
+    POLICY_GRAVITY_SLICE,
+    POLICY_JOINT_POS_SLICE,
+    POLICY_JOINT_VEL_SLICE,
+    POLICY_LAST_ACTION_SLICE,
+    POLICY_PREDICTION_SLICE,
+    POLICY_ROOT_ANG_VEL_SLICE,
+    PRIORITIZED_GRAVITY_SLICE,
+    PRIORITIZED_JOINT_POS_SLICE,
+    PRIORITIZED_JOINT_VEL_SLICE,
+    PRIORITIZED_LAST_ACTION_SLICE,
+    PRIORITIZED_ROOT_ANG_VEL_SLICE,
+    PRIORITIZED_ROOT_LIN_VEL_SLICE,
     BalanceBoardPolicy,
     normalize_observation,
     projected_gravity_from_quat_wxyz,
@@ -63,14 +77,17 @@ class RobotController:
         self.policy_start_time = None
         self.last_policy_time = None
         self.debug_step_count = 0
-        debug_dir = Path(__file__).resolve().parent / "debug_logs"
-        debug_dir.mkdir(parents=True, exist_ok=True)
-        model_name = "".join(
-            char if char.isalnum() or char in ("-", "_") else "_" for char in self.policy.actor_path.stem
-        )
-        debug_path = debug_dir / f"balance_board_debug_{model_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jsonl"
-        self.debug_log = debug_path.open("w", encoding="utf-8")
-        self._write_debug_metadata()
+        self.debug_enabled = bool(cfg.get("debug", {}).get("enabled", True))
+        self.debug_log = None
+        if self.debug_enabled:
+            debug_dir = Path(__file__).resolve().parent / "debug_logs"
+            debug_dir.mkdir(parents=True, exist_ok=True)
+            model_name = "".join(
+                char if char.isalnum() or char in ("-", "_") else "_" for char in self.policy.actor_path.stem
+            )
+            debug_path = debug_dir / f"balance_board_debug_{model_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jsonl"
+            self.debug_log = debug_path.open("w", encoding="utf-8")
+            self._write_debug_metadata()
         print(
             "Please press\n"
             "\t \"LT + RT + START\" to start bridge control in the balance-board initial pose,\n"
@@ -114,47 +131,33 @@ class RobotController:
         clip_mask_low = q_des_preclip < self.policy.target_qpos_lower
         clip_mask_high = q_des_preclip > self.policy.target_qpos_upper
 
-        self.debug_step_count += 1
-        self.debug_log.write(
-            json.dumps(
-                {
-                    "event": "policy_step",
-                    "step": self.debug_step_count,
-                    "wall_time": datetime.now().isoformat(timespec="milliseconds"),
-                    "policy_time": float(time_now),
-                    "loop_dt": None if loop_dt is None else float(loop_dt),
-                    "model": self.policy.actor_model,
-                    "model_path": str(self.policy.actor_path),
-                    "predictor_path": str(self.policy.predictor_path),
-                    "quat_wxyz": quat_wxyz.tolist(),
-                    "projected_gravity": projected_gravity.tolist(),
-                    "base_ang_vel": base_ang_vel.tolist(),
-                    "qpos": q_pos.tolist(),
-                    "qvel": q_vel.tolist(),
-                    "last_action_input": last_action_input.tolist(),
-                    "last_policy_prediction_input": last_policy_prediction_input.tolist(),
-                    "obs_97": obs_97.tolist(),
-                    "norm_obs_97": norm_obs_97.tolist(),
-                    "policy_prediction": self.policy.policy_prediction.tolist(),
-                    "raw_action_preclip": raw_action_preclip.tolist(),
-                    "action_postclip": action_postclip.tolist(),
-                    "action": action_postclip.tolist(),
-                    "q_des_preclip": q_des_preclip.tolist(),
-                    "q_des": q_des.tolist(),
-                    "clip_mask_low": clip_mask_low.tolist(),
-                    "clip_mask_high": clip_mask_high.tolist(),
-                    "qpos_minus_default": (q_pos - self.policy.default_dof_pos).tolist(),
-                    "q_des_minus_qpos": (q_des - q_pos).tolist(),
-                }
+        if self.debug_enabled and self.debug_log is not None:
+            self._write_policy_step_debug(
+                time_now=time_now,
+                loop_dt=loop_dt,
+                q_pos=q_pos,
+                q_vel=q_vel,
+                quat_wxyz=quat_wxyz,
+                base_ang_vel=base_ang_vel,
+                projected_gravity=projected_gravity,
+                last_action_input=last_action_input,
+                last_policy_prediction_input=last_policy_prediction_input,
+                obs_97=obs_97,
+                norm_obs_97=norm_obs_97,
+                raw_action_preclip=raw_action_preclip,
+                action_postclip=action_postclip,
+                q_des_preclip=q_des_preclip,
+                q_des=q_des,
+                clip_mask_low=clip_mask_low,
+                clip_mask_high=clip_mask_high,
             )
-            + "\n"
-        )
-        self.debug_log.flush()
         self.last_policy_time = time_now
 
         self.robot.send_cmd(q_target_pos=q_des, target_kp=self.policy_kp, target_kd=self.policy_kd)
 
     def _write_debug_metadata(self):
+        if not self.debug_enabled or self.debug_log is None:
+            return
         with np.load(self.policy.actor_path, allow_pickle=False) as actor_data:
             actor_indices = np.asarray(actor_data["actor_indices"], dtype=np.int64).tolist()
         with np.load(self.policy.predictor_path, allow_pickle=False) as predictor_data:
@@ -170,6 +173,8 @@ class RobotController:
                 {
                     "event": "metadata",
                     "wall_time": datetime.now().isoformat(timespec="milliseconds"),
+                    "debug_enabled": True,
+                    "debug_fields_version": 2,
                     "model": self.policy.actor_model,
                     "model_path": str(self.policy.actor_path),
                     "actor_sha256": self._sha256_file(self.policy.actor_path),
@@ -188,6 +193,31 @@ class RobotController:
                     "actor_observation_dim": int(self.policy.actor.observation_dim),
                     "full_observation_dim": 191,
                     "history_length": int(self.policy.predictor.history_length),
+                    "observation_slices": {
+                        "prioritized_gravity": [PRIORITIZED_GRAVITY_SLICE.start, PRIORITIZED_GRAVITY_SLICE.stop],
+                        "prioritized_joint_pos": [PRIORITIZED_JOINT_POS_SLICE.start, PRIORITIZED_JOINT_POS_SLICE.stop],
+                        "prioritized_root_lin_vel": [
+                            PRIORITIZED_ROOT_LIN_VEL_SLICE.start,
+                            PRIORITIZED_ROOT_LIN_VEL_SLICE.stop,
+                        ],
+                        "prioritized_root_ang_vel": [
+                            PRIORITIZED_ROOT_ANG_VEL_SLICE.start,
+                            PRIORITIZED_ROOT_ANG_VEL_SLICE.stop,
+                        ],
+                        "prioritized_joint_vel": [PRIORITIZED_JOINT_VEL_SLICE.start, PRIORITIZED_JOINT_VEL_SLICE.stop],
+                        "prioritized_last_action": [
+                            PRIORITIZED_LAST_ACTION_SLICE.start,
+                            PRIORITIZED_LAST_ACTION_SLICE.stop,
+                        ],
+                        "policy_gravity": [POLICY_GRAVITY_SLICE.start, POLICY_GRAVITY_SLICE.stop],
+                        "policy_joint_pos": [POLICY_JOINT_POS_SLICE.start, POLICY_JOINT_POS_SLICE.stop],
+                        "policy_root_ang_vel": [POLICY_ROOT_ANG_VEL_SLICE.start, POLICY_ROOT_ANG_VEL_SLICE.stop],
+                        "policy_joint_vel": [POLICY_JOINT_VEL_SLICE.start, POLICY_JOINT_VEL_SLICE.stop],
+                        "policy_last_action": [POLICY_LAST_ACTION_SLICE.start, POLICY_LAST_ACTION_SLICE.stop],
+                        "balance_board_raw": [BALANCE_BOARD_RAW_SLICE.start, BALANCE_BOARD_RAW_SLICE.stop],
+                        "policy_prediction": [POLICY_PREDICTION_SLICE.start, POLICY_PREDICTION_SLICE.stop],
+                        "goal": [GOAL_SLICE.start, GOAL_SLICE.stop],
+                    },
                     "target_qpos_lower": self.policy.target_qpos_lower.tolist(),
                     "target_qpos_upper": self.policy.target_qpos_upper.tolist(),
                     "mean_97": self.policy.actor.mean.tolist(),
@@ -198,6 +228,110 @@ class RobotController:
                     "var_97_max": float(np.max(self.policy.actor.var)),
                     "goal_height": float(self.policy.goal_height),
                     "parallel_mech_indexes": self.cfg.get("mech", {}).get("parallel_mech_indexes", []),
+                }
+            )
+            + "\n"
+        )
+        self.debug_log.flush()
+
+    def _write_policy_step_debug(
+        self,
+        time_now,
+        loop_dt,
+        q_pos,
+        q_vel,
+        quat_wxyz,
+        base_ang_vel,
+        projected_gravity,
+        last_action_input,
+        last_policy_prediction_input,
+        obs_97,
+        norm_obs_97,
+        raw_action_preclip,
+        action_postclip,
+        q_des_preclip,
+        q_des,
+        clip_mask_low,
+        clip_mask_high,
+    ):
+        debug = self.policy.last_debug
+        full_obs = np.asarray(debug["full_observation"], dtype=np.float32)
+        decoder_prediction = np.asarray(debug["decoder_prediction"], dtype=np.float32)
+        policy_prediction_input = np.asarray(debug["policy_prediction_input"], dtype=np.float32)
+        self.debug_step_count += 1
+        self.debug_log.write(
+            json.dumps(
+                {
+                    "event": "policy_step",
+                    "step": self.debug_step_count,
+                    "wall_time": datetime.now().isoformat(timespec="milliseconds"),
+                    "policy_time": float(time_now),
+                    "loop_dt": None if loop_dt is None else float(loop_dt),
+                    "debug_enabled": True,
+                    "model": self.policy.actor_model,
+                    "model_path": str(self.policy.actor_path),
+                    "predictor_path": str(self.policy.predictor_path),
+                    "robot_state": {
+                        "quat_wxyz": quat_wxyz.tolist(),
+                        "projected_gravity": projected_gravity.tolist(),
+                        "base_ang_vel": base_ang_vel.tolist(),
+                        "qpos": q_pos.tolist(),
+                        "qvel": q_vel.tolist(),
+                        "qpos_minus_default": (q_pos - self.policy.default_dof_pos).tolist(),
+                    },
+                    "observation": {
+                        "full_obs_191": full_obs.tolist(),
+                        "actor_obs_97": obs_97.tolist(),
+                        "norm_actor_obs_97": norm_obs_97.tolist(),
+                        "prioritized": {
+                            "gravity": full_obs[PRIORITIZED_GRAVITY_SLICE].tolist(),
+                            "joint_pos": full_obs[PRIORITIZED_JOINT_POS_SLICE].tolist(),
+                            "root_lin_vel": full_obs[PRIORITIZED_ROOT_LIN_VEL_SLICE].tolist(),
+                            "root_ang_vel": full_obs[PRIORITIZED_ROOT_ANG_VEL_SLICE].tolist(),
+                            "joint_vel_scaled": full_obs[PRIORITIZED_JOINT_VEL_SLICE].tolist(),
+                            "last_action": full_obs[PRIORITIZED_LAST_ACTION_SLICE].tolist(),
+                        },
+                        "policy": {
+                            "gravity": full_obs[POLICY_GRAVITY_SLICE].tolist(),
+                            "joint_pos": full_obs[POLICY_JOINT_POS_SLICE].tolist(),
+                            "root_ang_vel": full_obs[POLICY_ROOT_ANG_VEL_SLICE].tolist(),
+                            "joint_vel_scaled": full_obs[POLICY_JOINT_VEL_SLICE].tolist(),
+                            "last_action": full_obs[POLICY_LAST_ACTION_SLICE].tolist(),
+                        },
+                        "balance_board_raw": full_obs[BALANCE_BOARD_RAW_SLICE].tolist(),
+                        "policy_prediction_input": policy_prediction_input.tolist(),
+                        "goal": full_obs[GOAL_SLICE].tolist(),
+                    },
+                    "decoder": {
+                        "history_initialized_before": bool(debug["history_initialized_before"]),
+                        "history_initialized_after": bool(debug["history_initialized_after"]),
+                        "policy_prediction_input": policy_prediction_input.tolist(),
+                        "prediction": decoder_prediction.tolist(),
+                        "prediction_delta": (decoder_prediction - policy_prediction_input).tolist(),
+                        "encoder_latent": np.asarray(debug["encoder_latent"], dtype=np.float32).tolist(),
+                        "decoder_input": np.asarray(debug["decoder_input"], dtype=np.float32).tolist(),
+                        "history_selected_10x97": np.asarray(debug["history_selected"], dtype=np.float32).tolist(),
+                        "history_latest_full_obs_191": np.asarray(
+                            debug["history_latest_full_observation"],
+                            dtype=np.float32,
+                        ).tolist(),
+                        "history_latest_actor_obs_97": np.asarray(
+                            debug["history_latest_actor_observation"],
+                            dtype=np.float32,
+                        ).tolist(),
+                    },
+                    "control": {
+                        "last_action_input": last_action_input.tolist(),
+                        "last_policy_prediction_input": last_policy_prediction_input.tolist(),
+                        "raw_action_preclip": raw_action_preclip.tolist(),
+                        "action_postclip": action_postclip.tolist(),
+                        "action": action_postclip.tolist(),
+                        "q_des_preclip": q_des_preclip.tolist(),
+                        "q_des": q_des.tolist(),
+                        "clip_mask_low": clip_mask_low.tolist(),
+                        "clip_mask_high": clip_mask_high.tolist(),
+                        "q_des_minus_qpos": (q_des - q_pos).tolist(),
+                    },
                 }
             )
             + "\n"
@@ -219,7 +353,7 @@ class RobotController:
         return digest.hexdigest()
 
     def close_debug_log(self):
-        if not self.debug_log.closed:
+        if self.debug_log is not None and not self.debug_log.closed:
             self.debug_log.close()
 
     def _start_agent(self):
