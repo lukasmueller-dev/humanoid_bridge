@@ -20,6 +20,7 @@ SLIPPERY_FLOOR_KP50_RUN_NAME = "slippery_floor_kp50_jpiazpg2"
 SYMANKLE_YAWDRIFT_RUN_NAME = "t1_no_parajoints_slippery_ankle_noise_symankle_yawdrift_m0p75_1p2b_hfa93i45"
 HFA93I45_PLUS_PUSH_RUN_NAME = "hfa93i45_plus_push_full"
 FACTS_CONTEXT_DISABLED_RUN_NAME = "v0_2_A0_context_disabled_full_dr_1p2B"
+MX_ID_VANILLA_PPO_RUN_NAME = "MX_ID_vanilla_PPO_ent002_lr1e-4"
 
 
 def load_example_module():
@@ -348,6 +349,53 @@ def test_facts_context_disabled_deployment_config_matches_80d_training_settings(
 
     assert cfg["policy"]["actor_path"] == f"models/{FACTS_CONTEXT_DISABLED_RUN_NAME}_actor_80d.npz"
     assert cfg["policy"]["source_checkpoint_path"] == f"models/{FACTS_CONTEXT_DISABLED_RUN_NAME}.pkl"
+    assert (EXAMPLE_DIR / cfg["policy"]["actor_path"]).is_file()
+    assert (EXAMPLE_DIR / cfg["policy"]["source_checkpoint_path"]).is_file()
+    assert cfg["policy"]["include_height_in_obs"] is False
+    assert cfg["policy"]["num_observations"] == 80
+    assert cfg["common"]["stiffness"] == [
+        20.0, 20.0,
+        20.0, 20.0, 20.0, 20.0,
+        20.0, 20.0, 20.0, 20.0,
+        200.0,
+        200.0, 200.0, 200.0, 200.0, 50.0, 50.0,
+        200.0, 200.0, 200.0, 200.0, 50.0, 50.0,
+    ]
+    assert cfg["common"]["damping"] == [
+        0.2, 0.2,
+        0.5, 0.5, 0.5, 0.5,
+        0.5, 0.5, 0.5, 0.5,
+        5.0,
+        5.0, 5.0, 5.0, 5.0, 1.0, 1.0,
+        5.0, 5.0, 5.0, 5.0, 1.0, 1.0,
+    ]
+    assert cfg["common"]["default_qpos"] == [
+        0.0, 0.0,
+        0.2, -1.35, 0.0, -0.5,
+        0.2, 1.35, 0.0, 0.5,
+        0.0,
+        -0.2, 0.0, 0.0, 0.4, -0.25, 0.0,
+        -0.2, 0.0, 0.0, 0.4, -0.25, 0.0,
+    ]
+    assert cfg["policy"]["control"]["action_scale"] == 1.0
+    assert cfg["policy"]["control"]["clip_actions"] == 1.0
+    assert cfg["policy"]["gait_frequency"] == 1.5
+    assert cfg["policy"]["goal_height"] == 0.68
+    assert cfg["command"]["limit"] == {
+        "x": [-0.2, 0.3],
+        "y": [-0.2, 0.2],
+        "yaw": [-0.3, 0.3],
+    }
+
+
+def test_mx_id_vanilla_ppo_deployment_config_matches_80d_training_settings():
+    cfg_path = EXAMPLE_DIR / "configs" / f"T1_lmj_walking_{MX_ID_VANILLA_PPO_RUN_NAME}.yaml"
+
+    with cfg_path.open("r", encoding="utf-8") as f:
+        cfg = yaml.load(f.read(), Loader=yaml.FullLoader)
+
+    assert cfg["policy"]["actor_path"] == f"models/{MX_ID_VANILLA_PPO_RUN_NAME}_actor_80d.npz"
+    assert cfg["policy"]["source_checkpoint_path"] == f"models/{MX_ID_VANILLA_PPO_RUN_NAME}.pkl"
     assert (EXAMPLE_DIR / cfg["policy"]["actor_path"]).is_file()
     assert (EXAMPLE_DIR / cfg["policy"]["source_checkpoint_path"]).is_file()
     assert cfg["policy"]["include_height_in_obs"] is False
