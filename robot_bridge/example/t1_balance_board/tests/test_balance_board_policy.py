@@ -17,6 +17,9 @@ SPEC.loader.exec_module(balance_board_policy)
 EXAMPLE_DIR = MODULE_PATH.parents[1]
 RUN_NAME = "balance_board_r14_easyDR_20260525_223940_CEST"
 QV823LI5_RUN_NAME = "bb_r15_11_conservative_ppo_numsteps100"
+NO_POLICY_PREDICTION_RUN_NAME = (
+    "balance_board_r14_easyDR_policydecoder_no_policy_prediction_cluster42_20260526_184110_CEST"
+)
 NOMINAL_FLAT_BOARD_OBS = np.array(
     [
         0.0, 0.0, 1.0,
@@ -259,6 +262,73 @@ def test_qv823li5_config_smoke_uses_policy_decoder_observation():
     assert policy.policy_prediction.shape == (16,)
     assert np.all(q_des >= policy.target_qpos_lower)
     assert np.all(q_des <= policy.target_qpos_upper)
+
+
+def test_balance_board_policy_can_keep_prediction_slots_zero_for_actor():
+    cfg_path = EXAMPLE_DIR / "configs" / f"t1_balance_board_{QV823LI5_RUN_NAME}.yaml"
+    with cfg_path.open("r", encoding="utf-8") as f:
+        cfg = yaml.load(f.read(), Loader=yaml.FullLoader)
+    cfg["policy"]["feed_prediction_to_policy"] = False
+
+    policy = balance_board_policy.BalanceBoardPolicy(cfg)
+    stale_prediction = np.linspace(-0.4, 0.4, 16, dtype=np.float32)
+    policy.policy_prediction[:] = stale_prediction
+    policy.inference(
+        dof_pos=np.asarray(cfg["common"]["default_qpos"], dtype=np.float32),
+        dof_vel=np.zeros(23, dtype=np.float32),
+        base_ang_vel=np.zeros(3, dtype=np.float32),
+        projected_gravity=np.array([0.0, 0.0, -1.0], dtype=np.float32),
+    )
+
+    debug = policy.last_debug
+    np.testing.assert_allclose(debug["policy_prediction_input"], np.zeros(16, dtype=np.float32))
+    np.testing.assert_allclose(
+        debug["full_observation"][balance_board_policy.POLICY_PREDICTION_SLICE],
+        np.zeros(16, dtype=np.float32),
+    )
+    np.testing.assert_allclose(debug["actor_observation"][75:91], np.zeros(16, dtype=np.float32))
+
+
+def test_no_policy_prediction_config_keeps_actor_prediction_slots_zero():
+    cfg_path = EXAMPLE_DIR / "configs" / f"t1_balance_board_{NO_POLICY_PREDICTION_RUN_NAME}.yaml"
+    with cfg_path.open("r", encoding="utf-8") as f:
+        cfg = yaml.load(f.read(), Loader=yaml.FullLoader)
+
+    assert cfg["policy"]["actor_path"] == f"models/{NO_POLICY_PREDICTION_RUN_NAME}_actor_97d.npz"
+    assert cfg["policy"]["predictor_path"] == f"models/{NO_POLICY_PREDICTION_RUN_NAME}_predictor.npz"
+    assert cfg["policy"]["source_checkpoint_path"] == f"models/{NO_POLICY_PREDICTION_RUN_NAME}.pkl"
+    assert cfg["policy"]["feed_prediction_to_policy"] is False
+    assert (EXAMPLE_DIR / cfg["policy"]["actor_path"]).is_file()
+    assert (EXAMPLE_DIR / cfg["policy"]["predictor_path"]).is_file()
+    assert (EXAMPLE_DIR / cfg["policy"]["source_checkpoint_path"]).is_file()
+
+    with np.load(EXAMPLE_DIR / cfg["policy"]["actor_path"], allow_pickle=False) as actor_data:
+        actor_indices = np.asarray(actor_data["actor_indices"], dtype=np.int64)
+        assert actor_data["kernel_0"].shape == (97, 512)
+        assert actor_data["kernel_3"].shape == (128, 23)
+    np.testing.assert_array_equal(actor_indices[:75], np.arange(78, 153))
+    np.testing.assert_array_equal(actor_indices[75:91], np.arange(169, 185))
+    np.testing.assert_array_equal(actor_indices[91:97], np.arange(185, 191))
+
+    with np.load(EXAMPLE_DIR / cfg["policy"]["predictor_path"], allow_pickle=False) as predictor_data:
+        np.testing.assert_array_equal(predictor_data["history_obs_indices"], actor_indices)
+        np.testing.assert_array_equal(predictor_data["decoder_obs_indices"], actor_indices)
+        assert predictor_data["encoder_kernel_0"].shape == (970, 512)
+        assert predictor_data["decoder_kernel_0"].shape == (184, 128)
+
+    policy = balance_board_policy.BalanceBoardPolicy(cfg)
+    policy.policy_prediction[:] = np.linspace(-0.4, 0.4, 16, dtype=np.float32)
+    policy.inference(
+        dof_pos=np.asarray(cfg["common"]["default_qpos"], dtype=np.float32),
+        dof_vel=np.zeros(23, dtype=np.float32),
+        base_ang_vel=np.zeros(3, dtype=np.float32),
+        projected_gravity=np.array([0.0, 0.0, -1.0], dtype=np.float32),
+    )
+
+    np.testing.assert_allclose(policy.last_debug["policy_prediction_input"], np.zeros(16, dtype=np.float32))
+    np.testing.assert_allclose(policy.last_debug["actor_observation"][75:91], np.zeros(16, dtype=np.float32))
+    np.testing.assert_allclose(policy.policy_prediction, np.zeros(16, dtype=np.float32))
+    assert policy.last_debug["decoder_prediction"].shape == (16,)
 
 
 def test_balance_board_config_matches_training_control_settings():

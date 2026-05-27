@@ -390,6 +390,7 @@ class BalanceBoardPolicy:
         self.damping = _as_vector("common.damping", cfg["common"]["damping"], ACTION_DIM)
 
         policy_cfg = cfg["policy"]
+        self.feed_prediction_to_policy = bool(policy_cfg.get("feed_prediction_to_policy", True))
         self.actor_model = str(policy_cfg["actor_path"])
         self.actor_path = self._resolve_example_path(self.actor_model)
         self.actor = NumpyActor.from_npz(self.actor_path)
@@ -533,14 +534,17 @@ class BalanceBoardPolicy:
             )
         history_initialized_before = bool(self.history_initialized)
         last_action_input = self.last_action.copy()
-        policy_prediction_input = self.policy_prediction.copy()
+        if self.feed_prediction_to_policy:
+            policy_prediction_input = self.policy_prediction.copy()
+        else:
+            policy_prediction_input = np.zeros(POLICY_PREDICTION_DIM, dtype=np.float32)
         full_observation = build_full_observation(
             projected_gravity=projected_gravity,
             dof_pos=dof_pos,
             dof_vel=dof_vel,
             base_ang_vel=base_ang_vel,
             last_action=self.last_action,
-            policy_prediction=self.policy_prediction,
+            policy_prediction=policy_prediction_input,
             goal_height=self.goal_height,
             base_lin_vel=base_lin_vel,
             balance_board_observation=balance_board_observation,
@@ -559,7 +563,10 @@ class BalanceBoardPolicy:
         self.last_full_observation[:] = full_observation
         self.last_actor_observation[:] = actor_observation
         self.last_action[:] = action
-        self.policy_prediction[:] = predicted_next_policy
+        if self.feed_prediction_to_policy:
+            self.policy_prediction[:] = predicted_next_policy
+        else:
+            self.policy_prediction[:] = 0.0
 
         q_des_preclip = self.default_dof_pos + self.action_scale * action
         clip_mask_low = q_des_preclip < self.target_qpos_lower
