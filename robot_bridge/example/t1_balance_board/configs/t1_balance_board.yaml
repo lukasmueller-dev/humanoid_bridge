@@ -63,6 +63,7 @@ balance_board:
 
 debug:
   enabled: true
+  first_step_probe_enabled: false
 
 mech:
   parallel_mech_indexes: [15, 16, 21, 22]

@@ -80,15 +80,27 @@ class RobotController:
         self.policy_start_time = None
         self.last_policy_time = None
         self.debug_step_count = 0
-        self.debug_enabled = bool(cfg.get("debug", {}).get("enabled", True))
+        debug_cfg = cfg.get("debug", {})
+        self.debug_enabled = bool(debug_cfg.get("enabled", True))
+        self.first_step_probe_enabled = bool(debug_cfg.get("first_step_probe_enabled", False))
+        self.first_step_probe_pending = False
+        self.first_step_probe_path = None
         self.debug_log = None
+        self.actor_sha256 = None
+        self.predictor_sha256 = None
+        self.debug_dir = Path(__file__).resolve().parent / "debug_logs"
+        if self.debug_enabled or self.first_step_probe_enabled:
+            self.debug_dir.mkdir(parents=True, exist_ok=True)
+            self.actor_sha256 = self._sha256_file(self.policy.actor_path)
+            self.predictor_sha256 = self._sha256_file(self.policy.predictor_path)
         if self.debug_enabled:
-            debug_dir = Path(__file__).resolve().parent / "debug_logs"
-            debug_dir.mkdir(parents=True, exist_ok=True)
             model_name = "".join(
                 char if char.isalnum() or char in ("-", "_") else "_" for char in self.policy.actor_path.stem
             )
-            debug_path = debug_dir / f"balance_board_debug_{model_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jsonl"
+            debug_path = (
+                self.debug_dir
+                / f"balance_board_debug_{model_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jsonl"
+            )
             self.debug_log = debug_path.open("w", encoding="utf-8")
             self._write_debug_metadata()
         print(
@@ -138,6 +150,40 @@ class RobotController:
         q_des_preclip = self.policy.default_dof_pos + self.policy.action_scale * action_postclip
         clip_mask_low = q_des_preclip < self.policy.target_qpos_lower
         clip_mask_high = q_des_preclip > self.policy.target_qpos_upper
+
+        if self.first_step_probe_pending:
+            record = self._write_first_step_probe_debug(
+                time_now=time_now,
+                loop_dt=loop_dt,
+                q_pos=q_pos,
+                q_vel=q_vel,
+                quat_wxyz=quat_wxyz,
+                base_ang_vel=base_ang_vel,
+                projected_gravity=projected_gravity,
+                last_action_input=last_action_input,
+                last_policy_prediction_input=last_policy_prediction_input,
+                obs_97=obs_97,
+                norm_obs_97=norm_obs_97,
+                raw_action_preclip=raw_action_preclip,
+                action_postclip=action_postclip,
+                q_des_preclip=q_des_preclip,
+                policy_q_des=policy_q_des,
+                q_des=q_des,
+                startup_blend_alpha=startup_blend_alpha,
+                clip_mask_low=clip_mask_low,
+                clip_mask_high=clip_mask_high,
+            )
+            self.first_step_probe_pending = False
+            self.agent_started = False
+            self.policy_start_time = None
+            self.last_policy_time = None
+            self.policy.reset()
+            self.node.get_logger().info(
+                "First-step probe captured policy target positions without sending a command: "
+                f"{json.dumps(record['control']['policy_q_des'])}"
+            )
+            self.node.get_logger().info(f"First-step probe saved to {self.first_step_probe_path}")
+            return
 
         if self.debug_enabled and self.debug_log is not None:
             self._write_policy_step_debug(
@@ -189,12 +235,13 @@ class RobotController:
                     "event": "metadata",
                     "wall_time": datetime.now().isoformat(timespec="milliseconds"),
                     "debug_enabled": True,
-                    "debug_fields_version": 3,
+                    "debug_fields_version": 4,
+                    "first_step_probe_enabled": bool(self.first_step_probe_enabled),
                     "model": self.policy.actor_model,
                     "model_path": str(self.policy.actor_path),
-                    "actor_sha256": self._sha256_file(self.policy.actor_path),
+                    "actor_sha256": self.actor_sha256,
                     "predictor_path": str(self.policy.predictor_path),
-                    "predictor_sha256": self._sha256_file(self.policy.predictor_path),
+                    "predictor_sha256": self.predictor_sha256,
                     "actor_indices": actor_indices,
                     "history_obs_indices": history_obs_indices,
                     "predictor_obs_indices": predictor_obs_indices,
@@ -274,98 +321,204 @@ class RobotController:
         clip_mask_low,
         clip_mask_high,
     ):
+        self.debug_step_count += 1
+        record = self._policy_step_debug_record(
+            event="policy_step",
+            step=self.debug_step_count,
+            executed=True,
+            time_now=time_now,
+            loop_dt=loop_dt,
+            q_pos=q_pos,
+            q_vel=q_vel,
+            quat_wxyz=quat_wxyz,
+            base_ang_vel=base_ang_vel,
+            projected_gravity=projected_gravity,
+            last_action_input=last_action_input,
+            last_policy_prediction_input=last_policy_prediction_input,
+            obs_97=obs_97,
+            norm_obs_97=norm_obs_97,
+            raw_action_preclip=raw_action_preclip,
+            action_postclip=action_postclip,
+            q_des_preclip=q_des_preclip,
+            policy_q_des=policy_q_des,
+            q_des=q_des,
+            startup_blend_alpha=startup_blend_alpha,
+            clip_mask_low=clip_mask_low,
+            clip_mask_high=clip_mask_high,
+        )
+        self.debug_log.write(json.dumps(record) + "\n")
+        self.debug_log.flush()
+
+    def _write_first_step_probe_debug(
+        self,
+        time_now,
+        loop_dt,
+        q_pos,
+        q_vel,
+        quat_wxyz,
+        base_ang_vel,
+        projected_gravity,
+        last_action_input,
+        last_policy_prediction_input,
+        obs_97,
+        norm_obs_97,
+        raw_action_preclip,
+        action_postclip,
+        q_des_preclip,
+        policy_q_des,
+        q_des,
+        startup_blend_alpha,
+        clip_mask_low,
+        clip_mask_high,
+    ):
+        self.debug_step_count += 1
+        record = self._policy_step_debug_record(
+            event="first_step_probe",
+            step=self.debug_step_count,
+            executed=False,
+            time_now=time_now,
+            loop_dt=loop_dt,
+            q_pos=q_pos,
+            q_vel=q_vel,
+            quat_wxyz=quat_wxyz,
+            base_ang_vel=base_ang_vel,
+            projected_gravity=projected_gravity,
+            last_action_input=last_action_input,
+            last_policy_prediction_input=last_policy_prediction_input,
+            obs_97=obs_97,
+            norm_obs_97=norm_obs_97,
+            raw_action_preclip=raw_action_preclip,
+            action_postclip=action_postclip,
+            q_des_preclip=q_des_preclip,
+            policy_q_des=policy_q_des,
+            q_des=q_des,
+            startup_blend_alpha=startup_blend_alpha,
+            clip_mask_low=clip_mask_low,
+            clip_mask_high=clip_mask_high,
+        )
+        probe_dir = self._first_step_probe_dir()
+        probe_dir.mkdir(parents=True, exist_ok=False)
+        self.first_step_probe_path = probe_dir / "first_step.json"
+        self.first_step_probe_path.write_text(json.dumps(record, indent=2) + "\n", encoding="utf-8")
+        if self.debug_enabled and self.debug_log is not None:
+            self.debug_log.write(json.dumps(record) + "\n")
+            self.debug_log.flush()
+        return record
+
+    def _policy_step_debug_record(
+        self,
+        event,
+        step,
+        executed,
+        time_now,
+        loop_dt,
+        q_pos,
+        q_vel,
+        quat_wxyz,
+        base_ang_vel,
+        projected_gravity,
+        last_action_input,
+        last_policy_prediction_input,
+        obs_97,
+        norm_obs_97,
+        raw_action_preclip,
+        action_postclip,
+        q_des_preclip,
+        policy_q_des,
+        q_des,
+        startup_blend_alpha,
+        clip_mask_low,
+        clip_mask_high,
+    ):
         debug = self.policy.last_debug
         full_obs = np.asarray(debug["full_observation"], dtype=np.float32)
         decoder_prediction = np.asarray(debug["decoder_prediction"], dtype=np.float32)
         policy_prediction_input = np.asarray(debug["policy_prediction_input"], dtype=np.float32)
-        self.debug_step_count += 1
-        self.debug_log.write(
-            json.dumps(
-                {
-                    "event": "policy_step",
-                    "step": self.debug_step_count,
-                    "wall_time": datetime.now().isoformat(timespec="milliseconds"),
-                    "policy_time": float(time_now),
-                    "loop_dt": None if loop_dt is None else float(loop_dt),
-                    "debug_enabled": True,
-                    "model": self.policy.actor_model,
-                    "model_path": str(self.policy.actor_path),
-                    "predictor_path": str(self.policy.predictor_path),
-                    "robot_state": {
-                        "quat_wxyz": quat_wxyz.tolist(),
-                        "projected_gravity": projected_gravity.tolist(),
-                        "base_ang_vel": base_ang_vel.tolist(),
-                        "qpos": q_pos.tolist(),
-                        "qvel": q_vel.tolist(),
-                        "qpos_minus_default": (q_pos - self.policy.default_dof_pos).tolist(),
-                    },
-                    "observation": {
-                        "full_obs_191": full_obs.tolist(),
-                        "actor_obs_97": obs_97.tolist(),
-                        "norm_actor_obs_97": norm_obs_97.tolist(),
-                        "prioritized": {
-                            "gravity": full_obs[PRIORITIZED_GRAVITY_SLICE].tolist(),
-                            "joint_pos": full_obs[PRIORITIZED_JOINT_POS_SLICE].tolist(),
-                            "root_lin_vel": full_obs[PRIORITIZED_ROOT_LIN_VEL_SLICE].tolist(),
-                            "root_ang_vel": full_obs[PRIORITIZED_ROOT_ANG_VEL_SLICE].tolist(),
-                            "joint_vel_scaled": full_obs[PRIORITIZED_JOINT_VEL_SLICE].tolist(),
-                            "last_action": full_obs[PRIORITIZED_LAST_ACTION_SLICE].tolist(),
-                        },
-                        "policy": {
-                            "gravity": full_obs[POLICY_GRAVITY_SLICE].tolist(),
-                            "joint_pos": full_obs[POLICY_JOINT_POS_SLICE].tolist(),
-                            "root_ang_vel": full_obs[POLICY_ROOT_ANG_VEL_SLICE].tolist(),
-                            "joint_vel_scaled": full_obs[POLICY_JOINT_VEL_SLICE].tolist(),
-                            "last_action": full_obs[POLICY_LAST_ACTION_SLICE].tolist(),
-                        },
-                        "balance_board_raw": full_obs[BALANCE_BOARD_RAW_SLICE].tolist(),
-                        "policy_prediction_input": policy_prediction_input.tolist(),
-                        "goal": full_obs[GOAL_SLICE].tolist(),
-                    },
-                    "decoder": {
-                        "history_initialized_before": bool(debug["history_initialized_before"]),
-                        "history_initialized_after": bool(debug["history_initialized_after"]),
-                        "policy_prediction_input": policy_prediction_input.tolist(),
-                        "prediction": decoder_prediction.tolist(),
-                        "prediction_delta": (decoder_prediction - policy_prediction_input).tolist(),
-                        "encoder_latent": np.asarray(debug["encoder_latent"], dtype=np.float32).tolist(),
-                        "decoder_observation": np.asarray(
-                            debug["decoder_observation"],
-                            dtype=np.float32,
-                        ).tolist(),
-                        "decoder_input": np.asarray(debug["decoder_input"], dtype=np.float32).tolist(),
-                        "history_selected_10x97": np.asarray(debug["history_selected"], dtype=np.float32).tolist(),
-                        "history_latest_full_obs_191": np.asarray(
-                            debug["history_latest_full_observation"],
-                            dtype=np.float32,
-                        ).tolist(),
-                        "history_latest_actor_obs_97": np.asarray(
-                            debug["history_latest_actor_observation"],
-                            dtype=np.float32,
-                        ).tolist(),
-                    },
-                    "control": {
-                        "last_action_input": last_action_input.tolist(),
-                        "last_policy_prediction_input": last_policy_prediction_input.tolist(),
-                        "raw_action_preclip": raw_action_preclip.tolist(),
-                        "action_postclip": action_postclip.tolist(),
-                        "action": action_postclip.tolist(),
-                        "q_des_preclip": q_des_preclip.tolist(),
-                        "policy_q_des": policy_q_des.tolist(),
-                        "q_des": q_des.tolist(),
-                        "startup_blend_duration": float(self.startup_blend_duration),
-                        "startup_blend_alpha": float(startup_blend_alpha),
-                        "startup_blend_start_pos": self.startup_blend_start_pos.tolist(),
-                        "clip_mask_low": clip_mask_low.tolist(),
-                        "clip_mask_high": clip_mask_high.tolist(),
-                        "q_des_minus_policy": (q_des - policy_q_des).tolist(),
-                        "q_des_minus_qpos": (q_des - q_pos).tolist(),
-                    },
-                }
-            )
-            + "\n"
-        )
-        self.debug_log.flush()
+        return {
+            "event": event,
+            "step": int(step),
+            "wall_time": datetime.now().isoformat(timespec="milliseconds"),
+            "policy_time": float(time_now),
+            "loop_dt": None if loop_dt is None else float(loop_dt),
+            "debug_enabled": bool(self.debug_enabled),
+            "executed": bool(executed),
+            "model": self.policy.actor_model,
+            "model_path": str(self.policy.actor_path),
+            "actor_sha256": self.actor_sha256,
+            "predictor_path": str(self.policy.predictor_path),
+            "predictor_sha256": self.predictor_sha256,
+            "joint_names": JOINT_NAMES,
+            "robot_state": {
+                "quat_wxyz": quat_wxyz.tolist(),
+                "projected_gravity": projected_gravity.tolist(),
+                "base_ang_vel": base_ang_vel.tolist(),
+                "qpos": q_pos.tolist(),
+                "qvel": q_vel.tolist(),
+                "qpos_minus_default": (q_pos - self.policy.default_dof_pos).tolist(),
+            },
+            "observation": {
+                "full_obs_191": full_obs.tolist(),
+                "actor_obs_97": obs_97.tolist(),
+                "norm_actor_obs_97": norm_obs_97.tolist(),
+                "prioritized": {
+                    "gravity": full_obs[PRIORITIZED_GRAVITY_SLICE].tolist(),
+                    "joint_pos": full_obs[PRIORITIZED_JOINT_POS_SLICE].tolist(),
+                    "root_lin_vel": full_obs[PRIORITIZED_ROOT_LIN_VEL_SLICE].tolist(),
+                    "root_ang_vel": full_obs[PRIORITIZED_ROOT_ANG_VEL_SLICE].tolist(),
+                    "joint_vel_scaled": full_obs[PRIORITIZED_JOINT_VEL_SLICE].tolist(),
+                    "last_action": full_obs[PRIORITIZED_LAST_ACTION_SLICE].tolist(),
+                },
+                "policy": {
+                    "gravity": full_obs[POLICY_GRAVITY_SLICE].tolist(),
+                    "joint_pos": full_obs[POLICY_JOINT_POS_SLICE].tolist(),
+                    "root_ang_vel": full_obs[POLICY_ROOT_ANG_VEL_SLICE].tolist(),
+                    "joint_vel_scaled": full_obs[POLICY_JOINT_VEL_SLICE].tolist(),
+                    "last_action": full_obs[POLICY_LAST_ACTION_SLICE].tolist(),
+                },
+                "balance_board_raw": full_obs[BALANCE_BOARD_RAW_SLICE].tolist(),
+                "policy_prediction_input": policy_prediction_input.tolist(),
+                "goal": full_obs[GOAL_SLICE].tolist(),
+            },
+            "decoder": {
+                "history_initialized_before": bool(debug["history_initialized_before"]),
+                "history_initialized_after": bool(debug["history_initialized_after"]),
+                "policy_prediction_input": policy_prediction_input.tolist(),
+                "prediction": decoder_prediction.tolist(),
+                "prediction_delta": (decoder_prediction - policy_prediction_input).tolist(),
+                "encoder_latent": np.asarray(debug["encoder_latent"], dtype=np.float32).tolist(),
+                "decoder_observation": np.asarray(
+                    debug["decoder_observation"],
+                    dtype=np.float32,
+                ).tolist(),
+                "decoder_input": np.asarray(debug["decoder_input"], dtype=np.float32).tolist(),
+                "history_selected_10x97": np.asarray(debug["history_selected"], dtype=np.float32).tolist(),
+                "history_latest_full_obs_191": np.asarray(
+                    debug["history_latest_full_observation"],
+                    dtype=np.float32,
+                ).tolist(),
+                "history_latest_actor_obs_97": np.asarray(
+                    debug["history_latest_actor_observation"],
+                    dtype=np.float32,
+                ).tolist(),
+            },
+            "control": {
+                "last_action_input": last_action_input.tolist(),
+                "last_policy_prediction_input": last_policy_prediction_input.tolist(),
+                "raw_action_preclip": raw_action_preclip.tolist(),
+                "action_postclip": action_postclip.tolist(),
+                "action": action_postclip.tolist(),
+                "q_des_preclip": q_des_preclip.tolist(),
+                "policy_q_des": policy_q_des.tolist(),
+                "q_des": q_des.tolist(),
+                "startup_blend_duration": float(self.startup_blend_duration),
+                "startup_blend_alpha": float(startup_blend_alpha),
+                "startup_blend_start_pos": self.startup_blend_start_pos.tolist(),
+                "clip_mask_low": clip_mask_low.tolist(),
+                "clip_mask_high": clip_mask_high.tolist(),
+                "q_des_minus_policy": (q_des - policy_q_des).tolist(),
+                "q_des_minus_qpos": (q_des - q_pos).tolist(),
+            },
+        }
 
     def _actor_forward_raw_from_normalized(self, norm_obs):
         x = np.asarray(norm_obs, dtype=np.float32)
@@ -378,6 +531,13 @@ class RobotController:
         if self.startup_blend_duration <= 0.0:
             return 1.0
         return float(np.clip(time_now / self.startup_blend_duration, 0.0, 1.0))
+
+    def _first_step_probe_dir(self):
+        model_name = "".join(
+            char if char.isalnum() or char in ("-", "_") else "_" for char in self.policy.actor_path.stem
+        )
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        return self.debug_dir / f"first_step_{model_name}_{timestamp}"
 
     def _sha256_file(self, path):
         digest = hashlib.sha256()
@@ -394,6 +554,7 @@ class RobotController:
         self.agent_started = True
         self.policy_start_time = time.monotonic()
         self.last_policy_time = None
+        self.first_step_probe_pending = self.first_step_probe_enabled
         current_q_pos = np.asarray(self.robot.q_pos, dtype=np.float32)
         if current_q_pos.shape == self.init_pos.shape:
             self.startup_blend_start_pos = current_q_pos.copy()
@@ -406,6 +567,7 @@ class RobotController:
         self.agent_started = False
         self.policy_start_time = None
         self.last_policy_time = None
+        self.first_step_probe_pending = False
         self.startup_blend_start_pos = self.init_pos.copy()
         self.policy.reset()
         self.robot.set_default_cmd(default_pos=self.init_pos, default_kp=self.policy_kp, default_kd=self.policy_kd)

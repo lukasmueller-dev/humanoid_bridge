@@ -247,6 +247,7 @@ def test_qv823li5_config_smoke_uses_policy_decoder_observation():
     assert cfg["policy"]["goal_height"] == 0.755
     assert cfg["policy"]["control"]["startup_blend_duration"] == 2.0
     assert cfg["debug"]["enabled"] is True
+    assert cfg["debug"]["first_step_probe_enabled"] is False
 
     policy = balance_board_policy.BalanceBoardPolicy(cfg)
     q_des = policy.inference(
@@ -377,6 +378,7 @@ def test_balance_board_config_matches_training_control_settings():
     assert cfg["policy"]["control"]["startup_blend_duration"] == 2.0
     assert cfg["balance_board"]["raw_observation_source"] == "nominal_flat"
     assert cfg["debug"]["enabled"] is True
+    assert cfg["debug"]["first_step_probe_enabled"] is False
 
 
 def test_balance_board_policy_smoke_updates_prediction_and_clips_targets():
@@ -538,3 +540,47 @@ def test_t1_balance_board_controller_blends_first_policy_command_from_current_po
     assert step["control"]["startup_blend_alpha"] == 0.0
     np.testing.assert_allclose(step["control"]["startup_blend_start_pos"], start_pos, atol=1e-6)
     assert len(step["control"]["policy_q_des"]) == 23
+
+
+def test_t1_balance_board_first_step_probe_logs_initial_inference_without_sending_command():
+    module = load_example_module(robot_client_cls=FakeRobotClient)
+    cfg_path = EXAMPLE_DIR / "configs" / "t1_balance_board.yaml"
+    with cfg_path.open("r", encoding="utf-8") as f:
+        cfg = yaml.load(f.read(), Loader=yaml.FullLoader)
+    cfg["debug"]["first_step_probe_enabled"] = True
+
+    original_monotonic = module.time.monotonic
+    monotonic_values = iter([200.0, 200.0])
+    module.time.monotonic = lambda: next(monotonic_values)
+    controller = module.RobotController(FakeNode(), cfg)
+    log_path = Path(controller.debug_log.name)
+    try:
+        controller.robot.q_pos = np.asarray(cfg["common"]["default_qpos"], dtype=np.float32)
+        controller.robot.joy_key = types.SimpleNamespace(lt=True, rt=False, start=False, a=True, back=False)
+        controller.robot.key_count = 2
+
+        controller.step()
+        controller.close_debug_log()
+
+        probe_path = controller.first_step_probe_path
+        rows = [json.loads(line) for line in log_path.read_text(encoding="utf-8").splitlines()]
+        probe = json.loads(probe_path.read_text(encoding="utf-8"))
+    finally:
+        module.time.monotonic = original_monotonic
+        controller.close_debug_log()
+        if log_path.exists():
+            log_path.unlink()
+        if "probe_path" in locals() and probe_path.exists():
+            probe_path.unlink()
+            probe_path.parent.rmdir()
+
+    assert controller.robot.last_cmd is None
+    assert controller.agent_started is False
+    assert rows[-1]["event"] == "first_step_probe"
+    assert probe["event"] == "first_step_probe"
+    assert probe["executed"] is False
+    assert len(probe["observation"]["full_obs_191"]) == 191
+    assert len(probe["observation"]["actor_obs_97"]) == 97
+    assert len(probe["control"]["raw_action_preclip"]) == 23
+    assert len(probe["control"]["action"]) == 23
+    assert len(probe["control"]["policy_q_des"]) == 23
