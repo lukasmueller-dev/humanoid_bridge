@@ -71,6 +71,9 @@ class RobotController:
         self.init_pos = np.array(cfg["common"]["default_qpos"], dtype=np.float32)
         self.policy_kp = np.array(cfg["common"]["stiffness"], dtype=np.float32)
         self.policy_kd = np.array(cfg["common"]["damping"], dtype=np.float32)
+        control_cfg = cfg.get("policy", {}).get("control", {})
+        self.startup_blend_duration = max(0.0, float(control_cfg.get("startup_blend_duration", 0.0)))
+        self.startup_blend_start_pos = self.init_pos.copy()
         self.robot.set_default_cmd(default_pos=self.init_pos, default_kp=self.policy_kp, default_kd=self.policy_kd)
 
         self.agent_started = False
@@ -117,12 +120,17 @@ class RobotController:
         last_policy_prediction_input = self.policy.policy_prediction.copy()
         projected_gravity = projected_gravity_from_quat_wxyz(quat_wxyz)
 
-        q_des = self.policy.inference(
+        policy_q_des = self.policy.inference(
             dof_pos=q_pos,
             dof_vel=q_vel,
             base_ang_vel=base_ang_vel,
             projected_gravity=projected_gravity,
         )
+        startup_blend_alpha = self._startup_blend_alpha(time_now)
+        q_des = (
+            (1.0 - startup_blend_alpha) * self.startup_blend_start_pos
+            + startup_blend_alpha * policy_q_des
+        ).astype(np.float32)
         obs_97 = self.policy.last_actor_observation.copy()
         norm_obs_97 = normalize_observation(obs_97, self.policy.actor.mean, self.policy.actor.var)
         raw_action_preclip = self._actor_forward_raw_from_normalized(norm_obs_97)
@@ -147,7 +155,9 @@ class RobotController:
                 raw_action_preclip=raw_action_preclip,
                 action_postclip=action_postclip,
                 q_des_preclip=q_des_preclip,
+                policy_q_des=policy_q_des,
                 q_des=q_des,
+                startup_blend_alpha=startup_blend_alpha,
                 clip_mask_low=clip_mask_low,
                 clip_mask_high=clip_mask_high,
             )
@@ -179,7 +189,7 @@ class RobotController:
                     "event": "metadata",
                     "wall_time": datetime.now().isoformat(timespec="milliseconds"),
                     "debug_enabled": True,
-                    "debug_fields_version": 2,
+                    "debug_fields_version": 3,
                     "model": self.policy.actor_model,
                     "model_path": str(self.policy.actor_path),
                     "actor_sha256": self._sha256_file(self.policy.actor_path),
@@ -196,6 +206,7 @@ class RobotController:
                     "kd": self.policy_kd.tolist(),
                     "action_scale": float(self.policy.action_scale),
                     "action_clip": float(self.policy.actor.action_clip),
+                    "startup_blend_duration": float(self.startup_blend_duration),
                     "actor_observation_dim": int(self.policy.actor.observation_dim),
                     "decoder_observation_dim": int(self.policy.predictor.decoder_observation_dim),
                     "full_observation_dim": 191,
@@ -257,7 +268,9 @@ class RobotController:
         raw_action_preclip,
         action_postclip,
         q_des_preclip,
+        policy_q_des,
         q_des,
+        startup_blend_alpha,
         clip_mask_low,
         clip_mask_high,
     ):
@@ -338,9 +351,14 @@ class RobotController:
                         "action_postclip": action_postclip.tolist(),
                         "action": action_postclip.tolist(),
                         "q_des_preclip": q_des_preclip.tolist(),
+                        "policy_q_des": policy_q_des.tolist(),
                         "q_des": q_des.tolist(),
+                        "startup_blend_duration": float(self.startup_blend_duration),
+                        "startup_blend_alpha": float(startup_blend_alpha),
+                        "startup_blend_start_pos": self.startup_blend_start_pos.tolist(),
                         "clip_mask_low": clip_mask_low.tolist(),
                         "clip_mask_high": clip_mask_high.tolist(),
+                        "q_des_minus_policy": (q_des - policy_q_des).tolist(),
                         "q_des_minus_qpos": (q_des - q_pos).tolist(),
                     },
                 }
@@ -355,6 +373,11 @@ class RobotController:
             x = self.policy.actor.activation(x @ kernel + bias)
         kernel, bias = self.policy.actor.weights[-1]
         return (x @ kernel + bias).astype(np.float32)
+
+    def _startup_blend_alpha(self, time_now):
+        if self.startup_blend_duration <= 0.0:
+            return 1.0
+        return float(np.clip(time_now / self.startup_blend_duration, 0.0, 1.0))
 
     def _sha256_file(self, path):
         digest = hashlib.sha256()
@@ -371,6 +394,11 @@ class RobotController:
         self.agent_started = True
         self.policy_start_time = time.monotonic()
         self.last_policy_time = None
+        current_q_pos = np.asarray(self.robot.q_pos, dtype=np.float32)
+        if current_q_pos.shape == self.init_pos.shape:
+            self.startup_blend_start_pos = current_q_pos.copy()
+        else:
+            self.startup_blend_start_pos = self.init_pos.copy()
         self.policy.reset()
         self.node.get_logger().info("Balance-board agent started.")
 
@@ -378,6 +406,7 @@ class RobotController:
         self.agent_started = False
         self.policy_start_time = None
         self.last_policy_time = None
+        self.startup_blend_start_pos = self.init_pos.copy()
         self.policy.reset()
         self.robot.set_default_cmd(default_pos=self.init_pos, default_kp=self.policy_kp, default_kd=self.policy_kd)
 

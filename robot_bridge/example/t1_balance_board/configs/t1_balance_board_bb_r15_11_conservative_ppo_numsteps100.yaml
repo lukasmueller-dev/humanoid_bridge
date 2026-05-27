@@ -39,6 +39,7 @@ policy:
     action_scale: 1.0
     clip_actions: 1.0
     decimation: 10
+    startup_blend_duration: 2.0
     target_qpos_lower: [
       -1.012, -0.314,
       -3.281, -1.640, -2.234, -2.094,
