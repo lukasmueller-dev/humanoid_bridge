@@ -167,6 +167,11 @@ class RobotController:
                 predictor_data["policy_prediction_obs_indices"],
                 dtype=np.int64,
             ).tolist()
+            decoder_obs_indices = (
+                np.asarray(predictor_data["decoder_obs_indices"], dtype=np.int64).tolist()
+                if "decoder_obs_indices" in predictor_data.files
+                else []
+            )
 
         self.debug_log.write(
             json.dumps(
@@ -183,6 +188,7 @@ class RobotController:
                     "actor_indices": actor_indices,
                     "history_obs_indices": history_obs_indices,
                     "predictor_obs_indices": predictor_obs_indices,
+                    "decoder_obs_indices": decoder_obs_indices,
                     "policy_prediction_obs_indices": policy_prediction_obs_indices,
                     "joint_names": JOINT_NAMES,
                     "default_qpos": self.policy.default_dof_pos.tolist(),
@@ -191,6 +197,7 @@ class RobotController:
                     "action_scale": float(self.policy.action_scale),
                     "action_clip": float(self.policy.actor.action_clip),
                     "actor_observation_dim": int(self.policy.actor.observation_dim),
+                    "decoder_observation_dim": int(self.policy.predictor.decoder_observation_dim),
                     "full_observation_dim": 191,
                     "history_length": int(self.policy.predictor.history_length),
                     "observation_slices": {
@@ -309,6 +316,10 @@ class RobotController:
                         "prediction": decoder_prediction.tolist(),
                         "prediction_delta": (decoder_prediction - policy_prediction_input).tolist(),
                         "encoder_latent": np.asarray(debug["encoder_latent"], dtype=np.float32).tolist(),
+                        "decoder_observation": np.asarray(
+                            debug["decoder_observation"],
+                            dtype=np.float32,
+                        ).tolist(),
                         "decoder_input": np.asarray(debug["decoder_input"], dtype=np.float32).tolist(),
                         "history_selected_10x97": np.asarray(debug["history_selected"], dtype=np.float32).tolist(),
                         "history_latest_full_obs_191": np.asarray(

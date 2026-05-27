@@ -241,6 +241,7 @@ class BalanceBoardPredictor:
         predictor_obs_indices,
         policy_prediction_obs_indices,
         activation,
+        decoder_obs_indices=None,
     ):
         self.encoder_weights = [
             (np.asarray(kernel, dtype=np.float32), np.asarray(bias, dtype=np.float32))
@@ -258,6 +259,16 @@ class BalanceBoardPredictor:
             policy_prediction_obs_indices,
             FULL_OBSERVATION_DIM,
         )
+        if decoder_obs_indices is None:
+            self.decoder_obs_indices = None
+            self.decoder_observation_dim = FULL_OBSERVATION_DIM
+        else:
+            self.decoder_obs_indices = _as_index_vector(
+                "decoder_obs_indices",
+                decoder_obs_indices,
+                FULL_OBSERVATION_DIM,
+            )
+            self.decoder_observation_dim = int(self.decoder_obs_indices.shape[0])
         self.activation_name = str(activation)
         self.activation = _activation(self.activation_name)
         self._validate_shapes()
@@ -283,6 +294,7 @@ class BalanceBoardPredictor:
                 predictor_obs_indices=data["predictor_obs_indices"],
                 policy_prediction_obs_indices=data["policy_prediction_obs_indices"],
                 activation=data["activation"].item(),
+                decoder_obs_indices=data["decoder_obs_indices"] if "decoder_obs_indices" in data.files else None,
             )
 
     def _validate_shapes(self):
@@ -312,8 +324,9 @@ class BalanceBoardPredictor:
             expected_in = kernel.shape[1]
         if expected_in <= 0:
             raise ValueError("encoder output dim must be positive")
+        self.encoder_output_dim = int(expected_in)
 
-        decoder_expected_in = expected_in + FULL_OBSERVATION_DIM + ACTION_DIM
+        decoder_expected_in = self.encoder_output_dim + self.decoder_observation_dim + ACTION_DIM
         for idx, (kernel, bias) in enumerate(self.decoder_weights):
             if kernel.ndim != 2 or kernel.shape[0] != decoder_expected_in:
                 raise ValueError(f"decoder_kernel_{idx} input dim must be {decoder_expected_in}, got {kernel.shape}")
@@ -351,14 +364,19 @@ class BalanceBoardPredictor:
         latent = self.encode(history)
         obs = _as_vector("obs", obs, FULL_OBSERVATION_DIM)
         action = _as_vector("action", action, ACTION_DIM)
-        x = np.concatenate([latent, obs, action]).astype(np.float32)
+        if self.decoder_obs_indices is None:
+            decoder_observation = obs.astype(np.float32)
+        else:
+            decoder_observation = obs[self.decoder_obs_indices].astype(np.float32)
+        decoder_input = np.concatenate([latent, decoder_observation, action]).astype(np.float32)
+        x = decoder_input
         for kernel, bias in self.decoder_weights[:-1]:
             x = self.activation(x @ kernel + bias)
         kernel, bias = self.decoder_weights[-1]
         prediction = (x @ kernel + bias).astype(np.float32)
-        decoder_input = np.concatenate([latent, obs, action]).astype(np.float32)
         return prediction, {
             "encoder_latent": latent.copy(),
+            "decoder_observation": decoder_observation.copy(),
             "decoder_input": decoder_input,
             "history_selected": self.select_history_observations(history),
         }
@@ -468,8 +486,12 @@ class BalanceBoardPolicy:
             "clip_mask_low": np.zeros(ACTION_DIM, dtype=bool),
             "clip_mask_high": np.zeros(ACTION_DIM, dtype=bool),
             "decoder_prediction": np.zeros(POLICY_PREDICTION_DIM, dtype=np.float32),
-            "encoder_latent": np.zeros(64, dtype=np.float32),
-            "decoder_input": np.zeros(278, dtype=np.float32),
+            "encoder_latent": np.zeros(self.predictor.encoder_output_dim, dtype=np.float32),
+            "decoder_observation": np.zeros(self.predictor.decoder_observation_dim, dtype=np.float32),
+            "decoder_input": np.zeros(
+                self.predictor.encoder_output_dim + self.predictor.decoder_observation_dim + ACTION_DIM,
+                dtype=np.float32,
+            ),
             "history_selected": np.zeros((self.predictor.history_length, ACTOR_OBSERVATION_DIM), dtype=np.float32),
             "history_latest_full_observation": np.zeros(FULL_OBSERVATION_DIM, dtype=np.float32),
             "history_latest_actor_observation": np.zeros(ACTOR_OBSERVATION_DIM, dtype=np.float32),
@@ -565,6 +587,7 @@ class BalanceBoardPolicy:
             "clip_mask_high": clip_mask_high.copy(),
             "decoder_prediction": predicted_next_policy.copy(),
             "encoder_latent": predictor_debug["encoder_latent"].copy(),
+            "decoder_observation": predictor_debug["decoder_observation"].copy(),
             "decoder_input": predictor_debug["decoder_input"].copy(),
             "history_selected": predictor_debug["history_selected"].copy(),
             "history_latest_full_observation": self.history[-1].copy(),

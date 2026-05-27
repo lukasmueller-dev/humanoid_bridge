@@ -16,6 +16,7 @@ SPEC.loader.exec_module(balance_board_policy)
 
 EXAMPLE_DIR = MODULE_PATH.parents[1]
 RUN_NAME = "balance_board_r14_easyDR_20260525_223940_CEST"
+QV823LI5_RUN_NAME = "bb_r15_11_conservative_ppo_numsteps100"
 NOMINAL_FLAT_BOARD_OBS = np.array(
     [
         0.0, 0.0, 1.0,
@@ -156,11 +157,108 @@ def test_predictor_artifact_matches_balance_board_history_decoder_shapes():
         np.testing.assert_array_equal(data["history_obs_indices"][75:91], np.arange(169, 185))
         np.testing.assert_array_equal(data["history_obs_indices"][91:97], np.arange(185, 191))
         np.testing.assert_array_equal(data["predictor_obs_indices"], np.arange(153, 169))
+        assert "decoder_obs_indices" not in data.files
         np.testing.assert_array_equal(data["policy_prediction_obs_indices"], np.arange(169, 185))
         assert data["encoder_kernel_0"].shape == (970, 512)
         assert data["encoder_kernel_2"].shape == (256, 64)
         assert data["decoder_kernel_0"].shape == (278, 128)
         assert data["decoder_kernel_2"].shape == (256, 16)
+
+
+def test_balance_board_predictor_can_feed_selected_decoder_observation():
+    policy_indices = np.concatenate(
+        [np.arange(78, 153), np.arange(169, 185), np.arange(185, 191)]
+    ).astype(np.int64)
+    encoder_weights = [
+        (
+            np.zeros((10 * policy_indices.shape[0], 64), dtype=np.float32),
+            np.zeros(64, dtype=np.float32),
+        )
+    ]
+    decoder_weights = [
+        (
+            np.zeros((64 + policy_indices.shape[0] + 23, 16), dtype=np.float32),
+            np.zeros(16, dtype=np.float32),
+        )
+    ]
+
+    predictor = balance_board_policy.BalanceBoardPredictor(
+        encoder_weights=encoder_weights,
+        decoder_weights=decoder_weights,
+        history_length=10,
+        history_obs_indices=policy_indices,
+        predictor_obs_indices=np.arange(153, 169),
+        policy_prediction_obs_indices=np.arange(169, 185),
+        decoder_obs_indices=policy_indices,
+        activation="elu",
+    )
+    history = np.zeros((10, 191), dtype=np.float32)
+    obs = np.linspace(-1.0, 1.0, 191, dtype=np.float32)
+    action = np.linspace(-0.5, 0.5, 23, dtype=np.float32)
+
+    prediction, debug = predictor.predict_with_debug(history, obs, action)
+
+    assert predictor.decoder_observation_dim == 97
+    assert prediction.shape == (16,)
+    assert debug["decoder_observation"].shape == (97,)
+    assert debug["decoder_input"].shape == (184,)
+    np.testing.assert_allclose(debug["decoder_observation"], obs[policy_indices])
+
+
+def test_qv823li5_actor_and_predictor_artifacts_match_training_groups():
+    actor_path = EXAMPLE_DIR / "models" / f"{QV823LI5_RUN_NAME}_actor_97d.npz"
+    predictor_path = EXAMPLE_DIR / "models" / f"{QV823LI5_RUN_NAME}_predictor.npz"
+
+    with np.load(actor_path, allow_pickle=False) as actor_data:
+        actor_indices = np.asarray(actor_data["actor_indices"], dtype=np.int64)
+        assert actor_data["kernel_0"].shape == (97, 512)
+        assert actor_data["kernel_3"].shape == (128, 23)
+
+    np.testing.assert_array_equal(actor_indices[:75], np.arange(78, 153))
+    np.testing.assert_array_equal(actor_indices[75:91], np.arange(169, 185))
+    np.testing.assert_array_equal(actor_indices[91:97], np.arange(185, 191))
+
+    with np.load(predictor_path, allow_pickle=False) as predictor_data:
+        assert int(predictor_data["history_length"]) == 10
+        np.testing.assert_array_equal(predictor_data["history_obs_indices"], actor_indices)
+        np.testing.assert_array_equal(predictor_data["predictor_obs_indices"], np.arange(153, 169))
+        np.testing.assert_array_equal(predictor_data["decoder_obs_indices"], actor_indices)
+        np.testing.assert_array_equal(predictor_data["policy_prediction_obs_indices"], np.arange(169, 185))
+        assert predictor_data["encoder_kernel_0"].shape == (970, 512)
+        assert predictor_data["encoder_kernel_2"].shape == (256, 64)
+        assert predictor_data["decoder_kernel_0"].shape == (184, 128)
+        assert predictor_data["decoder_kernel_2"].shape == (256, 16)
+
+
+def test_qv823li5_config_smoke_uses_policy_decoder_observation():
+    cfg_path = EXAMPLE_DIR / "configs" / f"t1_balance_board_{QV823LI5_RUN_NAME}.yaml"
+    with cfg_path.open("r", encoding="utf-8") as f:
+        cfg = yaml.load(f.read(), Loader=yaml.FullLoader)
+
+    assert cfg["policy"]["actor_path"] == f"models/{QV823LI5_RUN_NAME}_actor_97d.npz"
+    assert cfg["policy"]["predictor_path"] == f"models/{QV823LI5_RUN_NAME}_predictor.npz"
+    assert cfg["policy"]["source_checkpoint_path"] == f"models/{QV823LI5_RUN_NAME}.pkl"
+    assert (EXAMPLE_DIR / cfg["policy"]["actor_path"]).is_file()
+    assert (EXAMPLE_DIR / cfg["policy"]["predictor_path"]).is_file()
+    assert (EXAMPLE_DIR / cfg["policy"]["source_checkpoint_path"]).is_file()
+    assert cfg["policy"]["goal_height"] == 0.755
+    assert cfg["debug"]["enabled"] is True
+
+    policy = balance_board_policy.BalanceBoardPolicy(cfg)
+    q_des = policy.inference(
+        dof_pos=np.asarray(cfg["common"]["default_qpos"], dtype=np.float32),
+        dof_vel=np.zeros(23, dtype=np.float32),
+        base_ang_vel=np.zeros(3, dtype=np.float32),
+        projected_gravity=np.array([0.0, 0.0, -1.0], dtype=np.float32),
+    )
+
+    assert q_des.shape == (23,)
+    assert policy.predictor.decoder_observation_dim == 97
+    assert policy.last_debug["decoder_observation"].shape == (97,)
+    assert policy.last_debug["decoder_input"].shape == (184,)
+    assert policy.policy_prediction.shape == (16,)
+    assert np.all(q_des >= policy.target_qpos_lower)
+    assert np.all(q_des <= policy.target_qpos_upper)
 
 
 def test_balance_board_config_matches_training_control_settings():
@@ -279,6 +377,7 @@ def test_balance_board_policy_exposes_decoder_debug_snapshot_after_inference():
     assert debug["policy_prediction_input"].shape == (16,)
     assert debug["decoder_prediction"].shape == (16,)
     assert debug["encoder_latent"].shape == (64,)
+    assert debug["decoder_observation"].shape == (191,)
     assert debug["decoder_input"].shape == (278,)
     assert debug["history_selected"].shape == (10, 97)
     assert debug["history_latest_full_observation"].shape == (191,)
@@ -317,6 +416,8 @@ def test_t1_balance_board_controller_debug_log_contains_observation_and_decoder_
 
     assert rows[0]["event"] == "metadata"
     assert rows[0]["debug_enabled"] is True
+    assert rows[0]["decoder_obs_indices"] == []
+    assert rows[0]["decoder_observation_dim"] == 191
     step = rows[-1]
     assert step["event"] == "policy_step"
     assert len(step["observation"]["full_obs_191"]) == 191
@@ -324,6 +425,7 @@ def test_t1_balance_board_controller_debug_log_contains_observation_and_decoder_
     assert len(step["observation"]["norm_actor_obs_97"]) == 97
     assert len(step["decoder"]["prediction"]) == 16
     assert len(step["decoder"]["encoder_latent"]) == 64
+    assert len(step["decoder"]["decoder_observation"]) == 191
     assert len(step["decoder"]["decoder_input"]) == 278
     assert len(step["decoder"]["history_selected_10x97"]) == 10
     assert len(step["decoder"]["history_selected_10x97"][0]) == 97
