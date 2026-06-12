@@ -1,0 +1,338 @@
+# remote control:
+# start control: L2 + START
+# stop control: L2 + UP + LEFT
+# Ready position: L1
+# Zero position: R1
+
+robot_bridge:
+  ros__parameters:
+    robot_name: "H1_2"
+    duration: 2.0
+    control_dt: 0.002
+    empty_joint_index: -1
+    num_joint: 27
+    torque_control: false
+    imu_rpy_threshold: 1.0 #radians
+
+    upper_limbs_kp_min: 0.0
+    upper_limbs_kp_max: 5000.0
+    upper_limbs_kd_min: 0.0
+    upper_limbs_kd_max: 5000.0
+
+    lower_limbs_kp_min: 0.0
+    lower_limbs_kp_max: 5000.0
+    lower_limbs_kd_min: 0.0
+    lower_limbs_kd_max: 5000.0
+
+    joint_names: [
+                    "LEFT_HIP_YAW", "LEFT_HIP_PITCH", "LEFT_HIP_ROLL", "LEFT_KNEE", "LEFT_ANKLE_PITCH", "LEFT_ANKLE_ROLL",
+                    "RIGHT_HIP_YAW", "RIGHT_HIP_PITCH", "RIGHT_HIP_ROLL", "RIGHT_KNEE", "RIGHT_ANKLE_PITCH", "RIGHT_ANKLE_ROLL",
+                    "WAIST_YAW",
+                    "LEFT_SHOULDER_PITCH", "LEFT_SHOULDER_ROLL", "LEFT_SHOULDER_YAW", "LEFT_ELBOW", "LEFT_WRIST_ROLL", "LEFT_WRIST_PITCH", "LEFT_WRIST_YAW",
+                    "RIGHT_SHOULDER_PITCH", "RIGHT_SHOULDER_ROLL", "RIGHT_SHOULDER_YAW", "RIGHT_ELBOW", "RIGHT_WRIST_ROLL", "RIGHT_WRIST_PITCH", "RIGHT_WRIST_YAW"
+                  ]
+
+    ready_q: [
+               0.0, -0.2,  0.0,  0.5, -0.3, 0.0,
+               0.0, -0.2,  0.0,  0.5, -0.3, 0.0,
+               0.0,
+               0.28, 0.0,  0.0,  0.52, 0.0, 0.0, 0.0,
+               0.28, 0.0,  0.0,  0.52, 0.0, 0.0, 0.0
+             ]
+
+    LEFT_HIP_YAW:
+      idx: 0
+      q_min: -0.43
+      q_max: 0.43
+      dq_limit: 23.0
+      tau_limit: 200.0
+      kp: 250.0
+      kd: 6.5
+      if_strong_joint: true
+      if_parallel_joint: false
+
+    LEFT_HIP_PITCH:
+      idx: 1
+      q_min: -3.14
+      q_max: 2.5
+      dq_limit: 23.0
+      tau_limit: 200.0
+      kp: 250.0
+      kd: 6.5
+      if_strong_joint: true
+      if_parallel_joint: false
+
+    LEFT_HIP_ROLL:
+      idx: 2
+      q_min: -0.43
+      q_max: 3.14
+      dq_limit: 23.0
+      tau_limit: 200.0
+      kp: 250.0
+      kd: 6.5
+      if_strong_joint: true
+      if_parallel_joint: false
+
+    LEFT_KNEE:
+      idx: 3
+      q_min: -0.12
+      q_max: 2.19
+      dq_limit: 14.0
+      tau_limit: 300.0
+      kp: 400.0
+      kd: 10.0
+      if_strong_joint: true
+      if_parallel_joint: false
+
+    LEFT_ANKLE_PITCH:
+      idx: 4
+      q_min: -0.897334
+      q_max: 0.523598
+      dq_limit: 15.0
+      tau_limit: 60.0
+      kp: 80.0
+      kd: 1.5
+      if_strong_joint: false
+      if_parallel_joint: false
+
+    LEFT_ANKLE_ROLL:
+      idx: 5
+      q_min: -0.261799
+      q_max: 0.261799
+      dq_limit: 15.0
+      tau_limit: 40.0
+      kp: 40.0
+      kd: 0.4
+      if_strong_joint: false
+      if_parallel_joint: false
+
+    RIGHT_HIP_YAW:
+      idx: 6
+      q_min: -0.43
+      q_max: 0.43
+      dq_limit: 23.0
+      tau_limit: 200.0
+      kp: 250.0
+      kd: 6.5
+      if_strong_joint: true
+      if_parallel_joint: false
+
+    RIGHT_HIP_PITCH:
+      idx: 7
+      q_min: -3.14
+      q_max: 2.5
+      dq_limit: 23.0
+      tau_limit: 200.0
+      kp: 250.0
+      kd: 6.5
+      if_strong_joint: true
+      if_parallel_joint: false
+
+    RIGHT_HIP_ROLL:
+      idx: 8
+      q_min: -3.14
+      q_max: 0.43
+      dq_limit: 23.0
+      tau_limit: 200.0
+      kp: 250.0
+      kd: 6.5
+      if_strong_joint: true
+      if_parallel_joint: false
+
+    RIGHT_KNEE:
+      idx: 9
+      q_min: -0.12
+      q_max: 2.19
+      dq_limit: 14.0
+      tau_limit: 300.0
+      kp: 400.0
+      kd: 10.0
+      if_strong_joint: true
+      if_parallel_joint: false
+
+    RIGHT_ANKLE_PITCH:
+      idx: 10
+      q_min: -0.897334
+      q_max: 0.523598
+      dq_limit: 15.0
+      tau_limit: 60.0
+      kp: 80.0
+      kd: 1.5
+      if_strong_joint: false
+      if_parallel_joint: false
+
+    RIGHT_ANKLE_ROLL:
+      idx: 11
+      q_min: -0.261799
+      q_max: 0.261799
+      dq_limit: 15.0
+      tau_limit: 40.0
+      kp: 40.0
+      kd: 0.4
+      if_strong_joint: false
+      if_parallel_joint: false
+
+    WAIST_YAW:
+      idx: 12
+      q_min: -2.35
+      q_max: 2.35
+      dq_limit: 23.0
+      tau_limit: 200.0
+      kp: 600.0
+      kd: 6.0
+      if_strong_joint: true
+      if_parallel_joint: false
+
+    LEFT_SHOULDER_PITCH:
+      idx: 13
+      q_min: -3.14
+      q_max: 1.57
+      dq_limit: 11.0
+      tau_limit: 40.0
+      kp: 250.0
+      kd: 6.0
+      if_strong_joint: false
+      if_parallel_joint: false
+
+    LEFT_SHOULDER_ROLL:
+      idx: 14
+      q_min: -0.38
+      q_max: 3.4
+      dq_limit: 11.0
+      tau_limit: 40.0
+      kp: 400.0
+      kd: 10.0
+      if_strong_joint: false
+      if_parallel_joint: false
+
+    LEFT_SHOULDER_YAW:
+      idx: 15
+      q_min: -2.66
+      q_max: 3.01
+      dq_limit: 11.0
+      tau_limit: 18.0
+      kp: 80.0
+      kd: 2.0
+      if_strong_joint: false
+      if_parallel_joint: false
+
+    LEFT_ELBOW:
+      idx: 16
+      q_min: -0.95
+      q_max: 3.18
+      dq_limit: 20.0
+      tau_limit: 18.0
+      kp: 80.0
+      kd: 2.0
+      if_strong_joint: false
+      if_parallel_joint: false
+
+    LEFT_WRIST_ROLL:
+      idx: 17
+      q_min: -3.01
+      q_max: 2.75
+      dq_limit: 22.0
+      tau_limit: 18.0
+      kp: 20.0
+      kd: 0.5
+      if_strong_joint: false
+      if_parallel_joint: false
+
+    LEFT_WRIST_PITCH:
+      idx: 18
+      q_min: -0.4625
+      q_max: 0.4625
+      dq_limit: 22.0
+      tau_limit: 18.0
+      kp: 20.0
+      kd: 0.5
+      if_strong_joint: false
+      if_parallel_joint: false
+
+    LEFT_WRIST_YAW:
+      idx: 19
+      q_min: -1.27
+      q_max: 1.27
+      dq_limit: 22.0
+      tau_limit: 18.0
+      kp: 20.0
+      kd: 0.5
+      if_strong_joint: false
+      if_parallel_joint: false
+
+    RIGHT_SHOULDER_PITCH:
+      idx: 20
+      q_min: -3.14
+      q_max: 1.57
+      dq_limit: 11.0
+      tau_limit: 40.0
+      kp: 250.0
+      kd: 6.0
+      if_strong_joint: false
+      if_parallel_joint: false
+
+    RIGHT_SHOULDER_ROLL:
+      idx: 21
+      q_min: -3.4
+      q_max: 0.38
+      dq_limit: 11.0
+      tau_limit: 40.0
+      kp: 400.0
+      kd: 10.0
+      if_strong_joint: false
+      if_parallel_joint: false
+
+    RIGHT_SHOULDER_YAW:
+      idx: 22
+      q_min: -3.01
+      q_max: 2.66
+      dq_limit: 11.0
+      tau_limit: 18.0
+      kp: 80.0
+      kd: 2.0
+      if_strong_joint: false
+      if_parallel_joint: false
+
+    RIGHT_ELBOW:
+      idx: 23
+      q_min: -0.95
+      q_max: 3.18
+      dq_limit: 20.0
+      tau_limit: 18.0
+      kp: 80.0
+      kd: 2.0
+      if_strong_joint: false
+      if_parallel_joint: false
+
+    RIGHT_WRIST_ROLL:
+      idx: 24
+      q_min: -2.75
+      q_max: 3.01
+      dq_limit: 22.0
+      tau_limit: 18.0
+      kp: 20.0
+      kd: 0.5
+      if_strong_joint: false
+      if_parallel_joint: false
+
+    RIGHT_WRIST_PITCH:
+      idx: 25
+      q_min: -0.4625
+      q_max: 0.4625
+      dq_limit: 22.0
+      tau_limit: 18.0
+      kp: 20.0
+      kd: 0.5
+      if_strong_joint: false
+      if_parallel_joint: false
+
+    RIGHT_WRIST_YAW:
+      idx: 26
+      q_min: -1.27
+      q_max: 1.27
+      dq_limit: 22.0
+      tau_limit: 18.0
+      kp: 20.0
+      kd: 0.5
+      if_strong_joint: false
+      if_parallel_joint: false

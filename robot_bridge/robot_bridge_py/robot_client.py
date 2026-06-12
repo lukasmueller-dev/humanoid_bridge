@@ -226,6 +226,42 @@ class RobotClient:
                   "\n- Ready position: L1"
                   "\n- Zero position: R1"
                   )
+            
+
+        elif self.robot_type == "H1_2": 
+            from unitree_hg.msg import LowState
+            from unitree_go.msg import WirelessController as JoyMsg
+            state_topic_name = '/lowstate'
+            # joy_topic_name = '/wirelesscontroller'
+            low_state_handler = self._low_state_handler_unitree
+            # joy_handler = self._joy_handler_unitree
+            
+            self._default_pos = np.array([0.0, -0.2,  0.0,  0.5, -0.3, 0.0,
+                                          0.0, -0.2,  0.0,  0.5, -0.3, 0.0,
+                                          0.0,
+                                          0.28, 0.0,  0.0,  0.52, 0.0, 0.0, 0.0,
+                                          0.28, 0.0,  0.0,  0.52, 0.0, 0.0, 0.0]) 
+                                           
+   
+            self._default_kp = np.array([200, 200, 200, 300, 80, 40,
+                                         100, 100, 100, 150, 60, 60,
+                                         300,
+                                         100, 100, 50, 50, 20, 20, 20,
+                                         100, 100, 50, 50, 20, 20, 20])
+            
+            self._default_kd = np.array([2.5, 2.5, 2.5, 4, 2, 2,
+                                         2, 2, 2, 4, 2, 2,
+                                         3,
+                                         2, 2, 2, 2, 1, 1, 1,
+                                         2, 2, 2, 2, 1, 1, 1])
+            
+            self.remote_controller = RemoteController()
+            print("Key mapping for Unitree H1-2 robot:"
+                  "\n- Start control: L2 + START"
+                  "\n- Stop control: L2 + UP + LEFT"
+                  "\n- Ready position: L1"
+                  "\n- Zero position: R1"
+                  )
 
         self.low_state_subscription = self.node.create_subscription(LowState, state_topic_name, low_state_handler, 1)
         # self.joystick_subscription = self.node.create_subscription(JoyMsg, joy_topic_name, joy_handler, 1)
