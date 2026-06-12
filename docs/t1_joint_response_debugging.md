@@ -2,7 +2,9 @@
 
 This experiment records real Booster T1 joint responses to controlled target-position commands. It is meant for sim-to-real actuator mismatch debugging, especially around ankle speed, damping, delay, command scaling, and bridge-side clipping.
 
-The recorder uses the same Python robot communication path as `robot_bridge/example/T1/T1_example.py`: `RobotClient`, Booster T1 with 23 DoF, `set_default_cmd`, and `send_cmd(q_target_pos=..., target_kp=..., target_kd=...)`. The bridge remote flow is unchanged:
+The recorder uses the same Python robot communication path as `robot_bridge/example/T1/T1_example.py`: `RobotClient`, Booster T1 with 23 DoF, `set_default_cmd`, and `send_cmd(q_target_pos=..., target_kp=..., target_kd=...)`. By default, start-control/prep uses `prepare.default_qpos`, `prepare.stiffness`, and `prepare.damping` from `robot_bridge/example/T1/configs/T1.yaml`, matching the pose used by the normal T1 client at start. The excitation trajectory is also centered on `prepare.default_qpos` by default, while command gains use `common.stiffness` and `common.damping`, matching the policy-command gain path in `T1_example.py`.
+
+The bridge remote flow is unchanged:
 
 - `LT + RT + START`: start control and move through the bridge prep/default-position behavior
 - `LT + A`: start the scripted joint-response trajectory

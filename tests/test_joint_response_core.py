@@ -123,3 +123,27 @@ def test_apply_dotted_overrides_coerces_scalars_and_nested_values():
     assert updated["experiment"]["amplitude"] == 0.05
     assert updated["control"]["dry_run"] is False
     assert updated["control"]["enable_robot_command"] is True
+
+
+def test_default_start_pose_matches_t1_prepare_pose():
+    core = load_core_module()
+    cfg = core.default_config()
+    t1_cfg = core.load_yaml(REPO_ROOT / "robot_bridge" / "example" / "T1" / "configs" / "T1.yaml")
+
+    start_q, start_kp, start_kd, _ = core.load_start_vectors(cfg, REPO_ROOT)
+
+    np.testing.assert_allclose(start_q, np.asarray(t1_cfg["prepare"]["default_qpos"], dtype=np.float32))
+    np.testing.assert_allclose(start_kp, np.asarray(t1_cfg["prepare"]["stiffness"], dtype=np.float32))
+    np.testing.assert_allclose(start_kd, np.asarray(t1_cfg["prepare"]["damping"], dtype=np.float32))
+
+
+def test_default_experiment_baseline_uses_prepare_pose_but_common_command_gains():
+    core = load_core_module()
+    cfg = core.default_config()
+    t1_cfg = core.load_yaml(REPO_ROOT / "robot_bridge" / "example" / "T1" / "configs" / "T1.yaml")
+
+    nominal_q, command_kp, command_kd, _ = core.load_deployment_vectors(cfg, REPO_ROOT)
+
+    np.testing.assert_allclose(nominal_q, np.asarray(t1_cfg["prepare"]["default_qpos"], dtype=np.float32))
+    np.testing.assert_allclose(command_kp, np.asarray(t1_cfg["common"]["stiffness"], dtype=np.float32))
+    np.testing.assert_allclose(command_kd, np.asarray(t1_cfg["common"]["damping"], dtype=np.float32))

@@ -72,8 +72,15 @@ def default_config():
             "interpolation_order": 0.8,
         },
         "pose": {
-            "nominal_pose_name": "default_standing",
+            "start_pose_name": "prepare",
+            "start_joint_positions": None,
+            "start_stiffness": None,
+            "start_damping": None,
+            "nominal_pose_name": "prepare",
             "nominal_joint_positions": None,
+            "command_gains_name": "common",
+            "command_stiffness": None,
+            "command_damping": None,
             "deployment_config_path": "robot_bridge/example/T1/configs/T1.yaml",
         },
         "experiment": {
@@ -363,19 +370,78 @@ def _resolve_repo_path(repo_root, value):
     return Path(repo_root) / path
 
 
-def load_deployment_vectors(cfg, repo_root):
+def _section_for_pose_name(deployment_cfg, pose_name):
+    pose_key = str(pose_name or "prepare").lower()
+    if pose_key in {"prepare", "prep", "robot_client_default", "start"}:
+        return deployment_cfg["prepare"]
+    if pose_key in {"common", "default_standing", "policy", "standing"}:
+        return deployment_cfg["common"]
+    raise ValueError(
+        f"Unsupported pose/gain section {pose_name!r}; expected prepare or common/default_standing"
+    )
+
+
+def _pose_vector(section, key):
+    if key == "default_qpos":
+        return np.asarray(section["default_qpos"], dtype=np.float32)
+    return np.asarray(section[key], dtype=np.float32)
+
+
+def _load_t1_deployment_cfg(cfg, repo_root):
     pose_cfg = cfg.get("pose", {})
-    nominal_override = pose_cfg.get("nominal_joint_positions")
     deployment_path = _resolve_repo_path(repo_root, pose_cfg["deployment_config_path"])
     deployment_cfg = load_yaml(deployment_path)
-    common = deployment_cfg["common"]
+    return pose_cfg, deployment_cfg, deployment_path
+
+
+def load_start_vectors(cfg, repo_root):
+    pose_cfg, deployment_cfg, deployment_path = _load_t1_deployment_cfg(cfg, repo_root)
+    start_section = _section_for_pose_name(deployment_cfg, pose_cfg.get("start_pose_name", "prepare"))
+    start_pos_override = pose_cfg.get("start_joint_positions")
+    start_kp_override = pose_cfg.get("start_stiffness")
+    start_kd_override = pose_cfg.get("start_damping")
+    start_pos = (
+        np.asarray(start_pos_override, dtype=np.float32)
+        if start_pos_override is not None
+        else _pose_vector(start_section, "default_qpos")
+    )
+    start_kp = (
+        np.asarray(start_kp_override, dtype=np.float32)
+        if start_kp_override is not None
+        else np.asarray(start_section["stiffness"], dtype=np.float32)
+    )
+    start_kd = (
+        np.asarray(start_kd_override, dtype=np.float32)
+        if start_kd_override is not None
+        else np.asarray(start_section["damping"], dtype=np.float32)
+    )
+    if start_pos.shape != (23,) or start_kp.shape != (23,) or start_kd.shape != (23,):
+        raise ValueError("Start pose/kp/kd vectors must all have length 23")
+    return start_pos, start_kp, start_kd, deployment_path
+
+
+def load_deployment_vectors(cfg, repo_root):
+    pose_cfg, deployment_cfg, deployment_path = _load_t1_deployment_cfg(cfg, repo_root)
+    nominal_override = pose_cfg.get("nominal_joint_positions")
+    command_kp_override = pose_cfg.get("command_stiffness")
+    command_kd_override = pose_cfg.get("command_damping")
+    nominal_section = _section_for_pose_name(deployment_cfg, pose_cfg.get("nominal_pose_name", "prepare"))
+    gains_section = _section_for_pose_name(deployment_cfg, pose_cfg.get("command_gains_name", "common"))
     nominal = (
         np.asarray(nominal_override, dtype=np.float32)
         if nominal_override is not None
-        else np.asarray(common["default_qpos"], dtype=np.float32)
+        else _pose_vector(nominal_section, "default_qpos")
     )
-    kp = np.asarray(common["stiffness"], dtype=np.float32)
-    kd = np.asarray(common["damping"], dtype=np.float32)
+    kp = (
+        np.asarray(command_kp_override, dtype=np.float32)
+        if command_kp_override is not None
+        else np.asarray(gains_section["stiffness"], dtype=np.float32)
+    )
+    kd = (
+        np.asarray(command_kd_override, dtype=np.float32)
+        if command_kd_override is not None
+        else np.asarray(gains_section["damping"], dtype=np.float32)
+    )
     if nominal.shape != (23,) or kp.shape != (23,) or kd.shape != (23,):
         raise ValueError("Deployment nominal/kp/kd vectors must all have length 23")
     return nominal, kp, kd, deployment_path

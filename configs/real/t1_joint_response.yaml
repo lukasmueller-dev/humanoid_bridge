@@ -11,8 +11,15 @@ control:
   interpolation_order: 0.8
 
 pose:
-  nominal_pose_name: default_standing
+  start_pose_name: prepare
+  start_joint_positions: null
+  start_stiffness: null
+  start_damping: null
+  nominal_pose_name: prepare
   nominal_joint_positions: null
+  command_gains_name: common
+  command_stiffness: null
+  command_damping: null
   deployment_config_path: robot_bridge/example/T1/configs/T1.yaml
 
 experiment:

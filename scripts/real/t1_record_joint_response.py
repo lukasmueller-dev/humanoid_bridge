@@ -103,6 +103,7 @@ def _write_json(path, data):
 def _print_startup(cfg, plan, output_dir, joint_limits_path, deployment_config_path):
     exp = cfg["experiment"]
     control = cfg["control"]
+    pose = cfg["pose"]
     print("T1 joint response recorder")
     print(f"  selected joint: {exp['selected_joint']} -> {plan.selected_joint_name}")
     print(f"  joint index: {plan.selected_joint_index}")
@@ -117,6 +118,9 @@ def _print_startup(cfg, plan, output_dir, joint_limits_path, deployment_config_p
     print(f"  total duration: {float(plan.total_duration):.3f} s")
     print(f"  dry_run: {control.get('dry_run')}")
     print(f"  enable_robot_command: {control.get('enable_robot_command')}")
+    print(f"  start pose: {pose.get('start_pose_name')}")
+    print(f"  experiment nominal pose: {pose.get('nominal_pose_name')}")
+    print(f"  command gains: {pose.get('command_gains_name')}")
     print(f"  output log path: {output_dir}")
     print(f"  deployment config: {deployment_config_path}")
     print(f"  joint limit config: {joint_limits_path}")
@@ -206,7 +210,20 @@ class RecorderLogger:
 
 
 class T1JointResponseController:
-    def __init__(self, node, cfg, plan, nominal, kp, kd, output_dir, metadata):
+    def __init__(
+        self,
+        node,
+        cfg,
+        plan,
+        nominal,
+        kp,
+        kd,
+        start_pos,
+        start_kp,
+        start_kd,
+        output_dir,
+        metadata,
+    ):
         from robot_bridge_py.robot_client import RobotClient
 
         self.node = node
@@ -215,6 +232,9 @@ class T1JointResponseController:
         self.nominal = nominal.astype(np.float32)
         self.kp = kp.astype(np.float32)
         self.kd = kd.astype(np.float32)
+        self.start_pos = start_pos.astype(np.float32)
+        self.start_kp = start_kp.astype(np.float32)
+        self.start_kd = start_kd.astype(np.float32)
         self.dt = float(cfg["control"]["dt"])
         self.robot = RobotClient(
             node=self.node,
@@ -224,9 +244,9 @@ class T1JointResponseController:
             interpolation_order=float(cfg["control"].get("interpolation_order", 0.8)),
         )
         self.robot.set_default_cmd(
-            default_pos=self.nominal,
-            default_kp=self.kp,
-            default_kd=self.kd,
+            default_pos=self.start_pos,
+            default_kp=self.start_kp,
+            default_kd=self.start_kd,
         )
         self.logger = RecorderLogger(cfg, plan, output_dir, metadata)
         self.timer = self.node.create_timer(self.dt, self.step)
@@ -455,6 +475,7 @@ def main(argv=None):
 
     cfg = core.load_joint_response_config(args.config, overrides=overrides)
     joint_names = core.t1_joint_names()
+    start_pos, start_kp, start_kd, deployment_path = core.load_start_vectors(cfg, REPO_ROOT)
     nominal, kp, kd, deployment_path = core.load_deployment_vectors(cfg, REPO_ROOT)
     joint_limits, joint_limits_path = core.load_t1_joint_limits(cfg, REPO_ROOT, joint_names)
     plan = core.build_trajectory(cfg, nominal, joint_names=joint_names, joint_limits=joint_limits)
@@ -467,6 +488,9 @@ def main(argv=None):
         "selected_joint_index": plan.selected_joint_index,
         "deployment_config_path": str(deployment_path),
         "joint_limits_config_path": str(joint_limits_path),
+        "start_pose_name": cfg["pose"].get("start_pose_name"),
+        "experiment_nominal_pose_name": cfg["pose"].get("nominal_pose_name"),
+        "command_gains_name": cfg["pose"].get("command_gains_name"),
         "remote_flow": {
             "start_control_prep": "LT + RT + START",
             "start_experiment": "LT + A",
@@ -501,6 +525,9 @@ def main(argv=None):
         nominal=nominal,
         kp=kp,
         kd=kd,
+        start_pos=start_pos,
+        start_kp=start_kp,
+        start_kd=start_kd,
         output_dir=output_dir,
         metadata=metadata,
     )
