@@ -305,6 +305,7 @@ def build_trajectory(cfg, nominal_joint_positions, joint_names=None, joint_limit
         raise ValueError(f"nominal_joint_positions must have shape ({len(joint_names)},), got {nominal.shape}")
 
     selected_index = resolve_joint_name(cfg["experiment"]["selected_joint"], joint_names)
+    
     command_type = str(cfg["experiment"].get("command_type", "step")).lower()
     dt = float(cfg["control"].get("dt", 0.02))
     if dt <= 0.0:

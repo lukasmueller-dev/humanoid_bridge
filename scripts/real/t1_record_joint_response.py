@@ -268,7 +268,8 @@ class T1JointResponseController:
                 self.experiment_started = False
             return
 
-        if getattr(joy, "lt", False) and getattr(joy, "a", False) and self.robot.key_count == 2:
+        if joy.lt and joy.a and self.robot.key_count == 2:
+            print("LT + A detected: starting experiment (if control is started).")
             if self.robot.control_started:
                 self.experiment_started = True
                 self.start_monotonic = time.monotonic()
@@ -427,6 +428,10 @@ class T1JointResponseController:
             and self.robot.control_started
         ):
             self._return_to_nominal()
+            if reason == "completed" and not self.cfg["safety"].get(
+                "stop_control_on_exit", False
+            ):
+                self._hold_nominal_on_bridge()
         if self.cfg["safety"].get("stop_control_on_exit", False):
             try:
                 self.robot.stop_control()
@@ -464,6 +469,16 @@ class T1JointResponseController:
             )
             time.sleep(self.dt)
 
+    def _hold_nominal_on_bridge(self):
+        self.robot.cmd.hold_position = True
+        self.robot.cmd.duration = max(self.dt, float(self.robot.cmd.duration))
+        self.robot.send_cmd(
+            q_target_pos=self.nominal,
+            target_kp=self.kp,
+            target_kd=self.kd,
+        )
+        time.sleep(max(self.dt, 0.05))
+
 
 def main(argv=None):
     args = parse_args(argv)
@@ -474,6 +489,8 @@ def main(argv=None):
         overrides.append("control.enable_robot_command=true")
 
     cfg = core.load_joint_response_config(args.config, overrides=overrides)
+
+    print("selected joint name: ", cfg["experiment"]["selected_joint"])
     joint_names = core.t1_joint_names()
     start_pos, start_kp, start_kd, deployment_path = core.load_start_vectors(cfg, REPO_ROOT)
     nominal, kp, kd, deployment_path = core.load_deployment_vectors(cfg, REPO_ROOT)
