@@ -208,10 +208,9 @@ robot_bridge:
     Left_Ankle_Pitch:
       idx: 15
 
-      # q_min: -0.87
-      # q_max: 0.35
-      q_min: -0.401
-      q_max: 0.855
+      q_min: -0.87
+      q_max: 0.35
+
 
       dq_limit: 18.8
       tau_limit: 24.0      
@@ -223,10 +222,8 @@ robot_bridge:
     Left_Ankle_Roll:
       idx: 16
 
-      # q_min: -0.44
-      # q_max: 0.44
-      q_min: -0.419
-      q_max: 0.785
+      q_min: -0.44
+      q_max: 0.44
 
       dq_limit: 12.4
       tau_limit: 15.0      
@@ -248,8 +245,8 @@ robot_bridge:
 
     RightHipRoll:
       idx: 18   
-      q_min: -1.536
-      q_max: 0.366
+      q_min: -1.57
+      q_max: 0.2
       dq_limit: 10.9  
       tau_limit: 25.0
       kp: 350.0
@@ -259,8 +256,8 @@ robot_bridge:
 
     RightHipYaw:
       idx: 19
-      q_min: -1.012
-      q_max: 1.012
+      q_min: -1.0
+      q_max: 1.0
       dq_limit: 10.9
       tau_limit: 25.0      
       kp: 180.0
@@ -270,8 +267,8 @@ robot_bridge:
 
     RightKnee:
       idx: 20
-      q_min: -0.192
-      q_max: 2.146
+      q_min: 0.0
+      q_max: 2.15
       dq_limit: 11.7
       tau_limit: 60.0  
       kp: 350.0
@@ -282,10 +279,8 @@ robot_bridge:
     Right_Ankle_Pitch:
       idx: 21
 
-      # q_min: -0.87
-      # q_max: 0.35
-      q_min: -0.401
-      q_max: 0.855
+      q_min: -0.87
+      q_max: 0.35
 
       dq_limit: 18.8
       tau_limit: 24.0      
@@ -297,10 +292,8 @@ robot_bridge:
     Right_Ankle_Roll:
       idx: 22
 
-      # q_min: -0.44      
-      # q_max: 0.44
-      q_min: -0.419      
-      q_max: 0.785
+      q_min: -0.45     
+      q_max: 0.45
 
       dq_limit: 12.4
       tau_limit: 24.0  
