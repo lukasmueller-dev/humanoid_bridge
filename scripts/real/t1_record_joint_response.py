@@ -100,7 +100,7 @@ def _write_json(path, data):
         f.write("\n")
 
 
-def _print_startup(cfg, plan, output_dir, joint_limits_path, deployment_config_path):
+def _print_startup(cfg, plan, output_dir, joint_limits_path, deployment_config_path, kp, kd):
     exp = cfg["experiment"]
     control = cfg["control"]
     pose = cfg["pose"]
@@ -121,6 +121,10 @@ def _print_startup(cfg, plan, output_dir, joint_limits_path, deployment_config_p
     print(f"  start pose: {pose.get('start_pose_name')}")
     print(f"  experiment nominal pose: {pose.get('nominal_pose_name')}")
     print(f"  command gains: {pose.get('command_gains_name')}")
+    print(
+        f"  selected joint gains: kp={float(kp[plan.selected_joint_index])} "
+        f"kd={float(kd[plan.selected_joint_index])}"
+    )
     print(f"  output log path: {output_dir}")
     print(f"  deployment config: {deployment_config_path}")
     print(f"  joint limit config: {joint_limits_path}")
@@ -338,6 +342,13 @@ class T1JointResponseController:
                 velocity_abort,
             )
             self.logger.write_row(row, target, qpos, qvel, tau)
+            self._log_safety_abort_details(
+                tracking_abort=tracking_abort,
+                velocity_abort=velocity_abort,
+                target=target,
+                qpos=qpos,
+                qvel=qvel,
+            )
             self.safe_shutdown(reason="safety_abort")
             return
 
@@ -379,6 +390,76 @@ class T1JointResponseController:
             max_any > float(safety.get("max_joint_velocity", 8.0))
             or max_selected > float(safety.get("selected_joint_max_velocity", 6.0))
         )
+
+    def _joint_name(self, index):
+        try:
+            return core.t1_joint_names()[int(index)]
+        except (IndexError, ValueError):
+            return f"joint_{index}"
+
+    def _tracking_abort_detail(self, target, qpos):
+        errors = np.abs(np.asarray(target) - np.asarray(qpos))
+        index = int(np.argmax(errors))
+        return {
+            "index": index,
+            "name": self._joint_name(index),
+            "target": float(target[index]),
+            "measured": float(qpos[index]),
+            "error": float(errors[index]),
+            "limit": float(self.cfg["safety"].get("max_tracking_error", 0.5)),
+        }
+
+    def _velocity_abort_details(self, qvel):
+        velocities = np.abs(np.asarray(qvel))
+        max_index = int(np.argmax(velocities))
+        selected_index = self.plan.selected_joint_index
+        return {
+            "max": {
+                "index": max_index,
+                "name": self._joint_name(max_index),
+                "velocity": float(qvel[max_index]),
+                "abs_velocity": float(velocities[max_index]),
+                "limit": float(self.cfg["safety"].get("max_joint_velocity", 8.0)),
+            },
+            "selected": {
+                "index": selected_index,
+                "name": self._joint_name(selected_index),
+                "velocity": float(qvel[selected_index]),
+                "abs_velocity": float(velocities[selected_index]),
+                "limit": float(self.cfg["safety"].get("selected_joint_max_velocity", 6.0)),
+            },
+        }
+
+    def _log_safety_abort_details(self, tracking_abort, velocity_abort, target, qpos, qvel):
+        if tracking_abort:
+            detail = self._tracking_abort_detail(target, qpos)
+            self.node.get_logger().error(
+                "Safety abort: tracking error exceeded limit. "
+                f"joint={detail['index']}:{detail['name']} "
+                f"target={detail['target']:.6f} measured={detail['measured']:.6f} "
+                f"error={detail['error']:.6f} limit={detail['limit']:.6f}"
+            )
+        if velocity_abort:
+            details = self._velocity_abort_details(qvel)
+            max_detail = details["max"]
+            selected_detail = details["selected"]
+            reasons = []
+            if max_detail["abs_velocity"] > max_detail["limit"]:
+                reasons.append("max_joint_velocity")
+            if selected_detail["abs_velocity"] > selected_detail["limit"]:
+                reasons.append("selected_joint_max_velocity")
+            self.node.get_logger().error(
+                "Safety abort: velocity exceeded limit. "
+                f"reasons={','.join(reasons)} "
+                f"max_joint={max_detail['index']}:{max_detail['name']} "
+                f"velocity={max_detail['velocity']:.6f} "
+                f"abs_velocity={max_detail['abs_velocity']:.6f} "
+                f"limit={max_detail['limit']:.6f}; "
+                f"selected_joint={selected_detail['index']}:{selected_detail['name']} "
+                f"velocity={selected_detail['velocity']:.6f} "
+                f"abs_velocity={selected_detail['abs_velocity']:.6f} "
+                f"limit={selected_detail['limit']:.6f}"
+            )
 
     def _make_row(
         self,
@@ -518,7 +599,7 @@ def main(argv=None):
         },
     }
 
-    _print_startup(cfg, plan, output_dir, joint_limits_path, deployment_path)
+    _print_startup(cfg, plan, output_dir, joint_limits_path, deployment_path, kp, kd)
     if cfg["control"].get("dry_run", True):
         _print_dry_run(cfg, plan, joint_names)
         print("\nDry-run complete: no ROS node was created and no robot command was sent.")

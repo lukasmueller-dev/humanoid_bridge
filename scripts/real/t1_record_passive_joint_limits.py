@@ -260,8 +260,15 @@ class T1PassiveJointLimitRecorder:
             self.logging_active = True
             self.start_monotonic = time.monotonic()
             self.loop_index = 0
+            print(
+                "LT + A detected: passive joint-limit recording started. "
+                f"Output directory: {self.logger.output_dir}. "
+                f"Sample frequency: {self.args.sample_frequency} Hz.",
+                flush=True,
+            )
             self.node.get_logger().info("Passive joint-limit logging started.")
         elif is_stop_logging_combo(joy, self.robot.key_count):
+            print("LT + X detected: stopping recording and saving logs.", flush=True)
             self.node.get_logger().info("LT + X received; saving passive joint-limit log.")
             self.safe_shutdown(reason="lt_x_stop_logging")
 
@@ -318,6 +325,16 @@ class T1PassiveJointLimitRecorder:
         self.node.get_logger().info(f"Passive recorder shutdown: {reason}")
         summary = self.logger.close()
         self.node.get_logger().info(f"Saved {summary['sample_count']} samples to {self.logger.output_dir}")
+        print(
+            "Passive joint-limit logs processed. "
+            f"Saved {summary['sample_count']} samples to {self.logger.output_dir}.",
+            flush=True,
+        )
+        print(f"  summary: {self.logger.output_dir / 'summary.json'}", flush=True)
+        if not self.args.no_csv:
+            print(f"  csv: {self.logger.output_dir / 'data.csv'}", flush=True)
+        if not self.args.no_npz:
+            print(f"  npz: {self.logger.output_dir / 'data.npz'}", flush=True)
         self.closed = True
         try:
             import rclpy

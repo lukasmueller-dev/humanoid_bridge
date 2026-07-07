@@ -125,6 +125,35 @@ def test_apply_dotted_overrides_coerces_scalars_and_nested_values():
     assert updated["control"]["enable_robot_command"] is True
 
 
+def test_apply_dotted_overrides_rejects_unknown_top_level_key_with_suggestion():
+    core = load_core_module()
+    cfg = core.default_config()
+
+    try:
+        core.apply_dotted_overrides(cfg, ["selected_joint_kd=7.0"])
+    except ValueError as exc:
+        message = str(exc)
+    else:
+        raise AssertionError("expected selected_joint_kd override to be rejected")
+
+    assert "Unknown override 'selected_joint_kd'" in message
+    assert "experiment.selected_joint_kd" in message
+
+
+def test_apply_dotted_overrides_rejects_unknown_nested_key():
+    core = load_core_module()
+    cfg = core.default_config()
+
+    try:
+        core.apply_dotted_overrides(cfg, ["experiment.not_a_real_key=1"])
+    except ValueError as exc:
+        message = str(exc)
+    else:
+        raise AssertionError("expected unknown nested override to be rejected")
+
+    assert "Unknown override 'experiment.not_a_real_key'" in message
+
+
 def test_default_start_pose_matches_t1_prepare_pose():
     core = load_core_module()
     cfg = core.default_config()
@@ -147,3 +176,22 @@ def test_default_experiment_baseline_uses_prepare_pose_but_common_command_gains(
     np.testing.assert_allclose(nominal_q, np.asarray(t1_cfg["prepare"]["default_qpos"], dtype=np.float32))
     np.testing.assert_allclose(command_kp, np.asarray(t1_cfg["common"]["stiffness"], dtype=np.float32))
     np.testing.assert_allclose(command_kd, np.asarray(t1_cfg["common"]["damping"], dtype=np.float32))
+
+
+def test_selected_joint_gain_overrides_only_selected_joint():
+    core = load_core_module()
+    cfg = core.default_config()
+    cfg["experiment"]["selected_joint"] = "right_ankle_roll"
+    cfg["experiment"]["selected_joint_kp"] = 42.0
+    cfg["experiment"]["selected_joint_kd"] = 1.25
+    t1_cfg = core.load_yaml(REPO_ROOT / "robot_bridge" / "example" / "T1" / "configs" / "T1.yaml")
+
+    _, command_kp, command_kd, _ = core.load_deployment_vectors(cfg, REPO_ROOT)
+
+    expected_kp = np.asarray(t1_cfg["common"]["stiffness"], dtype=np.float32)
+    expected_kd = np.asarray(t1_cfg["common"]["damping"], dtype=np.float32)
+    selected_index = core.resolve_joint_name("right_ankle_roll")
+    expected_kp[selected_index] = np.float32(42.0)
+    expected_kd[selected_index] = np.float32(1.25)
+    np.testing.assert_allclose(command_kp, expected_kp)
+    np.testing.assert_allclose(command_kd, expected_kd)

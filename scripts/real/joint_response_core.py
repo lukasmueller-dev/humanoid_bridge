@@ -1,4 +1,5 @@
 import copy
+import difflib
 import math
 import re
 from pathlib import Path
@@ -85,6 +86,8 @@ def default_config():
         },
         "experiment": {
             "selected_joint": "left_ankle_pitch",
+            "selected_joint_kp": None,
+            "selected_joint_kd": None,
             "command_type": "step",
             "amplitude": 0.02,
             "pre_hold_time": 1.0,
@@ -149,8 +152,32 @@ def _parse_override_value(value):
     return parsed
 
 
+def _flatten_config_paths(cfg, prefix=""):
+    paths = []
+    for key, value in cfg.items():
+        path = f"{prefix}.{key}" if prefix else str(key)
+        if isinstance(value, dict):
+            paths.extend(_flatten_config_paths(value, path))
+        else:
+            paths.append(path)
+    return paths
+
+
+def _override_suggestion(dotted_key, allowed_paths):
+    leaf = dotted_key.split(".")[-1]
+    leaf_matches = [path for path in allowed_paths if path.split(".")[-1] == leaf]
+    if len(leaf_matches) == 1:
+        return leaf_matches[0]
+    matches = difflib.get_close_matches(dotted_key, allowed_paths, n=1)
+    if matches:
+        return matches[0]
+    return leaf_matches[0] if leaf_matches else None
+
+
 def apply_dotted_overrides(cfg, overrides):
     updated = copy.deepcopy(cfg)
+    allowed_paths = sorted(_flatten_config_paths(default_config()))
+    allowed_path_set = set(allowed_paths)
     for raw in overrides:
         if raw is None:
             continue
@@ -162,6 +189,12 @@ def apply_dotted_overrides(cfg, overrides):
         if "=" not in item:
             raise ValueError(f"Override must be key=value, got {raw!r}")
         dotted_key, value = item.split("=", 1)
+        if dotted_key not in allowed_path_set:
+            suggestion = _override_suggestion(dotted_key, allowed_paths)
+            message = f"Unknown override {dotted_key!r}"
+            if suggestion is not None:
+                message += f". Did you mean {suggestion!r}?"
+            raise ValueError(message)
         keys = dotted_key.split(".")
         node = updated
         for key in keys[:-1]:
@@ -423,6 +456,7 @@ def load_start_vectors(cfg, repo_root):
 
 def load_deployment_vectors(cfg, repo_root):
     pose_cfg, deployment_cfg, deployment_path = _load_t1_deployment_cfg(cfg, repo_root)
+    exp_cfg = cfg.get("experiment", {})
     nominal_override = pose_cfg.get("nominal_joint_positions")
     command_kp_override = pose_cfg.get("command_stiffness")
     command_kd_override = pose_cfg.get("command_damping")
@@ -445,6 +479,13 @@ def load_deployment_vectors(cfg, repo_root):
     )
     if nominal.shape != (23,) or kp.shape != (23,) or kd.shape != (23,):
         raise ValueError("Deployment nominal/kp/kd vectors must all have length 23")
+    selected_index = resolve_joint_name(exp_cfg.get("selected_joint", "left_ankle_pitch"))
+    selected_kp = exp_cfg.get("selected_joint_kp")
+    selected_kd = exp_cfg.get("selected_joint_kd")
+    if selected_kp is not None:
+        kp[selected_index] = float(selected_kp)
+    if selected_kd is not None:
+        kd[selected_index] = float(selected_kd)
     return nominal, kp, kd, deployment_path
 
 
