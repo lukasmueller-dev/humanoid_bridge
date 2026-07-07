@@ -14,6 +14,21 @@ from utils.lmj_policy import JOINT_NAMES, LMJWalkingPolicy, normalize_actor_obse
 
 
 DEFAULT_CONFIG_FILE = "src/humanoid_bridge/robot_bridge/example/T1_lmj_walking/configs/T1_lmj_walking.yaml"
+STICK_COMMAND_DEADBAND = 0.03
+
+
+def scale_stick_axis_to_command(
+    axis_value,
+    command_at_negative_axis,
+    command_at_positive_axis,
+    deadband=STICK_COMMAND_DEADBAND,
+):
+    axis_value = float(np.clip(axis_value, -1.0, 1.0))
+    if abs(axis_value) < float(deadband):
+        return 0.0
+    if axis_value < 0.0:
+        return float(-axis_value * command_at_negative_axis)
+    return float(axis_value * command_at_positive_axis)
 
 
 def parse_args(argv=None):
@@ -262,6 +277,24 @@ class RobotController:
         self.vy_cmd = float(np.clip(self.vy_cmd, self.vy_min, self.vy_max))
         self.vyaw_cmd = float(np.clip(self.vyaw_cmd, self.vyaw_min, self.vyaw_max))
 
+    def _set_commands_from_joystick(self, joy_key):
+        self.vx_cmd = scale_stick_axis_to_command(
+            getattr(joy_key, "ly", 0.0),
+            command_at_negative_axis=self.vx_max,
+            command_at_positive_axis=self.vx_min,
+        )
+        self.vy_cmd = scale_stick_axis_to_command(
+            getattr(joy_key, "lx", 0.0),
+            command_at_negative_axis=self.vy_max,
+            command_at_positive_axis=self.vy_min,
+        )
+        self.vyaw_cmd = scale_stick_axis_to_command(
+            getattr(joy_key, "rx", 0.0),
+            command_at_negative_axis=self.vyaw_max,
+            command_at_positive_axis=self.vyaw_min,
+        )
+        self._clip_commands()
+
     def check_state(self):
         self.robot.update_robot_state()
 
@@ -273,22 +306,11 @@ class RobotController:
                     self.node.get_logger().warn("Start bridge control first with LT + RT + START.")
 
             if self.agent_started:
-                if self.robot.joy_key.hat_u and self.robot.key_count == 1:
-                    self.vx_cmd += self.command_step_x
-                elif self.robot.joy_key.hat_d and self.robot.key_count == 1:
-                    self.vx_cmd -= self.command_step_x
-                elif self.robot.joy_key.hat_l and self.robot.key_count == 1:
-                    self.vy_cmd += self.command_step_y
-                elif self.robot.joy_key.hat_r and self.robot.key_count == 1:
-                    self.vy_cmd -= self.command_step_y
-                elif self.robot.joy_key.rx * -1 >= 1.0:
-                    self.vyaw_cmd += self.command_step_yaw
-                elif self.robot.joy_key.rx * -1 <= -1.0:
-                    self.vyaw_cmd -= self.command_step_yaw
                 if (self.robot.joy_key.ls or self.robot.joy_key.rs) and self.robot.key_count == 1:
                     self._stop_agent_commands()
+                else:
+                    self._set_commands_from_joystick(self.robot.joy_key)
 
-                self._clip_commands()
                 print(f"Velocity commands - vx: {self.vx_cmd}, vy: {self.vy_cmd}, vyaw: {self.vyaw_cmd}")
             else:
                 self._stop_agent_commands()

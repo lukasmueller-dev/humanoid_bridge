@@ -2,6 +2,7 @@ import importlib.util
 import sys
 import types
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import yaml
@@ -589,3 +590,57 @@ def test_t1_lmj_example_accepts_config_argument_with_default():
 
     assert default_args.config == module.DEFAULT_CONFIG_FILE
     assert custom_args.config == "configs/custom.yaml"
+
+
+def test_stick_axis_scaling_maps_full_deflection_to_command_limits():
+    module = load_example_module()
+
+    np.testing.assert_allclose(
+        module.scale_stick_axis_to_command(
+            -1.0,
+            command_at_negative_axis=0.3,
+            command_at_positive_axis=-0.2,
+        ),
+        0.3,
+    )
+    np.testing.assert_allclose(
+        module.scale_stick_axis_to_command(
+            1.0,
+            command_at_negative_axis=0.3,
+            command_at_positive_axis=-0.2,
+        ),
+        -0.2,
+    )
+    np.testing.assert_allclose(
+        module.scale_stick_axis_to_command(
+            0.02,
+            command_at_negative_axis=0.3,
+            command_at_positive_axis=-0.2,
+        ),
+        0.0,
+    )
+    np.testing.assert_allclose(
+        module.scale_stick_axis_to_command(
+            2.0,
+            command_at_negative_axis=0.3,
+            command_at_positive_axis=-0.2,
+        ),
+        -0.2,
+    )
+
+
+def test_lmj_controller_maps_left_and_right_sticks_to_direct_velocity_commands():
+    module = load_example_module()
+    controller = module.RobotController.__new__(module.RobotController)
+    controller.vx_min = -0.2
+    controller.vx_max = 0.3
+    controller.vy_min = -0.2
+    controller.vy_max = 0.2
+    controller.vyaw_min = -0.3
+    controller.vyaw_max = 0.3
+
+    controller._set_commands_from_joystick(SimpleNamespace(lx=-1.0, ly=-1.0, rx=-1.0))
+    np.testing.assert_allclose([controller.vx_cmd, controller.vy_cmd, controller.vyaw_cmd], [0.3, 0.2, 0.3])
+
+    controller._set_commands_from_joystick(SimpleNamespace(lx=1.0, ly=1.0, rx=1.0))
+    np.testing.assert_allclose([controller.vx_cmd, controller.vy_cmd, controller.vyaw_cmd], [-0.2, -0.2, -0.3])
