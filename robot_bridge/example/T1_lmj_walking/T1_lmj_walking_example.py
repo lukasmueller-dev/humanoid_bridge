@@ -45,7 +45,7 @@ class RobotController:
             robot_type="T1",
             num_dof=23,
             control_frequency=50.0,
-            interpolation_order=0.8,
+            interpolation_order=0.0,
         )
         self.timer = self.node.create_timer(0.02, self.step)
         self.policy = LMJWalkingPolicy(cfg=cfg)

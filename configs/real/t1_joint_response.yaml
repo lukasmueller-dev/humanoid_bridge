@@ -24,6 +24,8 @@ pose:
 
 experiment:
   selected_joint: left_ankle_pitch
+  selected_joint_kp: null
+  selected_joint_kd: null
   command_type: step
   amplitude: 0.02
   pre_hold_time: 1.0
@@ -41,10 +43,10 @@ safety:
   joint_limit_margin: 0.05
   joint_limits_config_path: robot_bridge/params/T1_config.yaml
   abort_on_large_tracking_error: true
-  max_tracking_error: 0.5
+  max_tracking_error: 1.0
   abort_on_large_velocity: true
-  max_joint_velocity: 8.0
-  selected_joint_max_velocity: 6.0
+  max_joint_velocity: 15.0
+  selected_joint_max_velocity: 15.0
   return_to_nominal_on_exit: true
   return_duration: 2.0
   stop_control_on_exit: false

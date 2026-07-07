@@ -7,6 +7,8 @@ install/
 
 # Logs
 log/
+/logs/
+/robot_bridge/example/T1_lmj_walking/debug_logs/
 
 # ROS-specific files
 *.bag
