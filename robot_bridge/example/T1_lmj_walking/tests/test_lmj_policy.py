@@ -21,6 +21,7 @@ SYMANKLE_YAWDRIFT_RUN_NAME = "t1_no_parajoints_slippery_ankle_noise_symankle_yaw
 HFA93I45_PLUS_PUSH_RUN_NAME = "hfa93i45_plus_push_full"
 FACTS_CONTEXT_DISABLED_RUN_NAME = "v0_2_A0_context_disabled_full_dr_1p2B"
 MX_ID_VANILLA_PPO_RUN_NAME = "MX_ID_vanilla_PPO_ent002_lr1e-4"
+PURE_AXIS_YAWDRIFT_FEETROLL_RUN_NAME = "pure_axis_20p_yawdrift_m1_feetroll_m4_1p2b"
 
 
 def load_example_module():
@@ -495,6 +496,63 @@ def test_mx_id_vanilla_ppo_deployment_config_matches_80d_training_settings():
         "y": [-0.2, 0.2],
         "yaw": [-0.3, 0.3],
     }
+
+
+def test_pure_axis_yawdrift_feetroll_deployment_config_matches_training_settings():
+    cfg_path = EXAMPLE_DIR / "configs" / f"T1_lmj_walking_{PURE_AXIS_YAWDRIFT_FEETROLL_RUN_NAME}.yaml"
+
+    with cfg_path.open("r", encoding="utf-8") as f:
+        cfg = yaml.load(f.read(), Loader=yaml.FullLoader)
+
+    assert cfg["policy"]["actor_path"] == f"models/{PURE_AXIS_YAWDRIFT_FEETROLL_RUN_NAME}_actor_81d.npz"
+    assert cfg["policy"]["source_checkpoint_path"] == f"models/{PURE_AXIS_YAWDRIFT_FEETROLL_RUN_NAME}.pkl"
+    assert (EXAMPLE_DIR / cfg["policy"]["actor_path"]).is_file()
+    assert (EXAMPLE_DIR / cfg["policy"]["source_checkpoint_path"]).is_file()
+    assert cfg["policy"].get("include_height_in_obs", True) is True
+    assert cfg["policy"]["num_observations"] == 81
+    assert cfg["common"]["stiffness"] == [
+        20.0, 20.0,
+        20.0, 20.0, 20.0, 20.0,
+        20.0, 20.0, 20.0, 20.0,
+        200.0,
+        200.0, 200.0, 200.0, 200.0, 50.0, 50.0,
+        200.0, 200.0, 200.0, 200.0, 50.0, 50.0,
+    ]
+    assert cfg["common"]["damping"] == [
+        0.2, 0.2,
+        0.5, 0.5, 0.5, 0.5,
+        0.5, 0.5, 0.5, 0.5,
+        5.0,
+        5.0, 5.0, 5.0, 5.0, 3.0, 3.0,
+        5.0, 5.0, 5.0, 5.0, 3.0, 3.0,
+    ]
+    assert cfg["common"]["default_qpos"] == [
+        0.0, 0.0,
+        0.2, -1.35, 0.0, -0.5,
+        0.2, 1.35, 0.0, 0.5,
+        0.0,
+        -0.2, 0.0, 0.0, 0.4, -0.25, 0.0,
+        -0.2, 0.0, 0.0, 0.4, -0.25, 0.0,
+    ]
+    assert cfg["policy"]["control"]["action_scale"] == 1.0
+    assert cfg["policy"]["control"]["clip_actions"] == 1.0
+    assert cfg["policy"]["gait_frequency"] == 1.25
+    assert cfg["policy"]["goal_height"] == 0.67
+    assert cfg["command"]["limit"] == {
+        "x": [-0.2, 0.3],
+        "y": [-0.2, 0.2],
+        "yaw": [-0.3, 0.3],
+    }
+
+    with np.load(EXAMPLE_DIR / cfg["policy"]["actor_path"], allow_pickle=False) as actor_data:
+        np.testing.assert_array_equal(actor_data["actor_indices"], np.arange(78, 159))
+        assert actor_data["kernel_0"].shape == (81, 512)
+        assert actor_data["kernel_3"].shape == (128, 23)
+        assert actor_data["mean"].shape == (81,)
+        assert actor_data["var"].shape == (81,)
+        assert actor_data["full_mean"].shape == (159,)
+        assert actor_data["full_var"].shape == (159,)
+        assert float(actor_data["action_clip"]) == 1.0
 
 
 def test_t1_lmj_example_accepts_config_argument_with_default():
