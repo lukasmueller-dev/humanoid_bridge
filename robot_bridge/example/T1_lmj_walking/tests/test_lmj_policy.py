@@ -14,6 +14,7 @@ SPEC.loader.exec_module(lmj_policy)
 
 
 EXAMPLE_DIR = MODULE_PATH.parents[1]
+T1_CONFIG_PATH = EXAMPLE_DIR.parents[1] / "params" / "T1_config.yaml"
 RUN_NAME = "parajoints_slippery_ankle_noise_armmult_yawdrift_m0p2_1p2b"
 JOINT_WRAPPER_RUN_NAME = "joint_wrapper_tm4xonfx"
 SLIPPERY_FLOOR_KP50_RUN_NAME = "slippery_floor_kp50_jpiazpg2"
@@ -22,6 +23,20 @@ HFA93I45_PLUS_PUSH_RUN_NAME = "hfa93i45_plus_push_full"
 FACTS_CONTEXT_DISABLED_RUN_NAME = "v0_2_A0_context_disabled_full_dr_1p2B"
 MX_ID_VANILLA_PPO_RUN_NAME = "MX_ID_vanilla_PPO_ent002_lr1e-4"
 PURE_AXIS_YAWDRIFT_FEETROLL_RUN_NAME = "pure_axis_20p_yawdrift_m1_feetroll_m4_1p2b"
+
+
+def load_t1_joint_limits():
+    with T1_CONFIG_PATH.open("r", encoding="utf-8") as f:
+        cfg = yaml.load(f.read(), Loader=yaml.FullLoader)["robot_bridge"]["ros__parameters"]
+    joint_count = int(cfg["num_joint"])
+    lower = [0.0] * joint_count
+    upper = [0.0] * joint_count
+    for joint_name in cfg["joint_names"]:
+        joint_cfg = cfg[joint_name]
+        idx = int(joint_cfg["idx"])
+        lower[idx] = float(joint_cfg["q_min"])
+        upper[idx] = float(joint_cfg["q_max"])
+    return lower, upper
 
 
 def load_example_module():
@@ -39,6 +54,17 @@ def load_example_module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def test_all_lmj_walking_configs_match_t1_joint_limits():
+    expected_lower, expected_upper = load_t1_joint_limits()
+
+    for cfg_path in sorted((EXAMPLE_DIR / "configs").glob("*.yaml")):
+        with cfg_path.open("r", encoding="utf-8") as f:
+            cfg = yaml.load(f.read(), Loader=yaml.FullLoader)
+        control_cfg = cfg["policy"]["control"]
+        assert control_cfg["target_qpos_lower"] == expected_lower, cfg_path.name
+        assert control_cfg["target_qpos_upper"] == expected_upper, cfg_path.name
 
 
 def test_build_actor_observation_uses_expected_81d_sequence():

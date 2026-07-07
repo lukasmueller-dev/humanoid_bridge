@@ -15,6 +15,7 @@ SPEC.loader.exec_module(balance_board_policy)
 
 
 EXAMPLE_DIR = MODULE_PATH.parents[1]
+T1_CONFIG_PATH = EXAMPLE_DIR.parents[1] / "params" / "T1_config.yaml"
 RUN_NAME = "balance_board_r14_easyDR_20260525_223940_CEST"
 QV823LI5_RUN_NAME = "bb_r15_11_conservative_ppo_numsteps100"
 NO_POLICY_PREDICTION_RUN_NAME = (
@@ -31,6 +32,31 @@ NOMINAL_FLAT_BOARD_OBS = np.array(
     ],
     dtype=np.float32,
 )
+
+
+def load_t1_joint_limits():
+    with T1_CONFIG_PATH.open("r", encoding="utf-8") as f:
+        cfg = yaml.load(f.read(), Loader=yaml.FullLoader)["robot_bridge"]["ros__parameters"]
+    joint_count = int(cfg["num_joint"])
+    lower = [0.0] * joint_count
+    upper = [0.0] * joint_count
+    for joint_name in cfg["joint_names"]:
+        joint_cfg = cfg[joint_name]
+        idx = int(joint_cfg["idx"])
+        lower[idx] = float(joint_cfg["q_min"])
+        upper[idx] = float(joint_cfg["q_max"])
+    return lower, upper
+
+
+def test_all_balance_board_configs_match_t1_joint_limits():
+    expected_lower, expected_upper = load_t1_joint_limits()
+
+    for cfg_path in sorted((EXAMPLE_DIR / "configs").glob("*.yaml")):
+        with cfg_path.open("r", encoding="utf-8") as f:
+            cfg = yaml.load(f.read(), Loader=yaml.FullLoader)
+        control_cfg = cfg["policy"]["control"]
+        assert control_cfg["target_qpos_lower"] == expected_lower, cfg_path.name
+        assert control_cfg["target_qpos_upper"] == expected_upper, cfg_path.name
 
 
 def load_example_module(robot_client_cls=object):
