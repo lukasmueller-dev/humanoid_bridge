@@ -119,7 +119,29 @@ void sairol_bridge::G1Bridge::lowStateHandler_(unitree_hg::msg::LowState::Shared
     }
     // Update the last state time using the same clock source
     last_state_time_ = nh->get_clock()->now();
-    for (size_t i = 0; i < msg->motor_state.size(); ++i)
+
+    // unitree_hg::msg::LowState declares `MotorState[35] motor_state`, a fixed
+    // array, so size() is always 35 whatever the robot. currentState_ is a
+    // bridge_interface::msg::LowState, whose motor_state is an unbounded
+    // sequence resized once to numJoint_ (29 for the G1, per G1_config.yaml).
+    // Copying the full 35 therefore writes six MotorState past the end of that
+    // allocation on every message. Bound the copy, and say so once.
+    const size_t motor_state_count = msg->motor_state.size();
+    const size_t expected_motor_state_count = static_cast<size_t>(numJoint_);
+    const size_t copy_count = std::min(motor_state_count, expected_motor_state_count);
+
+    if (motor_state_count != expected_motor_state_count)
+    {
+        RCLCPP_WARN_ONCE(
+            nh->get_logger(),
+            "LowState carries %zu motor states, but robot_bridge is configured for %zu joints. "
+            "Only the first %zu entries will be used.",
+            motor_state_count,
+            expected_motor_state_count,
+            copy_count);
+    }
+
+    for (size_t i = 0; i < copy_count; ++i)
     {
         currentState_.motor_state[i].q = msg->motor_state[i].q;
         currentState_.motor_state[i].dq = msg->motor_state[i].dq;
