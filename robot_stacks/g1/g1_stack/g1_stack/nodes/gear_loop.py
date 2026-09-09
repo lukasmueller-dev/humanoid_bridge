@@ -19,6 +19,7 @@ Runs in SIMPLE's venv with the ROS workspace sourced:
 from __future__ import annotations
 
 import sys
+import threading
 
 NODE_NAME = "gear_wbc_bridge"
 NUM_MOTORS = 29
@@ -33,6 +34,11 @@ def run(config, rclpy, client_cls, install, loop_main, out=print):
     hz = float(config.control_frequency)
     rclpy.init()
     node = rclpy.create_node(NODE_NAME)
+    # Spin on a thread: a node joins the global executor only when spun, and
+    # GEAR's MuJoCo simulator takes the executor's first node for its rate
+    # (base_sim.py, BaseSimulator.__init__). Publishing needs no spin; the
+    # client's service calls do, and this loop makes none.
+    threading.Thread(target=rclpy.spin, args=(node,), daemon=True).start()
     try:
         client = client_cls(node, num_dof=NUM_MOTORS, control_frequency=hz)
         install(client, duration=1.0 / hz)
