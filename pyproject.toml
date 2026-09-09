@@ -5,7 +5,8 @@
 line-length = 100
 target-version = "py38"
 # Vendored upstream: examples/ is reference code no CMakeLists builds or installs.
-extend-exclude = ["thirdparty", "examples"]
+# *.md: ruff reformats python blocks inside markdown, rewriting doc examples.
+extend-exclude = ["thirdparty", "examples", "*.md"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]
