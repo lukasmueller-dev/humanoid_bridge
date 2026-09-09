@@ -13,8 +13,8 @@ interpolation, 1 kHz publish and watchdog.
 | Reach the wire only through the injected client | Keeps the adapter testable and transport-agnostic |
 | No controller import at module level | This repo does not depend on the controller |
 
-The client is `robot_bridge_py.cmd_client.RobotCmdClient` or
-`robot_bridge_py.robot_client.RobotClient`; both expose `send_cmd`.
+The client is `robot_bridge.cmd_client.RobotCmdClient` or
+`robot_bridge.robot_client.RobotClient`; both expose `send_cmd`.
 
 ## Requirements
 
@@ -31,13 +31,13 @@ Replaces `decoupled_wbc.control.envs.g1.utils.command_sender.BodyCommandSender`.
 
 ```python
 import rclpy
-from robot_bridge_py.cmd_client import RobotCmdClient
-from robot_bridge_py.adapters.gear_wbc import install
+from robot_bridge.cmd_client import RobotCmdClient
+from robot_bridge.adapters.gear_wbc import install
 
 rclpy.init()
 node = rclpy.create_node("gear_wbc_bridge")
 client = RobotCmdClient(node, num_dof=29, control_frequency=50.0)
-install(client)                     # before building the env
+install(client)  # before building the env
 ```
 
 `install()` rebinds `g1_body.BodyCommandSender`, which is where `G1Body`
@@ -46,7 +46,7 @@ resolves it. Pass `module=` to target a different module.
 ### 2. Start control, then run
 
 ```python
-client.start_control(default_position=[0.0] * 29)   # ramps over 2 s, blocks
+client.start_control(default_position=[0.0] * 29)  # ramps over 2 s, blocks
 ```
 
 The bridge drops every `/robot_cmd` until this returns.

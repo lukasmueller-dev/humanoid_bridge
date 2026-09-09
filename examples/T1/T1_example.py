@@ -4,7 +4,7 @@ import numpy as np
 # from utils.remote_control_service import RemoteControlService
 from utils.policy import Policy
 import yaml
-from robot_bridge_py.robot_client import RobotClient
+from robot_bridge.robot_client import RobotClient
 from enum import Enum
 
 

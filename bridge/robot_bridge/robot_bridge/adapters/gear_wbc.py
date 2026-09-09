@@ -23,18 +23,18 @@ class GearWbcAdapter:
         self.num_motors = int(config["NUM_MOTORS"])
         self.joint2motor = list(config["JOINT2MOTOR"])
         self.motor2joint = list(config["MOTOR2JOINT"])
-        self.default_motor_angles = np.asarray(
-            config["DEFAULT_MOTOR_ANGLES"], dtype=np.float32)
+        self.default_motor_angles = np.asarray(config["DEFAULT_MOTOR_ANGLES"], dtype=np.float32)
 
         # Short MOTOR_KP/MOTOR_KD leave the tail at zero, as in GEAR.
         self.robot_kp = np.zeros(self.num_motors, dtype=np.float32)
         self.robot_kd = np.zeros(self.num_motors, dtype=np.float32)
-        self.robot_kp[:len(config["MOTOR_KP"])] = config["MOTOR_KP"]
-        self.robot_kd[:len(config["MOTOR_KD"])] = config["MOTOR_KD"]
+        self.robot_kp[: len(config["MOTOR_KP"])] = config["MOTOR_KP"]
+        self.robot_kd[: len(config["MOTOR_KD"])] = config["MOTOR_KD"]
 
         if getattr(client, "num_dof", self.num_motors) != self.num_motors:
-            raise ValueError("client has num_dof {}, config NUM_MOTORS is {}".format(
-                client.num_dof, self.num_motors))
+            raise ValueError(
+                f"client has num_dof {client.num_dof}, config NUM_MOTORS is {self.num_motors}"
+            )
 
         self._q = np.zeros(self.num_motors, dtype=np.float32)
         self._dq = np.zeros(self.num_motors, dtype=np.float32)
@@ -59,15 +59,22 @@ class GearWbcAdapter:
         """GEAR's entry point. One /robot_cmd per call."""
         q, dq, tau = self.remap(cmd_q, cmd_dq, cmd_tau)
         return self.client.send_cmd(
-            q_target_pos=q, q_target_vel=dq, target_tau=tau,
-            target_kp=self.robot_kp, target_kd=self.robot_kd,
-            duration=self.duration, hold_position=False)
+            q_target_pos=q,
+            q_target_vel=dq,
+            target_tau=tau,
+            target_kp=self.robot_kp,
+            target_kd=self.robot_kd,
+            duration=self.duration,
+            hold_position=False,
+        )
 
 
 def make_factory(client, duration=DEFAULT_DURATION):
     """Wrap client into a one-argument BodyCommandSender(config=...) replacement."""
+
     def factory(config):
         return GearWbcAdapter(config, client=client, duration=duration)
+
     return factory
 
 
@@ -75,6 +82,7 @@ def install(client, duration=DEFAULT_DURATION, module=None):
     """Rebind g1_body.BodyCommandSender to this adapter. Call before building the env."""
     if module is None:
         import importlib
+
         module = importlib.import_module(GEAR_BODY_MODULE)
     factory = make_factory(client, duration)
     module.BodyCommandSender = factory

@@ -2,7 +2,7 @@ import rclpy
 import time
 import numpy as np
 import yaml
-from robot_bridge_py.robot_client import RobotClient, KeyMap # ,WirelessKey_H1_G1
+from robot_bridge.robot_client import RobotClient, KeyMap # ,WirelessKey_H1_G1
 from enum import Enum
 import torch
 from utils.rotation_helper import get_gravity_orientation, transform_imu_data
@@ -11,31 +11,18 @@ from config import Config
 class RobotController:   
     def __init__(self, node, cfg: Config):
         self.config = cfg
-        self.node = node
-        self.num_dof = 20
-        self.robot = RobotClient(node=self.node, robot_type="H1", num_dof=self.num_dof, control_frequency=50.0, interpolation_order=0.0)
+        self.node = node  
+        self.robot = RobotClient(node=self.node, robot_type="G1", num_dof=29, control_frequency=50.0, interpolation_order=0.0)
         self.timer = self.node.create_timer(0.02, self.step)  # 50 Hz control frequency
         self.action = np.zeros(cfg.num_actions, dtype=np.float32)
         # Initialize components
         self.policy = torch.jit.load(cfg.policy_path)
         self.counter = 0
 
-        init_pos = np.concatenate([self.config.default_angles, self.config.arm_waist_target]).astype(np.float32)
-        policy_kp = np.concatenate([self.config.kps, self.config.arm_waist_kps]).astype(np.float32)
-        policy_kd = np.concatenate([self.config.kds, self.config.arm_waist_kds]).astype(np.float32)
-        
-        self.init_pos = np.zeros(self.num_dof, dtype=np.float32)
-        self.policy_kp = np.zeros(self.num_dof, dtype=np.float32)
-        self.policy_kd = np.zeros(self.num_dof, dtype=np.float32)
-        
-        self.joint2motor_idx = self.config.leg_joint2motor_idx + self.config.arm_waist_joint2motor_idx
+        self.init_pos = np.concatenate([self.config.default_angles, self.config.arm_waist_target]).astype(np.float32)
+        self.policy_kp = np.concatenate([self.config.kps, self.config.arm_waist_kps]).astype(np.float32)
+        self.policy_kd = np.concatenate([self.config.kds, self.config.arm_waist_kds]).astype(np.float32)
 
-        for i in range(len(self.joint2motor_idx)):
-            motor_idx = self.joint2motor_idx[i]
-            self.init_pos[motor_idx] = init_pos[i]
-            self.policy_kp[motor_idx] = policy_kp[i]
-            self.policy_kd[motor_idx] = policy_kd[i]
-        
         self.obs = np.zeros(cfg.num_obs, dtype=np.float32)
         self.agent_started = False
         self.vx_cmd = 0.0
@@ -64,7 +51,6 @@ class RobotController:
             waist_yaw = self.robot.q_pos[self.config.arm_waist_joint2motor_idx[0]]
             waist_yaw_omega = self.robot.q_vel[self.config.arm_waist_joint2motor_idx[0]]
             quat, ang_vel = transform_imu_data(waist_yaw=waist_yaw, waist_yaw_omega=waist_yaw_omega, imu_quat=quat, imu_omega=ang_vel)
-
 
         # create observation
         gravity_orientation = get_gravity_orientation(quat)
@@ -97,15 +83,9 @@ class RobotController:
         # transform action to target_dof_pos
         target_dof_pos = self.config.default_angles + self.action * self.config.action_scale
 
-        q_target_pos = np.zeros(self.num_dof, dtype=np.float32)
-        
-        for i in range(len(self.config.leg_joint2motor_idx)):
-            motor_idx = self.config.leg_joint2motor_idx[i]
-            q_target_pos[motor_idx] = target_dof_pos[i]
-        for i in range(len(self.config.arm_waist_joint2motor_idx)):
-            motor_idx = self.config.arm_waist_joint2motor_idx[i]
-            q_target_pos[motor_idx] = self.config.arm_waist_target[i]
 
+        q_target_pos = np.concatenate([target_dof_pos, self.config.arm_waist_target])
+    
         # send the command
         self.robot.send_cmd(q_target_pos, target_kp=self.policy_kp, target_kd=self.policy_kd)
 
@@ -114,6 +94,7 @@ class RobotController:
 
         if self.robot.joy_key is not None:
 
+            # if (self.robot.joy_key.keys & (WirelessKey_H1_G1.KEY_R2 | WirelessKey_H1_G1.KEY_A)) == (WirelessKey_H1_G1.KEY_R2 | WirelessKey_H1_G1.KEY_A):  # start: R2 + A
             if self.robot.remote_controller.is_exact_combo(self.robot.joy_key, [KeyMap.R2, KeyMap.A]):  # start: R2 + A
                 if self.robot.control_started:
                     self.agent_started = True
@@ -125,12 +106,16 @@ class RobotController:
                     self.node.get_logger().warn("Please start the control first by pressing L2 + START.")
             
             self.robot.joy_key = None  # Reset joy_key
-        
+
         if self.agent_started:
+            # self.vx_cmd = self.robot.joy_key.ly
+            # self.vy_cmd = self.robot.joy_key.lx * -1
+            # self.vyaw_cmd = self.robot.joy_key.rx * -1
+            
             self.vx_cmd = self.robot.remote_controller.ly
             self.vy_cmd = self.robot.remote_controller.lx * -1
             self.vyaw_cmd = self.robot.remote_controller.rx * -1
-
+            
             self.vx_cmd = self.vx_cmd * 0.5
             self.vy_cmd = self.vy_cmd * 0.5
             self.vyaw_cmd = self.vyaw_cmd * 0.4
@@ -146,7 +131,7 @@ class RobotController:
 
 if __name__ == "__main__":
     rclpy.init()
-    cfg_file = "src/humanoid_bridge/robot_bridge/example/H1/configs/h1.yaml"
+    cfg_file = "src/humanoid_bridge/robot_bridge/example/G1/configs/g1.yaml"
     config = Config(cfg_file)
     node = rclpy.create_node('robot_client_node')
     controller = RobotController(node, config)
