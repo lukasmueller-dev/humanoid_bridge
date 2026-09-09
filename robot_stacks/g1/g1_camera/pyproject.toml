@@ -1,0 +1,14 @@
+# Self-contained: this package is rsynced to the Jetson on its own, so its tool
+# config cannot live in the repo root. Metadata stays in setup.py (PEP 621 needs
+# setuptools >= 61; the workstation has 59.6).
+
+[tool.ruff]
+line-length = 100
+# The Jetson runs JetPack 5.1.1: Python 3.8, ROS 2 Foxy.
+target-version = "py38"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
