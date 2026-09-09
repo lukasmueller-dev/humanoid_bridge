@@ -23,11 +23,12 @@ keeps the Jetson's isolation structural rather than conventional;
 ## Layout
 
 ```
-bridge/{bridge_interface,robot_bridge}       upstream-bound
+bridge/                                      upstream-bound
+  bridge_interface/  robot_bridge/{robot_bridge,tests,examples}
 robot_stacks/g1/                             grouping dirs, neither is a package
   g1_camera/g1_camera/    ships to the Jetson; py3.8, no ROS, self-contained
   g1_stack/g1_stack/      robot.py, joints/, observation/, gear/, nodes/
-examples/  thirdparty/  pyproject.toml  conftest.py
+scripts/  thirdparty/  pyproject.toml  conftest.py
 ```
 
 Public surface:
@@ -81,6 +82,11 @@ g1_camera.CameraClient, CameraServer, FakeCameraServer, synthetic_rgb
   find console scripts; pip still puts them in `bin/`, so both paths work.
 - Moving a colcon package leaves `build/<pkg>` pointing at the old source path.
   Delete `build/<pkg>` and `install/<pkg>` before rebuilding.
+- The example clients hardcoded their config path relative to the *workspace*
+  root, so they only ran from `~/bridge_ws` and broke silently when moved. They
+  now resolve it from `__file__`.
+- `scripts/setup_*.sh` counted directories up to the workspace. They now search
+  upward for `install/setup.bash`, so moving them cannot mis-source a prefix.
 - colcon stops descending once a directory is identified as a package, so a
   package nested inside another package is never discovered. Any grouping
   directory must not itself carry a `package.xml`.

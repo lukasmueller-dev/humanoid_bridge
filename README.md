@@ -8,9 +8,10 @@ checks on command and state, and publishes motor commands at 1 kHz.
 bridge/           the bridge and its Python client   — upstream-bound
   bridge_interface/   messages and services
   robot_bridge/       C++ bridge, robot_bridge/ Python client, adapters
+    examples/           reference clients per robot (not built or installed)
 robot_stacks/     per-robot deploy layers
   g1/                 g1_stack, g1_camera
-examples/         reference clients, one per robot (not built or installed)
+scripts/          environment setup, sourced not run
 thirdparty/       vendored unitree_ros2 and booster_ros2_interface
 ```
 
@@ -41,11 +42,11 @@ The Python client installs with the package — no `pip install` step.
 
 ## 2. Launch the bridge
 
-Set the network interface in `setup_unitree.sh` to match your cabling first.
+Set the network interface in `scripts/setup_unitree.sh` to match your cabling first.
 
 ```bash
-source src/humanoid_bridge/setup_unitree.sh    # G1, H1
-source src/humanoid_bridge/setup_booster.sh    # T1
+source src/humanoid_bridge/scripts/setup_unitree.sh    # G1, H1
+source src/humanoid_bridge/scripts/setup_booster.sh    # T1
 
 ros2 run robot_bridge G1_bridge --ros-args \
     --params-file src/humanoid_bridge/bridge/robot_bridge/params/G1_config.yaml
@@ -57,9 +58,10 @@ The bridge starts in damping mode.
 ## 3. Launch a client
 
 ```bash
-source src/humanoid_bridge/setup_unitree.sh
-pip install -r src/humanoid_bridge/examples/G1/requirements.txt   # first time
-python src/humanoid_bridge/examples/G1/G1_example.py
+source src/humanoid_bridge/scripts/setup_unitree.sh
+EX=src/humanoid_bridge/bridge/robot_bridge/examples/g1
+pip install -r $EX/requirements.txt      # first time
+python $EX/example.py
 ```
 
 ## 4. Operate

@@ -16,7 +16,7 @@ deploy layers stay independent of it.
 ```
 bridge/           upstream-bound: bridge_interface (msgs, srvs), robot_bridge (C++ + Python client)
 robot_stacks/     per-robot deploy layers; g1/ holds g1_stack and g1_camera
-examples/         reference clients, one per robot — not built or installed
+scripts/          environment setup, sourced not run
 thirdparty/       vendored unitree_ros2, booster_ros2_interface
 ```
 
@@ -34,7 +34,7 @@ _One line each, dated, with a pointer (commit or PR)._
 - 2026-09-09: `robot_bridge_py` → `robot_bridge`; divergence from upstream paths accepted over deferring the rename — same commit
 - 2026-09-09: Packaging metadata stays in `setup.py`; `pyproject.toml` is tool config only, because system setuptools is 59.6 and PEP 621 needs ≥61 — same commit
 - 2026-09-09: Jetson-bound code stays its own package `g1_camera`, a sibling of `g1_stack` under `robot_stacks/g1/`: the package boundary makes the isolation structural rather than a convention a test has to defend, and it is shallower than folding it in — commit `refactor(g1_stack)`
-- 2026-09-09: `examples/` excluded from lint as vendored upstream reference code no CMakeLists builds — same commit
+- 2026-09-09: `examples/` sits inside `robot_bridge`, the package it demonstrates, so a subtree split of `bridge/` carries it; excluded from lint as vendored upstream code — same commit
 
 ## Roadmap
 
