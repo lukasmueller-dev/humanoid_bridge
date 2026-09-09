@@ -15,7 +15,7 @@ log/
 *.bak
 
 # Python package info
-robot_bridge_py.egg-info/
+*.egg-info/
 
 # IDE and editor files
 .vscode/

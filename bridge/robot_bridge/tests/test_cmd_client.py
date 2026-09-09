@@ -5,7 +5,8 @@ import pytest
 pytest.importorskip("bridge_interface", reason="source the colcon workspace first")
 
 from bridge_interface.msg import MotorCmd, RobotCmd  # noqa: E402
-from robot_bridge_py.cmd_client import MOTOR_MODE, TOPIC, pack_robot_cmd  # noqa: E402
+
+from robot_bridge.cmd_client import MOTOR_MODE, TOPIC, pack_robot_cmd  # noqa: E402
 
 N = 29
 
@@ -14,11 +15,13 @@ REL = 1e-5
 
 
 def arrays(n=N):
-    return ([0.1 * i for i in range(n)],      # q
-            [0.2 * i for i in range(n)],      # dq
-            [0.3 * i for i in range(n)],      # tau
-            [10.0 * i for i in range(n)],     # kp
-            [0.5 * i for i in range(n)])      # kd
+    return (
+        [0.1 * i for i in range(n)],  # q
+        [0.2 * i for i in range(n)],  # dq
+        [0.3 * i for i in range(n)],  # tau
+        [10.0 * i for i in range(n)],  # kp
+        [0.5 * i for i in range(n)],
+    )  # kd
 
 
 def test_every_field_lands_on_its_motor():
@@ -37,8 +40,7 @@ def test_every_field_lands_on_its_motor():
 
 
 def test_header_fields_are_carried_through():
-    cmd = pack_robot_cmd(*arrays(), interpolation_order=1.0, duration=0.02,
-                         hold_position=True)
+    cmd = pack_robot_cmd(*arrays(), interpolation_order=1.0, duration=0.02, hold_position=True)
     assert cmd.interpolation_order == 1.0
     assert cmd.duration == pytest.approx(0.02)
     assert cmd.hold_position is True
@@ -69,8 +71,17 @@ def test_wire_contract_is_pinned():
     """Field order and widths must match bridge_interface/msg/*.msg."""
     assert TOPIC == "/robot_cmd"
     assert MotorCmd.get_fields_and_field_types() == {
-        "mode": "uint8", "q": "float", "dq": "float", "tau": "float",
-        "kp": "float", "kd": "float", "reserve": "uint32[3]"}
+        "mode": "uint8",
+        "q": "float",
+        "dq": "float",
+        "tau": "float",
+        "kp": "float",
+        "kd": "float",
+        "reserve": "uint32[3]",
+    }
     assert RobotCmd.get_fields_and_field_types() == {
-        "interpolation_order": "double", "hold_position": "boolean",
-        "duration": "double", "motor_cmd": "sequence<bridge_interface/MotorCmd>"}
+        "interpolation_order": "double",
+        "hold_position": "boolean",
+        "duration": "double",
+        "motor_cmd": "sequence<bridge_interface/MotorCmd>",
+    }

@@ -82,7 +82,7 @@ ament_target_dependencies(H1_bridge
   rosidl_default_runtime
 )
 
-ament_python_install_package(robot_bridge_py)
+ament_python_install_package(robot_bridge)
 
 
 install(

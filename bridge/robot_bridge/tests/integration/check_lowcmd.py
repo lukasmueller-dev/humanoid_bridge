@@ -6,8 +6,8 @@ import sys
 
 from drive_gear_wbc import RAMP_DEFAULT, fingerprint, load_config
 
-BRIDGE_HZ = 1000.0        # control_dt: 0.001 in G1_config.yaml
-RAMP_SECONDS = 2.0        # `duration` in G1_config.yaml
+BRIDGE_HZ = 1000.0  # control_dt: 0.001 in G1_config.yaml
+RAMP_SECONDS = 2.0  # `duration` in G1_config.yaml
 
 
 def main():
@@ -24,35 +24,35 @@ def main():
     failures = []
 
     def check(name, ok, detail=""):
-        print("{:<28} {}{}".format(name, "PASS" if ok else "FAIL",
-                                   "  " + detail if detail else ""))
+        print("{:<28} {}{}".format(name, "PASS" if ok else "FAIL", "  " + detail if detail else ""))
         if not ok:
             failures.append(name)
 
-    check("received /lowcmd", len(samples) > 1000, "{} samples".format(len(samples)))
+    check("received /lowcmd", len(samples) > 1000, f"{len(samples)} samples")
     if not samples:
         sys.exit(1)
 
     span = samples[-1]["t"] - samples[0]["t"]
     rate = len(samples) / span if span else 0.0
-    check("publishes at ~1 kHz", 0.8 * BRIDGE_HZ < rate < 1.2 * BRIDGE_HZ,
-          "{:.0f} Hz".format(rate))
+    check("publishes at ~1 kHz", 0.8 * BRIDGE_HZ < rate < 1.2 * BRIDGE_HZ, f"{rate:.0f} Hz")
 
     t0 = samples[0]["t"]
     ramped = min(samples, key=lambda s: abs((s["t"] - t0) - (RAMP_SECONDS + 0.3)))
-    check("start_control honoured",
-          all(abs(v - RAMP_DEFAULT) < 1e-2 for v in ramped["q"][:n]),
-          "q[0]={:.4f} wanted {}".format(ramped["q"][0], RAMP_DEFAULT))
+    check(
+        "start_control honoured",
+        all(abs(v - RAMP_DEFAULT) < 1e-2 for v in ramped["q"][:n]),
+        "q[0]={:.4f} wanted {}".format(ramped["q"][0], RAMP_DEFAULT),
+    )
 
     last = samples[-1]
     want = fingerprint(n)
-    check("joint j lands on motor j",
-          all(abs(a - b) < 1e-3 for a, b in zip(last["q"], want)),
-          "q[:3]={}".format([round(v, 4) for v in last["q"][:3]]))
-    check("kp from config", all(abs(a - b) < 1e-3
-                                for a, b in zip(last["kp"], config["MOTOR_KP"])))
-    check("kd from config", all(abs(a - b) < 1e-3
-                                for a, b in zip(last["kd"], config["MOTOR_KD"])))
+    check(
+        "joint j lands on motor j",
+        all(abs(a - b) < 1e-3 for a, b in zip(last["q"], want)),
+        "q[:3]={}".format([round(v, 4) for v in last["q"][:3]]),
+    )
+    check("kp from config", all(abs(a - b) < 1e-3 for a, b in zip(last["kp"], config["MOTOR_KP"])))
+    check("kd from config", all(abs(a - b) < 1e-3 for a, b in zip(last["kd"], config["MOTOR_KD"])))
     check("bridge forced mode 1", set(last["mode"]) == {1})
     check("bridge forced PR mode", last["mode_pr"] == 0)
 

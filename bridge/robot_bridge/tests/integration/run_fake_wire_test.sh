@@ -3,12 +3,14 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO="$(cd "$HERE/../../.." && pwd)"
-PARAMS="$REPO/robot_bridge/params/G1_config.yaml"
+# The package root, not the repo root: this keeps working if the repo is
+# rearranged around it.
+PKG="$(cd "$HERE/../.." && pwd)"
+PARAMS="$PKG/params/G1_config.yaml"
 OUT="$(mktemp -d)"
 CONFIG="${GEAR_CONFIG:-}"
 
-export PYTHONPATH="$REPO/robot_bridge:$HERE:${PYTHONPATH:-}"
+export PYTHONPATH="$PKG:$HERE:${PYTHONPATH:-}"
 
 FAKE_PID=""; BRIDGE_PID=""
 cleanup() {

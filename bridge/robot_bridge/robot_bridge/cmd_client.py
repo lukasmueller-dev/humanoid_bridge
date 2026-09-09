@@ -12,14 +12,16 @@ TOPIC = "/robot_cmd"
 MOTOR_MODE = 1
 
 
-def pack_robot_cmd(q, dq, tau, kp, kd, interpolation_order=0.0, duration=0.02,
-                   hold_position=False, mode=MOTOR_MODE):
+def pack_robot_cmd(
+    q, dq, tau, kp, kd, interpolation_order=0.0, duration=0.02, hold_position=False, mode=MOTOR_MODE
+):
     """Build a RobotCmd from five equal-length per-motor arrays."""
     lengths = {len(a) for a in (q, dq, tau, kp, kd)}
     if len(lengths) != 1:
         raise ValueError(
             "q, dq, tau, kp, kd must have equal length, got "
-            "{}".format([len(a) for a in (q, dq, tau, kp, kd)]))
+            f"{[len(a) for a in (q, dq, tau, kp, kd)]}"
+        )
 
     cmd = RobotCmd()
     cmd.interpolation_order = float(interpolation_order)
@@ -46,8 +48,17 @@ class RobotCmdClient:
     Service calls spin the node; do not use them while another thread spins it.
     """
 
-    def __init__(self, node, num_dof, control_frequency, interpolation_order=0.0,
-                 topic=TOPIC, default_pos=None, default_kp=None, default_kd=None):
+    def __init__(
+        self,
+        node,
+        num_dof,
+        control_frequency,
+        interpolation_order=0.0,
+        topic=TOPIC,
+        default_pos=None,
+        default_kp=None,
+        default_kd=None,
+    ):
         self.node = node
         self.num_dof = num_dof
         self.control_frequency = control_frequency
@@ -68,8 +79,7 @@ class RobotCmdClient:
             return None
         arr = np.asarray(value, dtype=np.float32)
         if arr.shape != (self.num_dof,):
-            raise ValueError("{} must have length {}, got {}".format(
-                name, self.num_dof, arr.shape))
+            raise ValueError(f"{name} must have length {self.num_dof}, got {arr.shape}")
         return arr
 
     def _resolve(self, value, fallback, name):
@@ -77,19 +87,18 @@ class RobotCmdClient:
             return value
         if fallback is None:
             raise ValueError(
-                "{0} is None and no default was set; pass {0} or set it via "
-                "set_default_cmd()".format(name))
+                f"{name} is None and no default was set; pass {name} or set it via "
+                "set_default_cmd()"
+            )
         return fallback
 
     def _call(self, client, request, timeout_sec):
         if not client.wait_for_service(timeout_sec=timeout_sec):
-            raise RuntimeError("{} is not available; is the bridge running?".format(
-                client.srv_name))
+            raise RuntimeError(f"{client.srv_name} is not available; is the bridge running?")
         future = client.call_async(request)
         rclpy.spin_until_future_complete(self.node, future, timeout_sec=timeout_sec)
         if not future.done():
-            raise RuntimeError("{} did not respond within {}s".format(
-                client.srv_name, timeout_sec))
+            raise RuntimeError(f"{client.srv_name} did not respond within {timeout_sec}s")
         return future.result()
 
     def set_default_cmd(self, default_pos=None, default_kp=None, default_kd=None):
@@ -101,8 +110,16 @@ class RobotCmdClient:
         if default_kd is not None:
             self._default_kd = self._as_array(default_kd, "default_kd")
 
-    def send_cmd(self, q_target_pos=None, q_target_vel=None, target_tau=None,
-                 target_kp=None, target_kd=None, duration=None, hold_position=False):
+    def send_cmd(
+        self,
+        q_target_pos=None,
+        q_target_vel=None,
+        target_tau=None,
+        target_kp=None,
+        target_kd=None,
+        duration=None,
+        hold_position=False,
+    ):
         """Publish one /robot_cmd. Dropped by the bridge until start_control succeeds."""
         cmd = pack_robot_cmd(
             q=self._resolve(q_target_pos, self._default_pos, "q_target_pos"),
@@ -115,8 +132,7 @@ class RobotCmdClient:
             hold_position=hold_position,
         )
         if len(cmd.motor_cmd) != self.num_dof:
-            raise ValueError("expected {} motors, packed {}".format(
-                self.num_dof, len(cmd.motor_cmd)))
+            raise ValueError(f"expected {self.num_dof} motors, packed {len(cmd.motor_cmd)}")
         self.cmd_publisher.publish(cmd)
         return cmd
 
@@ -124,8 +140,8 @@ class RobotCmdClient:
         """Ramp to default_position, then accept /robot_cmd. Blocks on the bridge."""
         request = SetDefaultPosition.Request()
         request.default_position = [
-            float(v) for v in self._resolve(
-                default_position, self._default_pos, "default_position")]
+            float(v) for v in self._resolve(default_position, self._default_pos, "default_position")
+        ]
         return self._call(self.start_control_client, request, timeout_sec)
 
     def stop_control(self, timeout_sec=5.0):

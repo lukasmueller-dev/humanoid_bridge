@@ -1,0 +1,24 @@
+# Tool config only. Package metadata lives in each package's setup.py:
+# system setuptools is 59.6 and PEP 621 metadata needs >= 61.
+
+[tool.ruff]
+line-length = 100
+target-version = "py38"
+# Vendored upstream: examples/ is reference code no CMakeLists builds or installs.
+extend-exclude = ["thirdparty", "examples"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+# E501: commented-out WirelessKey_H1_G1 blocks, kept as evidence for the pending
+# keymap fix. F841: service-call futures that are never awaited — a behaviour
+# question, not a lint nit. Both tracked in PROJECT_ROADMAP.md.
+"bridge/robot_bridge/robot_bridge/robot_client.py" = ["E501", "F841"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["robot_bridge", "g1_stack", "g1_camera"]
+
+[tool.pytest.ini_options]
+testpaths = ["bridge"]
+norecursedirs = ["thirdparty", "build", "install", "log"]

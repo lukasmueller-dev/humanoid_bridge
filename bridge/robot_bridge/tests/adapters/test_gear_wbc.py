@@ -5,8 +5,7 @@ import types
 import numpy as np
 import pytest
 
-from robot_bridge_py.adapters.gear_wbc import (DEFAULT_DURATION, GearWbcAdapter,
-                                               install, make_factory)
+from robot_bridge.adapters.gear_wbc import DEFAULT_DURATION, GearWbcAdapter, install, make_factory
 
 N = 6
 
@@ -53,9 +52,11 @@ def gear_reference(config, cmd_q, cmd_dq, cmd_tau):
 
 
 def joint_arrays(n=N):
-    return (np.arange(n, dtype=np.float64) + 1.0,          # q  = 1..n
-            (np.arange(n, dtype=np.float64) + 1.0) * 0.1,  # dq
-            (np.arange(n, dtype=np.float64) + 1.0) * 10.0) # tau
+    return (
+        np.arange(n, dtype=np.float64) + 1.0,  # q  = 1..n
+        (np.arange(n, dtype=np.float64) + 1.0) * 0.1,  # dq
+        (np.arange(n, dtype=np.float64) + 1.0) * 10.0,
+    )  # tau
 
 
 def make_adapter(config=None, client=None):
@@ -83,8 +84,7 @@ def test_joint_lands_on_its_motor_slot():
 
 def test_unmapped_motor_gets_its_default_angle_and_zero_dq_tau():
     q, dq, tau = make_adapter().remap(*joint_arrays())
-    unmapped = [CONFIG["JOINT2MOTOR"][i]
-                for i in range(N) if CONFIG["MOTOR2JOINT"][i] == -1]
+    unmapped = [CONFIG["JOINT2MOTOR"][i] for i in range(N) if CONFIG["MOTOR2JOINT"][i] == -1]
     assert unmapped == [5]
     for motor in unmapped:
         assert q[motor] == pytest.approx(CONFIG["DEFAULT_MOTOR_ANGLES"][motor])
@@ -140,10 +140,12 @@ def test_adapter_pulls_in_no_unitree_sdk():
     start while any such publisher exists. The adapter must reach the wire only
     through the injected client."""
     import sys
+
     for name in list(sys.modules):
-        if name.startswith("robot_bridge_py.adapters"):
+        if name.startswith("robot_bridge.adapters"):
             del sys.modules[name]
-    import robot_bridge_py.adapters.gear_wbc  # noqa: F401
+    import robot_bridge.adapters.gear_wbc  # noqa: F401
+
     assert not [m for m in sys.modules if m.startswith("unitree_sdk2py")]
 
 

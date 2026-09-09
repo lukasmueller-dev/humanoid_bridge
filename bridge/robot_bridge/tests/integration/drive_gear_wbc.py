@@ -6,11 +6,11 @@ import time
 import numpy as np
 import rclpy
 
-from robot_bridge_py.adapters.gear_wbc import make_factory
-from robot_bridge_py.cmd_client import RobotCmdClient
+from robot_bridge.adapters.gear_wbc import make_factory
+from robot_bridge.cmd_client import RobotCmdClient
 
 NUM_MOTORS = 29
-RAMP_DEFAULT = 0.123      # distinctive: ready_q_ starts [-0.1, 0.0, 0.0, 0.3]
+RAMP_DEFAULT = 0.123  # distinctive: ready_q_ starts [-0.1, 0.0, 0.0, 0.3]
 CONTROL_HZ = 50.0
 
 
@@ -35,14 +35,16 @@ def load_config(path):
     if not path:
         return synthetic_config()
     import yaml
+
     with open(path) as handle:
         return yaml.safe_load(handle)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--config", default=None,
-                        help="GEAR yaml; omit for a synthetic identity config")
+    parser.add_argument(
+        "--config", default=None, help="GEAR yaml; omit for a synthetic identity config"
+    )
     parser.add_argument("--cycles", type=int, default=100)
     args = parser.parse_args()
 
@@ -61,8 +63,7 @@ def main():
     time.sleep(2.5)  # the bridge ramps over its `duration` parameter, 2.0 s
 
     target, zeros = fingerprint(n), np.zeros(n)
-    print("drive: streaming {} commands at {:.0f} Hz".format(args.cycles, CONTROL_HZ),
-          flush=True)
+    print(f"drive: streaming {args.cycles} commands at {CONTROL_HZ:.0f} Hz", flush=True)
     for _ in range(args.cycles):
         adapter.send_command(target, zeros, zeros)
         time.sleep(1.0 / CONTROL_HZ)

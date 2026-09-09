@@ -40,19 +40,21 @@ class FakeG1(Node):
 
     def _on_cmd(self, msg):
         self.q = [msg.motor_cmd[i].q for i in range(NUM_JOINT)]  # perfect tracking
-        self.samples.append({
-            "t": round(time.monotonic() - self.t0, 4),
-            "mode_pr": int(msg.mode_pr),
-            "mode": [int(msg.motor_cmd[i].mode) for i in range(NUM_JOINT)],
-            "q": [round(msg.motor_cmd[i].q, 6) for i in range(NUM_JOINT)],
-            "kp": [round(msg.motor_cmd[i].kp, 3) for i in range(NUM_JOINT)],
-            "kd": [round(msg.motor_cmd[i].kd, 3) for i in range(NUM_JOINT)],
-        })
+        self.samples.append(
+            {
+                "t": round(time.monotonic() - self.t0, 4),
+                "mode_pr": int(msg.mode_pr),
+                "mode": [int(msg.motor_cmd[i].mode) for i in range(NUM_JOINT)],
+                "q": [round(msg.motor_cmd[i].q, 6) for i in range(NUM_JOINT)],
+                "kp": [round(msg.motor_cmd[i].kp, 3) for i in range(NUM_JOINT)],
+                "kd": [round(msg.motor_cmd[i].kd, 3) for i in range(NUM_JOINT)],
+            }
+        )
 
     def dump(self):
         with open(self.out_path, "w") as handle:
             json.dump(self.samples, handle)
-        print("fake_g1: wrote {} /lowcmd samples".format(len(self.samples)), flush=True)
+        print(f"fake_g1: wrote {len(self.samples)} /lowcmd samples", flush=True)
 
 
 def main():
