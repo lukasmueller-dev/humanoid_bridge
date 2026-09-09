@@ -35,6 +35,11 @@ CMakeFiles/
 cmake_install.cmake
 Makefile
 
+# Python environments
+.venv*/
+__pycache__/
+.pytest_cache/
+
 # Other
 *.out
 *.log
