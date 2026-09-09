@@ -93,6 +93,7 @@ g1_camera.CameraClient, CameraServer, FakeCameraServer, synthetic_rgb
 
 ## Open, for the thesis repo
 
-`benches/g1/deploy/` imports the names above. Jetson rsync source is now
-`robot_stacks/g1/g1_camera/`. `nodes/dex3_probe.py` (323 lines) has not moved — it
-is a starting point for the hand path. Remaining work is in `PROJECT_ROADMAP.md`.
+The thesis repo now imports the names above from `registry/psi0/` and
+`benches/g1/nodes/`; `benches/g1/deploy/` is gone there. `dex3_probe.py` moved
+here as `g1_stack.nodes.dex3_probe` with a console script (`ad4778f`). Remaining
+work is in `PROJECT_ROADMAP.md`.
