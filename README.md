@@ -11,6 +11,7 @@ bridge/           the bridge and its Python client   — upstream-bound
     examples/           reference clients per robot (not built or installed)
 robot_stacks/     per-robot deploy layers
   g1/                 g1_stack, g1_camera
+  t1/                 placeholder; the T1 stack has not been written
 scripts/          environment setup, sourced not run
 thirdparty/       vendored unitree_ros2 and booster_ros2_interface
 ```
