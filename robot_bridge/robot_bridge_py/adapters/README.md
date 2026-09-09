@@ -58,6 +58,9 @@ PYTHONPATH=robot_bridge /usr/bin/python3 -m pytest robot_bridge/test/
 ros2 topic echo /robot_cmd          # 29 motors, duration 0.02
 ```
 
+End to end against the real bridge, no hardware:
+`robot_bridge/test/integration/README.md`.
+
 ### Mapping
 
 `send_command(cmd_q, cmd_dq, cmd_tau)` takes three `(29,)` joint-order arrays

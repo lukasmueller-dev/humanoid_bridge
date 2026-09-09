@@ -17,12 +17,21 @@ PR 2 written, uncommitted:
 | `robot_bridge_py/adapters/README.md` | new |
 | `robot_bridge_py/adapters/__init__.py` | new, empty |
 | `robot_bridge/test/test_gear_wbc.py` | new, 11 tests |
+| `robot_bridge/test/integration/` | new, fake wire test, 4 files |
 | `HANDOFF.md` | this rewrite |
 
-17 tests pass. End-to-end checked on the lab machine: the real
-`g1_29dof_gear_wbc.yaml` through `make_factory(client)(config=config)` onto
-`/robot_cmd`, q/dq/kp/kd round-tripped, `mode` all 1, no `unitree_sdk2py`
-imported. Not yet run against a live bridge or the Jetson.
+17 unit tests pass. A fake wire test runs the **real `G1_bridge`** against a
+fake robot on the lab machine, no hardware:
+`robot_bridge/test/integration/run_fake_wire_test.sh`, 8 checks, repeatable.
+Verified 50 Hz in becomes 1 kHz out, joint j lands on motor j, GEAR's kp/kd
+survive, the bridge forces mode 1 and PR, and `start_control` honours the
+requested pose. Still unproven: the Foxy/Python 3.8 Jetson, the cable, motors.
+
+Found in DFKI's bridge, not fixed: `startControlServiceCB_`
+(`bridge_core.cpp`) sets `success = true` and the message `"start control with
+invalid size of default position, kp or kd"` unconditionally, no else branch.
+The response can never report failure and the message always looks like an
+error. Own small PR, same shape as the bounds fix.
 
 Settled this session:
 
