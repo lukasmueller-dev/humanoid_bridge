@@ -24,6 +24,10 @@ class FakeRclpy:
     def shutdown(self):
         self.events.append("shutdown")
 
+    def spin(self, node):
+        # a real spin blocks on a daemon thread; the fake just notes the node
+        self.events.append(("spin", node is self.node))
+
 
 def _harness(loop_main=None):
     rclpy = FakeRclpy()
@@ -47,7 +51,10 @@ def test_installs_the_adapter_before_the_loop_builds_the_env():
     config = SimpleNamespace(control_frequency=50)
     gear_loop.run(config, rclpy, client_cls, install, loop_main, out=lambda *_: None)
     kinds = [e[0] if isinstance(e, tuple) else e for e in rclpy.events]
-    assert kinds == ["init", "node", "client", "install", "loop", "destroy", "shutdown"]
+    # spin runs on its own thread, so it is checked for presence, not position
+    assert [k for k in kinds if k != "spin"] == [
+        "init", "node", "client", "install", "loop", "destroy", "shutdown"]
+    assert ("spin", True) in rclpy.events
     assert ("client", gear_loop.NUM_MOTORS, 50.0) in rclpy.events
     assert ("install", "client", pytest.approx(0.02)) in rclpy.events
 

@@ -22,6 +22,7 @@ setup(
             "gear_loop = g1_stack.nodes.gear_loop:main",
             "joint_probe = g1_stack.nodes.joint_probe:main",
             "dex3_probe = g1_stack.nodes.dex3_probe:main",
+            "drive = g1_stack.nodes.drive:main",
         ],
     },
 )
