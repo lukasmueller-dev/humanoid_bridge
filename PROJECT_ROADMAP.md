@@ -7,12 +7,6 @@ _Last updated: 2026-09-09 · local (adminsairol-MS-7E06)_
 
 ## Items
 
-### Deploy layer
-
-- [ ] Move the G1 deploy layer into `robot_stacks/g1/g1_stack`, split by owner (`robot.py`, `joints/`, `observation/`, `gear/`, `nodes/`), fakes beside what they fake. **Done when:** the moved tests pass, `gear_loop --help` imports from the workspace, and nothing under `bridge/` imports `g1_stack`.
-- [ ] Carve `g1_camera` out as a self-contained package: camera wire contract, sources, server, client, fake. No import leaves the package. **Done when:** `rsync` of that directory alone plus `pip3 install -e .` runs the server on the Jetson under Python 3.8 with no ROS installed.
-- [ ] Make camera frame size a parameter, not a constant. It is currently `config.IMAGE_WIDTH/HEIGHT` cited to psi0's checkpoint config, which puts a policy detail in the robot layer. **Done when:** `g1_camera` names no policy anywhere and the server takes the size from its caller.
-
 ### Hand path
 
 - [ ] Dex3 hand control through the bridge: `HandCmd.msg`, `rt/dex3/{left,right}/{state,cmd}`, a `hands:` block in `G1_config.yaml`, `send_hand_cmd` on the client, a `HandCommandSender` adapter, and the mode bit packing done bridge-side once. **Done when:** a `/hand_cmd` check passes against a fake dex3 with the same freshness, NaN and limit guards as the body path, and `num_joint` is still 29. **Note:** `nodes/dex3_probe.py` in the thesis repo is a starting point.

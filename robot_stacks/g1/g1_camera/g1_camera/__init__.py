@@ -2,7 +2,7 @@
 
 Self-contained on purpose: nothing here imports outside this package, so the
 directory can be rsynced to the Jetson and pip-installed on its own, under
-Python 3.8 with no ROS.
+Python 3.8 with no ROS. `tests/test_isolated.py` holds that line.
 """
 
 from .client import CameraClient, CameraTimeout

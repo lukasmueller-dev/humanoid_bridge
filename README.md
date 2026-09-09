@@ -9,6 +9,7 @@ bridge/           the bridge and its Python client   — upstream-bound
   bridge_interface/   messages and services
   robot_bridge/       C++ bridge, robot_bridge/ Python client, adapters
 robot_stacks/     per-robot deploy layers
+  g1/                 g1_stack, g1_camera
 examples/         reference clients, one per robot (not built or installed)
 thirdparty/       vendored unitree_ros2 and booster_ros2_interface
 ```
