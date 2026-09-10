@@ -24,6 +24,27 @@ Built targets are `G1_bridge`, `H1_bridge`, `H1_2_bridge`, `T1_bridge` and
 `test_node`. Other sources under `src/` are upstream leftovers that no target
 builds.
 
+## Fork or upstream
+
+Forked from [DFKI-SAIROL/humanoid_bridge](https://github.com/DFKI-SAIROL/humanoid_bridge).
+`bridge/` is upstream-bound; `robot_stacks/` is this project's own.
+
+| Change | Side | State |
+|---|---|---|
+| `/lowstate` copy bounded to `numJoint_` (upstream writes 35 into a 29-vector) | upstream | fixed here, no PR yet |
+| `cmd_client.py` and `adapters/` (GEAR WBC, GEAR hands) | upstream | added here, no PR yet |
+| Dex3 hand path: `HandCmd`, the 100 Hz loop, per-side guards | upstream | added here, no PR yet |
+| `checkMotorCmd_` using `std::abs` (upstream's bare `abs` truncated \|v\| < 1 to 0) | upstream | fixed here, behaviour change on the body path |
+| Config keymap headers advertising keys the source comments out | upstream | fixed here, no PR yet |
+| `start_control` answers `success: true` on a wrong length, then moves to `ready_q_` | upstream | **open**, `fix/start-control-validate` |
+| G1 `_default_pos` is 27 long while kp/kd are 29 | upstream | **open**, `fix/g1-default-pos-29` |
+| `finishControl_` only logs on G1, H1, H1_2, so an abort holds at full gains | upstream | **open**, `feat/g1-finish-control-release` |
+| Two-layer split, `robot_bridge_py` -> `robot_bridge` rename | fork | this project's structure |
+| `robot_stacks/g1/` (`g1_stack`, `g1_camera`) | fork | whether it stays here is DFKI's call |
+| `tools/` | fork | build, test and bring-up helpers |
+
+Details and done-when per item: `PROJECT_ROADMAP.md`.
+
 ## Requirements
 
 | | |
@@ -63,14 +84,32 @@ your cabling; a wrong one fails silently.
 ```bash
 BRIDGE_IFACE=<nic> source scripts/setup_unitree.sh   # G1, H1, H1_2
 source scripts/setup_booster.sh                      # T1
+```
 
+On the G1, one script does the whole ordering: release `/lowcmd`, start the
+bridge, wait for it, arm.
+
+```bash
+tools/g1-bringup.sh --dry-run                        # print the plan, run nothing
+tools/g1-bringup.sh                                  # release + bridge, no arming
+tools/g1-bringup.sh --arm-from-measured --robot-is-clear
+```
+
+**Arming moves the robot**, so it needs an `--arm-*` flag and
+`--robot-is-clear`. `--arm-from-measured` arms to the pose the robot already
+holds, which is the smooth choice.
+
+By hand, or for the other robots:
+
+```bash
 ros2 run robot_bridge G1_bridge --ros-args \
     --params-file bridge/robot_bridge/params/G1_config.yaml
 ```
 
 Substitute `H1_bridge`, `H1_2_bridge` or `T1_bridge` and the matching config.
 The bridge starts in damping mode, and refuses to start while anything else
-publishes `/lowcmd`.
+publishes `/lowcmd`. `tools/g1-release-lowcmd.py --iface <nic>` frees it;
+`L2 + R2` on the controller does the same.
 
 ## 3. Launch a client
 

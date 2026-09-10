@@ -12,7 +12,7 @@ It is the goal publisher, so run it *instead of* the psi0 node (both bind the
 same port). Everything else in the stack is unchanged: same GEAR, same bridge,
 same sim.
 
-Rehearsal (bridge + GEAR + MuJoCo already up and armed, benches/g1/bench.md):
+Rehearsal (bridge + GEAR + MuJoCo already up and armed; `tools/g1-bringup.sh`):
 
     fixed_goals --walk 0.3 0 0 --duration 20     # walk forward at 0.3 m/s for 20 s
     fixed_goals --walk 0 0 0.4                    # turn in place

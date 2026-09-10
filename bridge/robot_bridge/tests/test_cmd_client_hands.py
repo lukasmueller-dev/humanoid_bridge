@@ -2,9 +2,11 @@
 
 import pytest
 
-pytest.importorskip("bridge_interface", reason="source the colcon workspace first")
-
-from bridge_interface.msg import HandCmd  # noqa: E402
+# Not importorskip: see test_cmd_client.py.
+try:
+    from bridge_interface.msg import HandCmd
+except ImportError:
+    pytest.skip("source the colcon workspace first", allow_module_level=True)
 
 from robot_bridge.cmd_client import (  # noqa: E402
     HAND_MOTOR_MODE,

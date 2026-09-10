@@ -17,7 +17,8 @@ Jetson, where the SDK is system-wide and the interface auto-detects:
 
     dex3_probe
 
-The `moved` column answers `bench.md`'s open "Dex3 left/right read order":
+The `moved` column answers the open "Dex3 left/right read order" question in
+`PROJECT_STATUS.md`:
 bend one finger by hand and watch which side and which motor index answers.
 """
 
@@ -42,8 +43,8 @@ NUM_MOTORS = robot.NUM_HAND_JOINTS_PER_HAND
 # positive. NOT the order in `unitree_dex3.yml` -> that is the retargeting
 # library's, which is why upstream remaps.
 #
-# Still unconfirmed against our hardware (`bench.md`, "Dex3 left/right read
-# order"); `read` mode is what confirms it.
+# Still unconfirmed against our hardware; `read` mode is what confirms it.
+# Open question "Dex3 left/right read order" in PROJECT_STATUS.md.
 LIMITS = {
     "left": [
         ("thumb_0", -1.0472, 1.0472),

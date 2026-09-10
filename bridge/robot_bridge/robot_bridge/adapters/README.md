@@ -19,7 +19,7 @@ The client is `robot_bridge.cmd_client.RobotCmdClient` or
 ## Requirements
 
 ```bash
-source ~/github/SIMPLE/.venv/bin/activate
+source "$SIMPLE_VENV"/bin/activate       # the controller's venv
 source /opt/ros/humble/setup.bash && source <workspace>/install/setup.bash
 ```
 
@@ -54,7 +54,7 @@ The bridge drops every `/robot_cmd` until this returns.
 ### 3. Verify
 
 ```bash
-/usr/bin/python3 -m pytest bridge/robot_bridge/tests/
+tools/test.sh --unit
 ros2 topic echo /robot_cmd          # 29 motors, duration 0.02
 ```
 
@@ -110,7 +110,8 @@ the two orderings side by side.
 - Robot freezes holding the last pose at full gains: watchdog. Control ends
   `duration + 0.2 s` after the last command unless `hold_position`.
 - `ModuleNotFoundError: bridge_interface`: workspace not sourced.
-- `No module named pytest`: GEAR's venv has none; use `/usr/bin/python3`.
+- `No module named pytest`: the controller's venv has none. Use `tools/test.sh`,
+  or `--python <interpreter>` to pick one that does.
 - `g1_29dof` has identity `JOINT2MOTOR`/`MOTOR2JOINT` and no `-1`, so a
   mapping bug will not show on that config. The unit tests use a non-identity
   fixture instead.

@@ -5,14 +5,15 @@ sender: GEAR -> robot_bridge.adapters.gear_wbc -> /robot_cmd -> G1_bridge
 -> /lowcmd. GEAR opens no rt/lowcmd publisher, so the bridge can start.
 
 Arming is the operator's step, not this process's: the bridge drops every
-/robot_cmd until `start_control` is called (benches/g1/bench.md, "Bring up the
-bridge").
+/robot_cmd until `start_control` is called. `tools/g1-bringup.sh` does the
+whole ordering.
 
-Runs in SIMPLE's venv with the ROS workspace sourced:
+Runs in the controller's own venv ($SIMPLE_VENV) with the ROS workspace
+sourced, because it imports both GEAR and rclpy:
 
-    source /opt/ros/humble/setup.bash && source ~/bridge_ws/install/setup.bash
+    source scripts/setup_unitree.sh
     PYTHONPATH=.:$PYTHONPATH \\
-        ~/github/SIMPLE/.venv/bin/python -m g1_stack.nodes.gear_controller \\
+        "$SIMPLE_VENV"/bin/python -m g1_stack.nodes.gear_controller \\
         --interface real --enable-waist --messaging-backend zmq --zmq-host 127.0.0.1
 """
 

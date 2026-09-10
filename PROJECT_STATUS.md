@@ -50,4 +50,4 @@ Planned work lives in `PROJECT_ROADMAP.md`; this file keeps only the pointer.
 
 - Does `robot_stacks/g1/` stay in this repo or become its own? DFKI's call, deferred.
 - What should `finishControl_` release to on Unitree? `T1_bridge.cpp:304` already drops to damping; G1, H1 and H1_2 only log. Whether the Unitree answer is the same needs the lab.
-- Which half of the 14-vector is which hand. Hands are not mounted; verifiable against the fake only.
+- Dex3 left/right read order: which half of the 14-vector is which hand, and which motor index is which finger. Hands are not mounted; verifiable against the fake only. `dex3_probe` read mode answers it.

@@ -1,7 +1,8 @@
 """Publishes goals at a steady rate while the main thread waits on the policy.
 
 Why a thread. One `/act` takes 136 ms on loopback and 354 ms over wifi
-(`benches/g1/bench.md`, "Milestone 0 results"), and a chunk is 400 ms of
+(measured on the lab bench; humanoid-locoman-vla, `benches/g1/bench.md`,
+"Milestone 0 results"), and a chunk is 400 ms of
 motion. A single-threaded loop stops publishing for the whole call, so the
 robot stalls and then jumps when the next chunk lands.
 
