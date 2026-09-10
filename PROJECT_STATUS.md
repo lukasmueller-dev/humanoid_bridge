@@ -41,6 +41,9 @@ _One line each, dated, with a pointer (commit or PR)._
 - 2026-09-10: build and test are scripts, not doc paragraphs: `tools/` holds executables, `scripts/` stays sourced-only. Build deps that rosdep cannot pull now live here rather than only in the consumer repo's Dockerfile — `docs/handover-audit.md`
 - 2026-09-10: `fake_dex3.py`'s `--stale-after`/`--hot-after` clocks start at the first `/dex3/left/cmd`, not process start, so the documented 3.0-4.0 window means what the prose always claimed — same doc
 - 2026-09-09: `examples/` sits inside `robot_bridge`, the package it demonstrates, so a subtree split of `bridge/` carries it; excluded from lint as vendored upstream code — same commit
+- 2026-09-10: `motor_probe` serves its own page from stdlib `http.server` plus a hand-rolled RFC 6455 WebSocket, because the on-board Python 3.8 cannot pip-install and an aiohttp dependency would make the node undeployable — commit `feat(g1_stack): add motor_probe`
+- 2026-09-10: the panel's deadman is a browser ping, not a server-side timer: a 500 ms gap stops publishing and lets the bridge's own command timeout release the robot, so losing the tab stops the robot — same commit
+- 2026-09-10: `motor_probe` lives in `robot_stacks/g1/` rather than `bridge/`, because the clickable figure is G1-specific; it depends on `robot_bridge.cmd_client` the same way `gear_loop` does, which keeps the one-way layer rule intact — same commit
 
 ## Roadmap
 
