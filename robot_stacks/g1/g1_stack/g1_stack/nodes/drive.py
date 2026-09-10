@@ -50,11 +50,18 @@ def parse_pose(pairs):
     return goal_mod.pose_from_named(angles)  # raises KeyError on an unknown name
 
 
-def frames(pose, navigate_cmd, args, clock=time.monotonic):
+def frames(pose, navigate_cmd, args, clock=time.monotonic, ramp_from=None):
     """Yield one goal per tick for `--duration`, ramping the walk command in.
 
     The pose is held constant; only `navigate_cmd` ramps, so the robot eases
     into motion. `target_time` is stamped one period ahead, as the pacer does.
+
+    `ramp_from` is a callable returning the time the ramp should measure from,
+    or None while it should stay at zero. The walk command must not ramp on its
+    own clock: until the walk policy is engaged the legs hold their measured
+    angles and the command does nothing, so a ramp started at t=0 is already
+    part-way up when the policy engages and the robot takes a step input
+    instead of a ramp. `--duration` still measures from the first goal.
     """
     period = 1.0 / args.hz
     # navigate_cmd is vx, vy, vyaw, target_yaw. The CLI gives the three
@@ -66,8 +73,14 @@ def frames(pose, navigate_cmd, args, clock=time.monotonic):
         elapsed = clock() - began
         if args.duration and elapsed >= args.duration:
             return
-        scale = min(1.0, elapsed / args.ramp) if args.ramp > 0 else 1.0
         now = clock()
+        started = began if ramp_from is None else ramp_from()
+        if started is None:
+            scale = 0.0
+        elif args.ramp > 0:
+            scale = min(1.0, max(0.0, now - started) / args.ramp)
+        else:
+            scale = 1.0
         yield (
             goal_mod.goal(
                 pose, target * scale, BASE_HEIGHT, target_time=now + period, timestamp=now
@@ -80,8 +93,13 @@ def drive(publisher, pose, navigate_cmd, args, out=print, clock=time.monotonic, 
           status=None):
     period = 1.0 / args.hz
     sent = 0
-    engager = Engager(status if args.engage else None, out=out)
-    for goal, elapsed in frames(pose, navigate_cmd, args, clock):
+    engaging = status is not None and args.engage
+    engager = Engager(status if engaging else None, out=out)
+    # Ramp from the moment the policy takes the legs, not from process start.
+    # With nobody to tell us (--no-engage, an operator at the keyboard) the old
+    # behaviour stands: ramp from the first goal.
+    ramp_from = engager.engaged_at if engaging else None
+    for goal, elapsed in frames(pose, navigate_cmd, args, clock, ramp_from=ramp_from):
         if engager.wants(clock()):
             goal["toggle_policy_action"] = True
         publisher.send(goal)

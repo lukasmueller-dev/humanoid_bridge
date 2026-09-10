@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import sys
 import threading
+import time
 
 NODE_NAME = "gear_wbc_bridge"
 NUM_MOTORS = 29
@@ -45,6 +46,7 @@ def run(config, rclpy, client_cls, install, loop_main, patch_channel, out=print)
     def on_init_channel(real_init, gear_config):
         real_init(config=gear_config)   # raw DDS first: it creates the domain
         rclpy.init()                    # rmw_cyclonedds joins the existing one
+        started["ros"] = True           # recorded before anything else can raise
         node = rclpy.create_node(NODE_NAME)
         # Spin on a thread: a node joins the global executor only when spun, and
         # GEAR's MuJoCo simulator takes the executor's first node for its rate
@@ -52,6 +54,13 @@ def run(config, rclpy, client_cls, install, loop_main, patch_channel, out=print)
         # client's service calls do, and this loop makes none.
         threading.Thread(target=rclpy.spin, args=(node,), daemon=True).start()
         started["node"] = node
+        # Then wait for it to actually be there. base_sim takes
+        # `get_global_executor().get_nodes()[0]` with no length check, and the
+        # node only appears once the daemon thread reaches `executor.add_node`.
+        # Hooking here leaves far less work between the two than starting the
+        # thread at the top of run() did, so the race is real: losing it is an
+        # IndexError from base_sim that reads as an unrelated upstream crash.
+        wait_for_node(rclpy)
         client = client_cls(node, num_dof=NUM_MOTORS, control_frequency=hz)
         install(client, duration=1.0 / hz)
         out(
@@ -67,11 +76,31 @@ def run(config, rclpy, client_cls, install, loop_main, patch_channel, out=print)
         node = started.get("node")
         if node is not None:
             node.destroy_node()
+        # Separate from the node: rclpy.init() lands before the node exists, so
+        # a failure in between would otherwise leave ROS up and never shut down.
+        if started.get("ros"):
             rclpy.shutdown()
 
 
+def wait_for_node(rclpy, timeout=5.0, sleep=time.sleep):
+    """Block until the spun node is visible in the global executor."""
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if rclpy.get_global_executor().get_nodes():
+            return True
+        sleep(0.01)
+    raise RuntimeError(
+        f"node did not join the global executor within {timeout}s; GEAR's simulator "
+        "indexes it unguarded and would die with IndexError"
+    )
+
+
+MULTICAST_DEFAULT = 'multicast="default"'
+MULTICAST_FORCED = 'multicast="true"'
+
+
 def channel_patcher(g1_env, channel):
-    """Two patches GEAR needs to share one DDS domain with rclpy.
+    """Three patches GEAR needs to share one DDS domain with rclpy.
 
     `init_channel` is wrapped on `g1_env`, not on `simulator_factory`: `g1_env`
     imported the name, so rebinding the source module rebinds a copy nobody
@@ -85,8 +114,17 @@ def channel_patcher(g1_env, channel):
     class is patched rather than `ChannelFactoryInitialize`, because every
     caller imported that function by name but they all reach this one class.
 
-    Either name moving upstream raises here, rather than silently leaving the
-    clash these exist to avoid.
+    `ChannelConfigHasInterface` is forced to `multicast="true"`, which fixes
+    discovery. The template is handed straight to `Domain(id, config)`, so
+    `CYCLONEDDS_URI` cannot reach it, and `"default"` on `lo` resolves to off
+    ("selected interface lo is not multicast-capable"): the sim and the bridge
+    then never find each other. Forcing it here rather than setting the
+    interface's MULTICAST flag keeps a rehearsal from needing root on every new
+    machine. It is patched on `channel`, which imported the name, not on
+    `channel_config`. On a real NIC `"true"` and `"default"` agree.
+
+    Any of the three names moving upstream raises here, rather than silently
+    leaving the failure it exists to avoid.
     """
 
     def patch(hook):
@@ -102,6 +140,13 @@ def channel_patcher(g1_env, channel):
                 "unitree_sdk2py.core.channel has no ChannelFactory to guard: upstream "
                 "moved it, and the simulator's second init would fail on the domain"
             )
+        real_config = getattr(channel, "ChannelConfigHasInterface", None)
+        if real_config is None or MULTICAST_DEFAULT not in real_config:
+            raise RuntimeError(
+                "unitree_sdk2py's ChannelConfigHasInterface is missing or no longer "
+                f"carries {MULTICAST_DEFAULT}: without forcing multicast on, discovery "
+                "over lo needs `ip link set lo multicast on` as root on every machine"
+            )
         real_factory_init = factory.Init
         state = {}
 
@@ -112,10 +157,13 @@ def channel_patcher(g1_env, channel):
             return state["ok"]
 
         factory.Init = guarded_init
+        channel.ChannelConfigHasInterface = real_config.replace(
+            MULTICAST_DEFAULT, MULTICAST_FORCED)
         g1_env.init_channel = lambda config: hook(real_init_channel, config)
 
         def restore():
             factory.Init = real_factory_init
+            channel.ChannelConfigHasInterface = real_config
             g1_env.init_channel = real_init_channel
 
         return restore
@@ -135,6 +183,21 @@ def main(argv=None):
     from robot_bridge.cmd_client import RobotCmdClient
 
     config = tyro.cli(ControlLoopConfig, args=argv)
+    # The whole domain-ordering fix depends on this. `messaging_backend`
+    # defaults to "ros2", and upstream's main builds the loop manager before
+    # the env (`run_g1_control_loop.py`), so the ros2 manager calls
+    # `rclpy.init()` (`ros_utils.py`) before `init_channel` ever runs -- rmw
+    # takes the domain first and the channel factory dies on it, deep inside
+    # env construction where the message means nothing. The status topic this
+    # node reads is a ZMQ port too.
+    if config.messaging_backend != "zmq":
+        print(
+            f"--messaging-backend must be zmq here, not {config.messaging_backend!r}: "
+            "the ros2 backend starts rclpy before GEAR's channel and the DDS domain "
+            "goes to the wrong owner.",
+            file=sys.stderr,
+        )
+        return 2
     if config.interface == "sim":
         print(
             "WARNING: --interface sim: MuJoCo listens on rt/lowcmd, which "

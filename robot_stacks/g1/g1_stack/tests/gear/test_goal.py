@@ -77,9 +77,11 @@ def test_goal_carries_no_policy_toggle_by_default():
     assert "toggle_policy_action" not in msg
 
 
-def test_engaging_asks_the_controller_for_the_walk_policy():
-    msg = goal_mod.goal(np.zeros(31), np.zeros(4), 0.75, target_time=1.0, engage_policy=True)
-    assert msg["toggle_policy_action"] is True
+def test_goal_never_sets_the_policy_toggle_itself():
+    # Who sends it and when is Engager's decision; the builder must not have a
+    # way to smuggle it onto an arbitrary goal.
+    msg = goal_mod.goal(np.zeros(31), np.zeros(4), 0.75, target_time=1.0)
+    assert "toggle_policy_action" not in msg
 
 
 def test_a_wrong_length_pose_is_refused():

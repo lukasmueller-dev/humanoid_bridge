@@ -89,8 +89,7 @@ def pose_from_named(angles, default=0.0):
     return pose
 
 
-def goal(pose, navigate_cmd, base_height, target_time, timestamp=None,
-         engage_policy=False):
+def goal(pose, navigate_cmd, base_height, target_time, timestamp=None):
     """One goal message.
 
     `target_time` is a deadline on `time.monotonic()`, and the controller
@@ -102,13 +101,11 @@ def goal(pose, navigate_cmd, base_height, target_time, timestamp=None,
     `interpolation_garbage_collection_time` is deliberately absent: the control
     loop stamps it from its own clock before handing the goal on.
 
-    `engage_policy` adds `toggle_policy_action`, and exactly one goal in a run
-    may carry it. Until it arrives `use_policy_action` stays False and the
-    controller commands the legs to hold their *measured* angles
-    (`g1_gear_wbc_policy.py`): the walk policy runs and its output is thrown
-    away, so the robot sags where it stands whatever `navigate_cmd` says. It
-    flips rather than sets, so a second one disengages, and it assumes a fresh
-    control loop -- the flag lives as long as that process does.
+    `toggle_policy_action` is deliberately absent too, and is not a field to set
+    here. It flips rather than sets, so who sends it and when is the whole
+    problem: `gear.status.Engager` decides, and the sender attaches it to one
+    outgoing message (`GoalPacer.request_toggle`, or the drive node on the goal
+    it is about to publish).
     """
     pose = np.asarray(pose, dtype=np.float32)
     if pose.shape != (NUM_UPPER_BODY,):
@@ -116,16 +113,13 @@ def goal(pose, navigate_cmd, base_height, target_time, timestamp=None,
     navigate_cmd = np.asarray(navigate_cmd, dtype=np.float32)
     if navigate_cmd.shape != (4,):
         raise ValueError(f"navigate_cmd shape {navigate_cmd.shape}, expected (4,)")
-    message = {
+    return {
         "target_upper_body_pose": pose,
         "navigate_cmd": navigate_cmd,
         "base_height_command": np.asarray([base_height], dtype=np.float32).ravel()[:1],
         "target_time": float(target_time),
         "timestamp": float(timestamp if timestamp is not None else target_time),
     }
-    if engage_policy:
-        message["toggle_policy_action"] = True
-    return message
 
 
 def hold_goal(pose, target_time, base_height, timestamp=None):
