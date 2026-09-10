@@ -12,9 +12,11 @@ PARAMS="$PKG/params/G1_config.yaml"
 OUT="$(mktemp -d)"
 
 # STALE_AFTER=<seconds> silences the left hand mid-stream, to exercise the
-# per-side freshness release. It must land after the 2.5 s ramp-and-hold and
-# before the driver stops, or the left hand never tracks and the run is not
-# testing what it looks like it is testing. 3.5 is the middle of that window.
+# per-side freshness release. The clock starts at the first /dex3/left/cmd,
+# which is start_hand_control, so it must land after the 2.5 s ramp-and-hold
+# and before the driver stops about 2.4 s later, or the left hand never tracks
+# and the run is not testing what it looks like it is testing. 3.5 is the
+# middle of that window.
 STALE="${STALE_AFTER:-}"
 if [ -n "$STALE" ] && { [ "${STALE%%.*}" -lt 3 ] || [ "${STALE%%.*}" -ge 4 ]; }; then
     echo "STALE_AFTER must be between 3.0 and 4.0 seconds; got $STALE"; exit 1

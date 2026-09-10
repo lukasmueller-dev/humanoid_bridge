@@ -1,3 +1,4 @@
+# shellcheck shell=bash
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # Walk up for the colcon workspace rather than counting directories, so moving

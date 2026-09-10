@@ -4,8 +4,14 @@ Never publishes /dex3/*/cmd -- the bridge owns that topic. Tracks commands
 perfectly, like fake_g1 does for the body.
 
 Two switches exist so the guards can be exercised:
-  --stale-after S   stop publishing left-hand state after S seconds
-  --hot-after S     report the left hand over temperature after S seconds
+  --stale-after S   stop publishing left-hand state S seconds after the first
+                    left-hand command arrives
+  --hot-after S     report the left hand over temperature, same clock
+
+Both clocks start at the first `/dex3/left/cmd`, which is `start_hand_control`,
+not at process start. The runner sleeps about 6 s before the driver arms the
+hands, so a process-start clock silences the left hand before it has ever
+tracked and the run reports "left last commanded at never".
 """
 
 import argparse
@@ -43,10 +49,15 @@ class FakeDex3(Node):
             self.create_subscription(HandCmd, f"/dex3/{side}/cmd", self._make_handler(side), 10)
 
         self.t0 = time.monotonic()
+        # Set on the first /dex3/left/cmd. The --stale-after and --hot-after
+        # clocks run from here; sample timestamps still run from t0.
+        self.first_cmd_t = None
         self.create_timer(STATE_PERIOD, self._tick)
 
     def _make_handler(self, side):
         def handler(msg):
+            if side == "left" and self.first_cmd_t is None:
+                self.first_cmd_t = time.monotonic()
             # An unbounded MotorCmd[] on the wire: a bridge that forgot to resize
             # sends nothing here, which is the failure this records.
             n = min(len(msg.motor_cmd), NUM_MOTORS)
@@ -67,12 +78,18 @@ class FakeDex3(Node):
         return handler
 
     def _tick(self):
-        elapsed = time.monotonic() - self.t0
+        # None until the bridge commands the left hand, so neither switch can
+        # fire during the ~6 s the runner spends starting the fakes and bridge.
+        since_cmd = None if self.first_cmd_t is None else time.monotonic() - self.first_cmd_t
+        armed = since_cmd is not None
+
         for side in SIDES:
-            if side == "left" and self.stale_after is not None and elapsed > self.stale_after:
+            if (side == "left" and self.stale_after is not None
+                    and armed and since_cmd > self.stale_after):
                 continue  # go silent: exercises the per-side freshness guard
 
-            hot = side == "left" and self.hot_after is not None and elapsed > self.hot_after
+            hot = (side == "left" and self.hot_after is not None
+                   and armed and since_cmd > self.hot_after)
 
             state = HandState()
             state.motor_state = [MotorState() for _ in range(NUM_MOTORS)]

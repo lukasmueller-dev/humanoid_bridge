@@ -118,11 +118,12 @@ GEAR's own gains, because it is a drop-in and its caller passes none.
 Hands are not mounted, so all of this is verified against a fake only.
 
 ```bash
-pytest                                                          # 101 unit tests
-./bridge/robot_bridge/tests/integration/run_fake_wire_test.sh   # body path, 8 checks
-./bridge/robot_bridge/tests/integration/run_fake_hand_test.sh   # hand path
-STALE_AFTER=3.5 ./bridge/robot_bridge/tests/integration/run_fake_hand_test.sh
+tools/test.sh                       # unit, body path (8 checks), hand path
+tools/test.sh --stale-after 3.5     # per-side release
 ```
+
+`--stale-after` counts from the first `/dex3/left/cmd`, which is
+`start_hand_control`, so 3.0 to 4.0 lands mid-stream.
 
 `fake_dex3.py` publishes state at 100 Hz and records `/dex3/*/cmd`;
 `drive_hand_cmd.py` drives both hands through the adapter and then sends a

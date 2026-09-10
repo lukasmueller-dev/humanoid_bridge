@@ -8,19 +8,19 @@ It does **not** cover the Foxy/Python 3.8 Jetson, the cable, or real motors.
 ## Requirements
 
 ```bash
-cd <workspace> && source /opt/ros/humble/setup.bash
-colcon build --packages-select booster_interface bridge_interface \
-    unitree_go unitree_hg unitree_api robot_bridge
-source install/setup.bash
+source /opt/ros/humble/setup.bash && tools/build.sh
+source <workspace>/install/setup.bash
 ```
 
 `robot_bridge`'s `package.xml` depends on `booster_interface` unconditionally,
-so it must be built even with `-DBUILD_BOOSTER_T1=OFF`.
+so it builds even with T1 off.
+
+`tools/test.sh` runs both scripts below and handles the DDS setting they need.
 
 ## 1. Run
 
 ```bash
-./bridge/robot_bridge/tests/integration/run_fake_wire_test.sh
+tools/test.sh --wire
 ```
 
 Uses a synthetic identity config. To use GEAR's own:
@@ -45,13 +45,14 @@ bridge forced PR mode        PASS
 ## 3. The G1 hand path
 
 ```bash
-./bridge/robot_bridge/tests/integration/run_fake_hand_test.sh
-STALE_AFTER=3.5 ./bridge/robot_bridge/tests/integration/run_fake_hand_test.sh
+tools/test.sh --hands
+tools/test.sh --hands --stale-after 3.5
 ```
 
-`STALE_AFTER` silences the left hand mid-stream, to prove the release is
-per-side. It must land between 3.0 and 4.0 s: earlier and the left hand never
-tracks, later and the driver has already stopped.
+`--stale-after` silences the left hand mid-stream, to prove the release is
+per-side. The clock starts at the first `/dex3/left/cmd`, which is
+`start_hand_control`, so it must land between 3.0 and 4.0 s: earlier and the
+left hand never tracks, later and the driver has already stopped.
 
 `fake_g1.py` runs too, because the bridge blocks in its constructor until
 something publishes `/lowstate`. That doubles as the check that the hand path
@@ -65,7 +66,7 @@ left the body idle.
 | `drive_gear_wbc.py` | `start_control`, then 100 commands at 50 Hz through the adapter |
 | `check_lowcmd.py` | asserts the recording, exit 1 on failure |
 | `run_fake_wire_test.sh` | orchestrates the three, cleans up |
-| `fake_dex3.py` | publishes `/dex3/*/state` at 100 Hz, records `/dex3/*/cmd`; `--stale-after`, `--hot-after` |
+| `fake_dex3.py` | publishes `/dex3/*/state` at 100 Hz, records `/dex3/*/cmd`; `--stale-after`, `--hot-after`, both timed from the first left command |
 | `drive_hand_cmd.py` | `start_hand_control`, then both hands through the hand adapter, then a bad command |
 | `check_hand_cmd.py` | asserts the hand recording; pure offline, needs no ROS |
 | `run_fake_hand_test.sh` | orchestrates the hand run |
@@ -90,3 +91,6 @@ left the body idle.
 - Every hand run ends with both hands limp: the watchdog fires once the driver
   stops. `check_hand_cmd.py` asserts against the last *commanded* frame, and a
   new check that reads `samples[-1]` will be reading the release.
+- CycloneDDS with no `CYCLONEDDS_URI`: multicast is off on loopback, the
+  bridge never sees the fake and prints `Waiting for publisher on /lowstate`.
+  `tools/test.sh` sets the URI itself; `--rmw fastrtps` is the other way out.

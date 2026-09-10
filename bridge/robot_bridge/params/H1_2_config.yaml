@@ -1,8 +1,7 @@
-# remote control:
-# start control: L2 + START
+# remote control (only the key below is handled in the source):
 # stop control: L2 + UP + LEFT
-# Ready position: L1
-# Zero position: R1
+# start control, ready position and zero position are services only:
+#   /start_control, /ready_position_control, /zero_position_control
 
 robot_bridge:
   ros__parameters:

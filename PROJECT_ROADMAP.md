@@ -3,25 +3,24 @@
 > One per repo. Planned work only, one item per task. Finished items are
 > deleted; git history is the log.
 
-_Last updated: 2026-09-10 · local (adminsairol-MS-7E06)_
+_Last updated: 2026-09-10 · turing_
 
 ## Items
 
+### Handover
+
+- [ ] Finish the handover pass in `docs/handover-audit.md`: bring-up scripts,
+  the `bridge/` conftest, moving bridge-behaviour facts out of the consumer
+  repo, and the dead-code cleanup.
+  **Done when:** every P1 and P2 item in that plan is done and the audit is
+  deleted.
+
 ### Hand path
 
-Built and documented in `docs/hands_path.md`. What is left:
+Built, compiled and verified against the fakes (`tools/test.sh`, all stages
+pass on both CycloneDDS and Fast DDS). Design in `docs/hands_path.md`. What is
+left needs hardware:
 
-- [ ] Compile and verify the hand path. The C++ has never been built — it was
-  written on a machine without ROS 2. Either machine works: the bench container
-  in `humanoid-locoman-vla` (`docker/bench-g1.sh build`) carries Humble and
-  mounts this clone, or a native `colcon build` on the lab machine. Then
-  `run_fake_hand_test.sh`, `STALE_AFTER=3.5 run_fake_hand_test.sh`, and
-  `run_fake_wire_test.sh` to confirm the body path is unchanged.
-  **Done when:** all three pass and `ros2 topic echo /dex3/left/cmd` shows
-  7 motors with mode `[144, 145, 146, 147, 148, 149, 150]`.
-  **In the container:** set the `CYCLONEDDS_URI` from `scripts/test-stack.sh`,
-  or force `rmw_fastrtps_cpp`; Cyclone's loopback multicast is off by default
-  and discovery silently fails without it.
 - [ ] Confirm the Dex3 read order against hardware once the hands are mounted:
   bend one left-hand finger and watch which side and which motor index answers.
   `dex3_probe --iface <if>` read mode is what answers it.
@@ -37,7 +36,7 @@ Built and documented in `docs/hands_path.md`. What is left:
 
 - [ ] `fix/start-control-validate`: `startControlServiceCB_` answers `success: true` with an "invalid size" message unconditionally, then `initControl_` moves to `ready_q_` on a wrong length. **Done when:** a wrong length is rejected, the answer is false, and nothing moves.
 - [ ] `fix/g1-default-pos-29`: G1 `_default_pos` is 27 long while kp/kd are 29 (`robot_client.py`). **Done when:** all three are 29 and a length check fails loudly.
-- [ ] `fix/g1-config-keymap`: `G1_config.yaml`'s header advertises `LT + START`, `L1`, `R1`; all are commented out for G1. **Done when:** the config documents only keys the source handles.
+- [ ] `fix/config-keymaps`: the stale keymap headers are corrected here (G1 and H1_2 advertised four keys the source comments out; T1 omitted `RT` from the start combo; H1 was right). Still to send upstream. **Done when:** the PR is open.
 - [ ] `feat/g1-finish-control-release`: `finishControl_` only logs, so an abort holds the last pose at full kp/kd. **Done when:** an abort releases as the lab defines it — see the open question in `PROJECT_STATUS.md`.
 
 ### Cleanups
