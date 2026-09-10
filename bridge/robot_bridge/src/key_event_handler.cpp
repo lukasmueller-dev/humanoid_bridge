@@ -1,3 +1,5 @@
+// NOT BUILT. No target in CMakeLists.txt compiles this file; it is upstream
+// code kept for reference. The live G1 path is bridge_core.cpp + G1_bridge.cpp.
 #include "key_event_handler.hpp"
 
 //=======================For H1 and G1, the key mapping is the same ======================

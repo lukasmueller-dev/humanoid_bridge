@@ -29,11 +29,29 @@ All three non-`main` branches are superseded. A newcomer cannot tell.
 | Branch | Tip | Verdict |
 |---|---|---|
 | `origin/feat-hands-path` | `cba765e` | tree-identical to `main`. Dead |
-| `feat-motor-probe` (worktree) | `bf87279` | forked at `2428b48`, missing `main`'s last two commits. Its diff vs `main` only undoes `main`'s `drive.py -> fixed_goals.py` / `gear_loop.py -> gear_controller.py` renames. Dead |
+| `feat-motor-probe` (worktree) | `bf87279` | the **commit** is superseded, but the worktree carries unpushed `motor_probe` work. Keep the branch and the worktree |
 | `feat-dockerize-g1-bench` | `1d0451c` | missing the whole hand path (2290 lines). Dead |
 
 `main` carries everything: layer split, `/lowstate` bounds fix, DDS domain fix,
 drive node, `docs/hands_path.md`, dockerized usage, hand path.
+
+### `feat-motor-probe` holds unpushed work (corrects the row above)
+
+`~/git/worktrees/humanoid_bridge/feat-motor-probe` has never been committed:
+
+| Path | Lines |
+|---|---|
+| `g1_stack/motor_probe/` (`server`, `catalog`, `session`) | 526 |
+| `g1_stack/nodes/motor_probe.py` | 330 |
+| `tests/motor_probe/` (5 files) | 944 |
+| `scripts/fetch_g1_description.sh` | 155 |
+
+Plus edits to `.gitignore`, `PROJECT_ROADMAP.md` and `g1_stack/setup.py`. Its
+own `HANDOFF.md` calls the backend complete and tested, the frontend in
+progress, and says nothing has run against ROS.
+
+The author is pushing this separately; it is not landing with the handover
+pass. The only consequence here: `feat-motor-probe` and its worktree stay put.
 
 ### Stale claims
 
@@ -262,6 +280,29 @@ All of this is a fact about this code, and today lives only in
 | Cyclone loopback multicast is off, so one-host discovery needs the forced URI | `bench.md`, plus this repo's `HANDOFF.md` | `tools/test.sh` (as code, not prose) |
 | The goal array's three disagreeing joint orders | `bench.md`, "The goal array's joint order" | `g1_stack/README.md` already has the rule ("map by name"); the derivation belongs beside `goal.UPPER_BODY_JOINTS` |
 
+### Ownership of bring-up, settled 2026-09-10
+
+`humanoid-locoman-vla`'s own handover audit proposed `bridge-release-lowcmd.sh`,
+`bridge-up.sh` and `bridge-arm.sh` in that repo. The same three jobs are now in
+this one, tested against the fake robot. Decision: **the fork owns the
+mechanism, the consumer wraps it.**
+
+Why here: the ordering is entirely about this code. `checkExternalPublisher_`
+blocks startup, `start_control` does not validate its length, the ramp is cut
+by the first `/robot_cmd`. A fork user with no bench needs all of it.
+
+The contract for a wrapper in the consumer repo:
+
+| It supplies | This repo provides |
+|---|---|
+| NIC (`--iface`, or `BRIDGE_IFACE`) | `tools/g1-release-lowcmd.py` |
+| params path (`--params`), defaults to this repo's `G1_config.yaml` | `tools/g1-bringup.sh` |
+| native vs container, which is `bench-g1.sh`'s job, not this script's | `tools/g1-measured-pose.py` |
+| the gantry and safety gate, which stay bench facts | the `--robot-is-clear` gate and the 29-length check |
+
+These tools resolve their own paths from `BASH_SOURCE`, so an absolute-path
+call from another repo works unchanged. None of them knows about Docker.
+
 ### Correctly stays there
 
 Bench facts about one robot and one policy. Do not import.
@@ -400,7 +441,30 @@ line, same repo.
     names, and which changes are this project's own, without opening the
     roadmap.
 
-### P2, hygiene
+### P2 — done 2026-09-10
+
+Deleted: `thirdparty/unitree/cyclonedds.xml` (referenced by nothing, named a
+third NIC) and `bridge/robot_bridge/launch/robot_bridge_launch.py` with its
+`install(DIRECTORY launch/)` directive. That launch file ran two executables
+CMake does not build and hardcoded a stranger's home path, and it was installed,
+so it looked supported.
+
+The dead C++ is marked, not moved: a two-line `// NOT BUILT` header on
+`bridge.cpp`, `release_node.cpp`, `key_event_handler.cpp`,
+`ros2_sport_client.cpp`, `bridge.hpp` and `key_event_handler.hpp`. Comments
+only, so an upstream rebase stays clean. Verified by exact-include grep that
+nothing built pulls in either header.
+
+Branches: `feat-dockerize-g1-bench` deleted (local only, adds no file main
+lacks, 2159 lines behind; recover with `git branch feat-dockerize-g1-bench
+1d0451c`). `origin/feat-hands-path` is tree-identical to `main` and can go, but
+it is a shared remote, so it is left for the author:
+`git push origin --delete feat-hands-path`. `feat-motor-probe` stays.
+
+Clean container rebuild after the deletions: `unit PASS 116`, `wire PASS`,
+`hands PASS`, and `share/robot_bridge/` no longer installs `launch/`.
+
+### P2, hygiene (done)
 
 11. **Delete `thirdparty/unitree/cyclonedds.xml`** (12) and the dead launch file
     (10), or gate the launch file.
