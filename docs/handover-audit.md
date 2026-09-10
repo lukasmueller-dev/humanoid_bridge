@@ -342,7 +342,22 @@ Ordered. Each item is independently mergeable.
 
 ### P0 — done 2026-09-10
 
-Verified in the `humlocoman-bench-g1:local` container against a clean
+**Verified on a bare `ros:humble-ros-base`** (2026-09-10, second pass): the
+three README commands and nothing else give `unit PASS 116`, `wire PASS`,
+`hands PASS`. Degraded paths name their fix: no deps gives
+`unit SKIP /usr/bin/python3 lacks zmq msgpack msgpack_numpy;
+tools/install-build-deps.sh`, and no `rosidl_generator_dds_idl` gives the apt
+line.
+
+That pass found the dependency list was wrong: `install-build-deps.sh` shipped
+`numpy pytest ruff`, but `g1_stack` needs `pyzmq`, `msgpack` and
+`msgpack-numpy` too, and `g1_camera` needs OpenCV. Every earlier run used the
+bench image, which pre-installs all four, so the gap was invisible. The list is
+now the union of both packages' `install_requires` plus OpenCV, pytest and
+ruff, and `test.sh` preflights the same set. **Lesson: a container built for
+this repo cannot test this repo's install story.**
+
+Also verified in the `humlocoman-bench-g1:local` container against a clean
 workspace: `tools/build.sh` then `tools/test.sh` gives `unit PASS 116`,
 `wire PASS`, `hands PASS`, on CycloneDDS and on Fast DDS. Natively, with no
 ROS, `unit PASS 103 passed, 2 skipped` and the two integration stages skip with
