@@ -32,6 +32,27 @@ left needs hardware:
   **Done when:** either the message exists and `g1_stack` uses it, or the
   duplication is documented as deliberate.
 
+### Motor probe
+
+Built on `feat-motor-probe` (branched off `feat-hands-path`, which must land
+first). Backend, page and tests are done; no ROS path has ever executed.
+
+- [ ] Run `motor_probe` end to end on a machine with ROS 2: `colcon build`, start
+  `G1_bridge` against `fake_g1.py`, then `motor_probe --port 8080` and jog one
+  joint from the page. `fake_g1` tracks commands perfectly, so the on-screen
+  model should follow the slider exactly.
+  **Done when:** a slider drag moves the right joint in the 3D view, the deadman
+  releases the robot when the tab closes, and `run_fake_wire_test.sh` still passes.
+- [ ] Confirm the Dex3 read order with the panel once the hands are mounted —
+  jog `L_HAND_THUMB_0` and watch which motor answers. This is what
+  `g1_stack/robot.py`'s UNCONFIRMED note asks for, and the panel is the tool for it.
+  **Done when:** the note is gone or corrected.
+- [ ] Decide whether the ~2.2 MB of vendored `three.js` / `urdf-loader` under
+  `motor_probe/static/vendor/` belongs in git. There is no CDN at runtime on the
+  lab network, so the options are vendoring or a fetch step like the assets have.
+  **Done when:** either the vendor tree is deliberately committed and noted in the
+  README, or it is gitignored and a fetch script populates it.
+
 ### Upstream fixes — one branch each
 
 - [ ] `fix/start-control-validate`: `startControlServiceCB_` answers `success: true` with an "invalid size" message unconditionally, then `initControl_` moves to `ready_q_` on a wrong length. **Done when:** a wrong length is rejected, the answer is false, and nothing moves.
