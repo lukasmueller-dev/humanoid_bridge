@@ -68,6 +68,18 @@ namespace sairol_bridge
         virtual void publishLowCommand_() = 0;
         virtual bool initControl_(bridge_interface::msg::RobotCmd default_cmd) = 0;
         bool checkCommand_(bridge_interface::msg::RobotCmd::SharedPtr robotCommand);
+
+        // One motor's command, against one joint's limits. Rejects what cannot be
+        // salvaged (NaN/Inf, absurd magnitudes) and clamps what can (kp, kd, dq,
+        // tau), setting `clipped` when it did. Does not touch q: the body path
+        // bounds q by implied torque in publishLowCommand_, the hand path clamps
+        // it to [q_min, q_max] itself.
+        bool checkMotorCmd_(bridge_interface::msg::MotorCmd &cmd,
+                            const Joint &joint_info,
+                            float_t kp_min, float_t kp_max,
+                            float_t kd_min, float_t kd_max,
+                            size_t index, bool &clipped);
+
         bool checkState_();
         virtual void finishControl_() = 0;
 

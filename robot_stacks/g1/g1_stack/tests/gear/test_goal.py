@@ -113,3 +113,40 @@ def test_describe_labels_every_joint_group():
 def test_the_groups_cover_every_slot_exactly_once():
     covered = [i for _, slots in goal_mod.GOAL_GROUPS for i in slots]
     assert sorted(covered) == list(range(31))
+
+
+# --- DDS-order hand extraction ---------------------------------------------
+
+
+def test_dex3_order_is_seven_distinct_joints_per_hand():
+    assert len(goal_mod.DEX3_ORDER) == goal_mod.NUM_HAND_JOINTS_PER_HAND == 7
+    assert len(set(goal_mod.DEX3_ORDER)) == 7
+
+
+@pytest.mark.parametrize("side", ["left", "right"])
+def test_hand_from_pose_reorders_goal_order_into_dds_order(side):
+    """The load-bearing one: the goal array groups index, middle, thumb and the
+    Dex3 groups thumb, middle, index. Slicing the goal-order block instead of
+    remapping passes every shape check and drives the wrong finger."""
+    angles = {f"{side}_hand_{joint}_joint": float(i) for i, joint in enumerate(goal_mod.DEX3_ORDER)}
+    pose = goal_mod.pose_from_named(angles)
+
+    assert goal_mod.hand_from_pose(pose, side) == pytest.approx(list(range(7)))
+
+    # The naive alternative, and why it is wrong.
+    goal_order_slice = pose[list(goal_mod._slots(f"{side}_hand"))]
+    assert goal_order_slice != pytest.approx(list(range(7)))
+
+
+def test_hand_from_pose_keeps_the_two_hands_apart():
+    pose = goal_mod.pose_from_named({"left_hand_thumb_0_joint": 1.0})
+    assert goal_mod.hand_from_pose(pose, "left")[0] == pytest.approx(1.0)
+    assert goal_mod.hand_from_pose(pose, "right") == pytest.approx([0.0] * 7)
+
+
+def test_hand_from_pose_rejects_a_bad_side_and_a_bad_shape():
+    pose = goal_mod.pose_from_named({})
+    with pytest.raises(ValueError, match="side must be"):
+        goal_mod.hand_from_pose(pose, "middle")
+    with pytest.raises(ValueError, match="pose shape"):
+        goal_mod.hand_from_pose(np.zeros(7, dtype=np.float32), "left")

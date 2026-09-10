@@ -1,99 +1,91 @@
-# Handoff: layer split
+# Handoff: hands path
 
-_2026-09-09. Branch `chore-layer-split`, on the lab machine `adminsairol-MS-7E06`._
+_2026-09-10. Branch `feat-hands-path`, local on `turing` (no ROS 2 here)._
 
 ## State
 
+Implemented, **uncommitted**. Design and behaviour in `docs/hands_path.md`.
+
 | | |
 |---|---|
-| `2527239` | `chore: restructure into bridge/ and robot_stacks/ layers` |
-| `55ace06` | `refactor(g1_stack): move g1 stack to the bridge` |
-| working tree | flattening, below — **uncommitted, awaiting review** |
+| verified here | 101 pytest, ruff 0.16 clean, hand checker exercised against synthetic good/bad recordings, `send_hand_cmd` against stub messages |
+| **not verified** | the C++ has never been compiled — `turing` has no ROS 2 |
+| **not verified** | `run_fake_hand_test.sh` has never run |
 
 ## Next action
 
-Review, then commit. The working tree keeps `55ace06`'s `robot_stacks/g1/`
-grouping and folds `g1_camera` back out into its own package beside `g1_stack`.
-Suggested body reasons: colcon cannot discover a package nested inside another,
-so both grouping dirs stay package-free and the two packages are siblings;
-`robot_stacks/` keeps the root tidy as T1 and H1 stacks arrive; the package boundary
-keeps the Jetson's isolation structural rather than conventional;
-`g1_camera/tests/test_isolated.py` proves it; ruff no longer reformats markdown.
+Compile it. No lab machine needed: the bench container in
+`~/github/humanoid-locoman-vla` carries ROS 2 Humble, colcon, CycloneDDS,
+pytest and numpy, and mounts this clone (`.env` has
+`BRIDGE_CLONE=~/github/humanoid_bridge`) at `/bridge_ws/src/humanoid_bridge`.
 
-## Layout
-
-```
-bridge/                                      upstream-bound
-  bridge_interface/  robot_bridge/{robot_bridge,tests,examples}
-robot_stacks/g1/                             grouping dirs, neither is a package
-  g1_camera/g1_camera/    ships to the Jetson; py3.8, no ROS, self-contained
-  g1_stack/g1_stack/      robot.py, joints/, observation/, gear/, nodes/
-scripts/  thirdparty/  pyproject.toml  conftest.py
+```bash
+cd ~/github/humanoid-locoman-vla
+./docker/bench-g1.sh build                                  # compiles the hand path
+./docker/bench-g1.sh bash ~/github/humanoid_bridge/bridge/robot_bridge/tests/integration/run_fake_hand_test.sh
+./docker/bench-g1.sh pytest                                 # unskips the 2 bridge_interface tests
 ```
 
-Public surface:
+`~/bridge_ws/{build,install}/bridge_interface` are **already deleted** — that
+stale cache is why a new `HandCmd.msg` would not have shown up. Everything else
+in the workspace is intact, so the next build rebuilds those two and reuses the
+rest.
 
-```python
-g1_stack.gear.goal.UPPER_BODY_JOINTS               # 31 names, goal order
-g1_stack.gear.goal.pose_from_named({name: rad})    # -> (31,) float32
-g1_stack.gear.goal.goal(pose, nav, height, target_time, timestamp=None)
-g1_stack.gear.goal.hold_goal(pose, target_time, base_height)
-g1_stack.gear.GoalPublisher, GoalPacer, GOAL_PORT, GOAL_TOPIC
-g1_stack.observation.Observation, ObservationAssembler
-g1_stack.joints.ArmJointsFromLowState, HandJointsFromDex3, ZeroJointSource
-g1_stack.robot.NUM_BODY_JOINTS, ARM_SLICE, NUM_ARM_JOINTS, NUM_HAND_JOINTS
-g1_camera.CameraClient, CameraServer, FakeCameraServer, synthetic_rgb
-```
+The container's image ENV pins `RMW_IMPLEMENTATION=rmw_cyclonedds_cpp`, and
+Cyclone disables multicast on loopback, so multi-process discovery inside it
+needs the `CYCLONEDDS_URI` that `scripts/test-stack.sh` sets (`lo`,
+`multicast="true"`). `bench-g1.sh` forwards that variable when it is set.
+Without it, `run_fake_hand_test.sh` will look like the bridge never came up.
+The native fake-wire test runs on Fast DDS instead, so forcing
+`RMW_IMPLEMENTATION=rmw_fastrtps_cpp` is the other way out.
 
-## Verified
+A C++ review was started here and killed before it reported, so there are no
+review findings — the build is the only evidence.
 
-- 64 pytest tests; ruff clean.
-- 8 fake-wire checks pass unchanged.
-- `colcon build` across all 8 packages.
-- `ros2 run g1_camera {camera_server,fake_camera_server}`;
-  `~/github/SIMPLE/.venv/bin/python -m g1_stack.nodes.gear_loop --help`.
-- rsync of `robot_stacks/g1/g1_camera/` alone + `pip install --target`, then
-  importing `g1_camera` with nothing else on the path. Console scripts land on
-  PATH.
-- `g1_camera/tests/test_isolated.py` bites: adding `import g1_stack` to
-  `wire.py` turns it red, removing it turns it green.
+## What was built
+
+- `bridge_interface/msg/HandCmd.msg`; `hand_*` block in `G1_config.yaml`.
+- `G1Bridge`: per-side state subscriptions, `/hand_cmd/{left,right}`, a 100 Hz
+  wall timer, `start/stop_hand_control`, per-side guards and limp release.
+- `BridgeCore::checkMotorCmd_`, extracted from `checkCommand_` so both loops
+  share one per-motor guard.
+- `send_hand_cmd` + `start/stop_hand_control` on both clients;
+  `adapters/gear_hands.py`; `g1_stack.gear.goal.hand_from_pose`.
+- `fake_dex3.py`, `drive_hand_cmd.py`, `check_hand_cmd.py`,
+  `run_fake_hand_test.sh`.
 
 ## Decisions that changed the plan
 
-- `config.py` could not "stay" as the old handoff assumed: every `observation/`
-  module imported it. Split by owner — robot facts to `g1_stack/robot.py`,
-  camera wire to `g1_camera/wire.py`, policy constants stay in the thesis repo.
-- `camera_server.py` sized frames from psi0's `IMAGE_WIDTH/HEIGHT`. Now
-  `--width/--height`, defaulting to 640x480 as the camera's own size.
-- `Observation.validate()` took the policy's image shape. Now
-  `validate(image_shape=None)` — the caller asserts its own.
-- `RealSenseClient` renamed `CameraClient`; it is V4L2/videohub, not a RealSense.
-- `initialize_dds` lives in both packages. Not shared: a 3-line SDK entry point,
-  and sharing would point one package at the other for something neither owns.
-- Ruff 0.16 reformats python blocks inside markdown. `*.md` is now excluded, or
-  it rewrites doc examples.
+- `adapters/gear_hands.py` is a **pass-through, not a remap**. The design
+  assumed GEAR's `HandCommandSender` took goal order; `g1_hand.py:44` hands it
+  the state processor's own DDS order. The goal-order remap went to
+  `g1_stack.gear.goal.hand_from_pose` instead, where the goal order is defined.
+- The `dq_limit` blocker is closed: 6.857 on `thumb_0`, 12 elsewhere, from
+  `psi0/real/assets/unitree_hand/unitree_dex3_{left,right}.urdf`. That path
+  still holds and its ranges match `dex3_probe.LIMITS` exactly.
+- `checkMotorCmd_` uses `std::abs`, not the original's unqualified `abs`, which
+  resolved to the integer overload and truncated any |value| < 1 to 0 — so the
+  body path's "unreasonably large" guard was much weaker than it read. This is
+  a behaviour change on the body path, and the reason to run the body
+  integration test before trusting it.
 
 ## Traps found
 
-- `g1_camera` carries its own `pyproject.toml` to stay self-contained, which
-  makes it its own pytest rootdir. It needs its own `conftest.py` too, or
-  running its tests directly cannot import the package.
-- `setup.cfg` with `install_scripts=$base/lib/<pkg>` is what lets `ros2 run`
-  find console scripts; pip still puts them in `bin/`, so both paths work.
-- Moving a colcon package leaves `build/<pkg>` pointing at the old source path.
-  Delete `build/<pkg>` and `install/<pkg>` before rebuilding.
-- The example clients hardcoded their config path relative to the *workspace*
-  root, so they only ran from `~/bridge_ws` and broke silently when moved. They
-  now resolve it from `__file__`.
-- `scripts/setup_*.sh` counted directories up to the workspace. They now search
-  upward for `install/setup.bash`, so moving them cannot mis-source a prefix.
-- colcon stops descending once a directory is identified as a package, so a
-  package nested inside another package is never discovered. Any grouping
-  directory must not itself carry a `package.xml`.
+- `unitree_hg/HandCmd.motor_cmd` is an **unbounded** sequence, unlike
+  `LowCmd`'s fixed `[35]`. It must be resized before indexing or nothing is
+  published. Same for `HandState.motor_state` on the way in.
+- Every hand run ends with both hands limp — the watchdog fires when the driver
+  stops — so a recording's last frame has zero gains. Assert against the last
+  *commanded* frame.
+- `check_hand_cmd.py` must not import rclpy: it is offline analysis, so
+  `drive_hand_cmd.py` imports ROS inside `main()`.
+- `STALE_AFTER` only tests anything between 3.0 and 4.0 s; the runner enforces
+  that.
+- `checkExternalPublisher_` cannot see `dex3_probe --command`, which publishes
+  raw DDS and is not in the ROS graph.
 
-## Open, for the thesis repo
+## Repo hygiene
 
-The thesis repo now imports the names above from `registry/psi0/` and
-`benches/g1/nodes/`; `benches/g1/deploy/` is gone there. `dex3_probe.py` moved
-here as `g1_stack.nodes.dex3_probe` with a console script (`ad4778f`). Remaining
-work is in `PROJECT_ROADMAP.md`.
+`git status` shows `.bashrc`, `.gitconfig`, `.mcp.json`, `.claude/` and friends
+as untracked in several directories. They are `/dev/null` character devices from
+the sandbox, not repo content. **Do not `git add -A`** — add paths explicitly.

@@ -3,13 +3,35 @@
 > One per repo. Planned work only, one item per task. Finished items are
 > deleted; git history is the log.
 
-_Last updated: 2026-09-09 · local (adminsairol-MS-7E06)_
+_Last updated: 2026-09-10 · local (adminsairol-MS-7E06)_
 
 ## Items
 
 ### Hand path
 
-- [ ] Dex3 hand control through the bridge: `HandCmd.msg`, `rt/dex3/{left,right}/{state,cmd}`, a `hands:` block in `G1_config.yaml`, `send_hand_cmd` on the client, a `HandCommandSender` adapter, and the mode bit packing done bridge-side once. **Done when:** a `/hand_cmd` check passes against a fake dex3 with the same freshness, NaN and limit guards as the body path, and `num_joint` is still 29. **Note:** `g1_stack/nodes/dex3_probe.py` is a starting point.
+Built and documented in `docs/hands_path.md`. What is left:
+
+- [ ] Compile and verify the hand path. The C++ has never been built — it was
+  written on a machine without ROS 2. Either machine works: the bench container
+  in `humanoid-locoman-vla` (`docker/bench-g1.sh build`) carries Humble and
+  mounts this clone, or a native `colcon build` on the lab machine. Then
+  `run_fake_hand_test.sh`, `STALE_AFTER=3.5 run_fake_hand_test.sh`, and
+  `run_fake_wire_test.sh` to confirm the body path is unchanged.
+  **Done when:** all three pass and `ros2 topic echo /dex3/left/cmd` shows
+  7 motors with mode `[144, 145, 146, 147, 148, 149, 150]`.
+  **In the container:** set the `CYCLONEDDS_URI` from `scripts/test-stack.sh`,
+  or force `rmw_fastrtps_cpp`; Cyclone's loopback multicast is off by default
+  and discovery silently fails without it.
+- [ ] Confirm the Dex3 read order against hardware once the hands are mounted:
+  bend one left-hand finger and watch which side and which motor index answers.
+  `dex3_probe --iface <if>` read mode is what answers it.
+  **Done when:** `g1_stack/robot.py`'s UNCONFIRMED note on hand order is gone
+  or corrected, and `hand_from_pose` is checked against a real hand.
+- [ ] Decide whether the bridge should republish hand state as a
+  `bridge_interface` message, so `g1_stack` can drop its raw-DDS hand reader.
+  Blocked on whether the Jetson ever needs hand state.
+  **Done when:** either the message exists and `g1_stack` uses it, or the
+  duplication is documented as deliberate.
 
 ### Upstream fixes — one branch each
 

@@ -31,6 +31,64 @@ sairol_bridge::G1Bridge::G1Bridge(rclcpp::Node::SharedPtr node) : BridgeCore(nod
     {
         rclcpp::sleep_for(std::chrono::milliseconds(100));
     }
+
+    hands_[HAND_LEFT].name = "left";
+    hands_[HAND_RIGHT].name = "right";
+
+    if (!loadHandParameters_())
+    {
+        RCLCPP_WARN(nh->get_logger(),
+                    "No Dex3 hand parameters in this config; hand control is off. "
+                    "The body path is unaffected.");
+        return;
+    }
+
+    for (int side = 0; side < NUM_HANDS; ++side)
+    {
+        auto &hand = hands_[side];
+        const std::string cmd_topic = "/dex3/" + hand.name + "/cmd";
+
+        // Warn, unlike /lowcmd's blocking loop: a contested hand topic must not
+        // stop the body bridge from coming up. This sees ROS 2 publishers only --
+        // a raw unitree_sdk2py publisher such as `dex3_probe --command` is
+        // invisible to the ROS graph and will not be caught here.
+        if (nh->count_publishers(cmd_topic) > 0)
+        {
+            RCLCPP_WARN(nh->get_logger(),
+                        "Another ROS 2 publisher already holds %s; two publishers will fight.",
+                        cmd_topic.c_str());
+        }
+
+        hand.state_time = nh->get_clock()->now();
+        hand.desired.motor_cmd.resize(numHandJoint_);
+        hand.last.motor_cmd.resize(numHandJoint_);
+        hand.params.resize(numHandJoint_);
+
+        hand.cmd_pub = nh->create_publisher<unitree_hg::msg::HandCmd>(cmd_topic, 10);
+
+        hand.state_sub = nh->create_subscription<unitree_hg::msg::HandState>(
+            "/dex3/" + hand.name + "/state", 1,
+            [this, side](unitree_hg::msg::HandState::SharedPtr msg) { handStateHandler_(side, msg); });
+
+        hand.cmd_sub = nh->create_subscription<bridge_interface::msg::HandCmd>(
+            "/hand_cmd/" + hand.name, 1,
+            [this, side](bridge_interface::msg::HandCmd::SharedPtr msg) { handCmdCallBack_(side, msg); });
+    }
+
+    startHandControlService_ = nh->create_service<std_srvs::srv::Trigger>(
+        "start_hand_control",
+        std::bind(&G1Bridge::startHandControlServiceCB_, this, std::placeholders::_1, std::placeholders::_2));
+
+    stopHandControlService_ = nh->create_service<std_srvs::srv::Trigger>(
+        "stop_hand_control",
+        std::bind(&G1Bridge::stopHandControlServiceCB_, this, std::placeholders::_1, std::placeholders::_2));
+
+    handTimer_ = nh->create_wall_timer(std::chrono::duration<double>(handControlDt_),
+                                       std::bind(&G1Bridge::publishHandCommand_, this));
+
+    RCLCPP_INFO(nh->get_logger(),
+                "Dex3 hand path ready: /hand_cmd/{left,right} at %.0f Hz, %d joints per hand.",
+                1.0 / handControlDt_, numHandJoint_);
 }
 
 
@@ -51,6 +109,11 @@ bool sairol_bridge::G1Bridge::checkExternalPublisher_(std::string topic_name)
 
 void sairol_bridge::G1Bridge::stop()
 {
+    if (handTimer_)
+    {
+        handTimer_->cancel();
+    }
+
     // Stop the control thread if it's running
     if (controlThread_.joinable())
     {
@@ -276,3 +339,479 @@ void sairol_bridge::G1Bridge::finishControl_() {
 
 
 
+
+// --- Dex3 hands -------------------------------------------------------------
+//
+// A path of its own, beside the body path rather than inside it. num_joint stays
+// 29: the hands are a separate device, on their own state topic, at their own
+// rate. Everything below runs on the executor thread, which a single-threaded
+// spin serialises, so none of it locks against the body's control thread.
+
+bool sairol_bridge::G1Bridge::loadHandParameters_()
+{
+    if (!nh->get_parameter("num_hand_joint", numHandJoint_) ||
+        !nh->get_parameter("hand_control_dt", handControlDt_) ||
+        !nh->get_parameter("hand_state_timeout", handStateTimeout_) ||
+        !nh->get_parameter("hand_temperature_limit", handTemperatureLimit_) ||
+        !nh->get_parameter("hand_kp_min", handKpMin_) ||
+        !nh->get_parameter("hand_kp_max", handKpMax_) ||
+        !nh->get_parameter("hand_kd_min", handKdMin_) ||
+        !nh->get_parameter("hand_kd_max", handKdMax_) ||
+        !nh->get_parameter("hand_ready_q", handReadyQ_))
+    {
+        return false;
+    }
+
+    if (numHandJoint_ <= 0 || handControlDt_ <= 0.0)
+    {
+        RCLCPP_ERROR(nh->get_logger(), "num_hand_joint and hand_control_dt must be positive.");
+        return false;
+    }
+    if (handKpMax_ < handKpMin_ || handKdMax_ < handKdMin_)
+    {
+        RCLCPP_ERROR(nh->get_logger(), "hand gain ranges are inverted.");
+        return false;
+    }
+    if (static_cast<int>(handReadyQ_.size()) != numHandJoint_)
+    {
+        RCLCPP_ERROR(nh->get_logger(), "hand_ready_q has %ld entries, expected %d.",
+                     handReadyQ_.size(), numHandJoint_);
+        return false;
+    }
+
+    const char *name_param[NUM_HANDS] = {"left_hand_joint_names", "right_hand_joint_names"};
+    for (int side = 0; side < NUM_HANDS; ++side)
+    {
+        std::vector<std::string> joint_names;
+        if (!nh->get_parameter(name_param[side], joint_names))
+        {
+            RCLCPP_ERROR(nh->get_logger(), "Failed to get '%s' from parameters", name_param[side]);
+            return false;
+        }
+        if (static_cast<int>(joint_names.size()) != numHandJoint_)
+        {
+            RCLCPP_ERROR(nh->get_logger(), "'%s' has %ld names, expected %d.",
+                         name_param[side], joint_names.size(), numHandJoint_);
+            return false;
+        }
+
+        auto &joints = hands_[side].joints;
+        joints.clear();
+        for (const auto &name : joint_names)
+        {
+            Joint joint_info;
+            bool ret = true;
+            ret = ret && nh->get_parameter(name + ".idx", joint_info.idx);
+            ret = ret && nh->get_parameter(name + ".q_min", joint_info.q_min);
+            ret = ret && nh->get_parameter(name + ".q_max", joint_info.q_max);
+            ret = ret && nh->get_parameter(name + ".dq_limit", joint_info.dq_limit);
+            ret = ret && nh->get_parameter(name + ".tau_limit", joint_info.tau_limit);
+            ret = ret && nh->get_parameter(name + ".kp", joint_info.kp);
+            ret = ret && nh->get_parameter(name + ".kd", joint_info.kd);
+            if (!ret)
+            {
+                RCLCPP_ERROR(nh->get_logger(), "Hand joint '%s' is missing parameters.", name.c_str());
+                return false;
+            }
+            // Loud here rather than a wrong clamp later: these come from the
+            // Dex3 URDFs by hand, and the two hands are mirrored.
+            if (joint_info.q_max < joint_info.q_min || joint_info.dq_limit < 0 ||
+                joint_info.tau_limit < 0 || joint_info.kp < 0 || joint_info.kd < 0)
+            {
+                RCLCPP_ERROR(nh->get_logger(), "Hand joint '%s' has invalid limits.", name.c_str());
+                return false;
+            }
+            joints.push_back(joint_info);
+        }
+
+        for (int i = 0; i < numHandJoint_; ++i)
+        {
+            if (handReadyQ_[i] < joints[i].q_min || handReadyQ_[i] > joints[i].q_max)
+            {
+                RCLCPP_ERROR(nh->get_logger(),
+                             "hand_ready_q[%d] = %.4f is outside %s's range [%.4f, %.4f].",
+                             i, handReadyQ_[i], joint_names[i].c_str(), joints[i].q_min, joints[i].q_max);
+                return false;
+            }
+        }
+    }
+
+    RCLCPP_INFO(nh->get_logger(), "Loaded %d Dex3 joint limits per hand", numHandJoint_);
+    RCLCPP_INFO(nh->get_logger(), "Hand kp range: [%.3f, %.3f], kd range: [%.3f, %.3f]",
+                handKpMin_, handKpMax_, handKdMin_, handKdMax_);
+    return true;
+}
+
+void sairol_bridge::G1Bridge::handStateHandler_(int side, unitree_hg::msg::HandState::SharedPtr msg)
+{
+    auto &hand = hands_[side];
+    hand.state = *msg;
+    hand.state_time = nh->get_clock()->now();
+    hand.state_seen = true;
+}
+
+bool sairol_bridge::G1Bridge::checkHandState_(int side)
+{
+    auto &hand = hands_[side];
+
+    if (!hand.state_seen)
+    {
+        RCLCPP_ERROR_THROTTLE(nh->get_logger(), *nh->get_clock(), 2000,
+                              "%s hand: nothing has arrived on /dex3/%s/state.",
+                              hand.name.c_str(), hand.name.c_str());
+        return false;
+    }
+
+    const double dt_state = (nh->get_clock()->now() - hand.state_time).seconds();
+    if (dt_state > handStateTimeout_)
+    {
+        RCLCPP_ERROR_THROTTLE(nh->get_logger(), *nh->get_clock(), 2000,
+                              "%s hand signal lost! No HandState for %.2f s (limit %.2f s).",
+                              hand.name.c_str(), dt_state, handStateTimeout_);
+        return false;
+    }
+
+    // unitree_hg/HandState carries an unbounded MotorState[], unlike LowState's
+    // fixed [35], so the length is whatever the device sent. Bound every read.
+    if (static_cast<int>(hand.state.motor_state.size()) < numHandJoint_)
+    {
+        RCLCPP_ERROR_THROTTLE(nh->get_logger(), *nh->get_clock(), 2000,
+                              "%s hand state has %ld motors, expected at least %d.",
+                              hand.name.c_str(), hand.state.motor_state.size(), numHandJoint_);
+        return false;
+    }
+
+    for (int i = 0; i < numHandJoint_; ++i)
+    {
+        const auto &motor = hand.state.motor_state[i];
+
+        if (!std::isfinite(motor.q) || !std::isfinite(motor.dq) || !std::isfinite(motor.tau_est))
+        {
+            RCLCPP_ERROR(nh->get_logger(), "%s hand motor %d state contains invalid (NaN/Inf) values.",
+                         hand.name.c_str(), i);
+            return false;
+        }
+
+        if (std::abs(motor.dq) > hand.joints[i].dq_limit)
+        {
+            RCLCPP_ERROR(nh->get_logger(), "%s hand motor %d dq (%.3f) exceeds limit (%.3f).",
+                         hand.name.c_str(), i, motor.dq, hand.joints[i].dq_limit);
+            return false;
+        }
+
+        // The body path has no equivalent: a stalled finger is the failure a
+        // hand actually has, and the Dex3 reports two temperatures per motor.
+        for (const auto &temperature : motor.temperature)
+        {
+            if (static_cast<float_t>(temperature) > handTemperatureLimit_)
+            {
+                RCLCPP_ERROR(nh->get_logger(), "%s hand motor %d is at %d degrees (limit %.0f).",
+                             hand.name.c_str(), i, static_cast<int>(temperature), handTemperatureLimit_);
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+bool sairol_bridge::G1Bridge::checkHandCommand_(int side, bridge_interface::msg::HandCmd::SharedPtr message)
+{
+    auto &hand = hands_[side];
+
+    if (static_cast<int>(message->motor_cmd.size()) != numHandJoint_)
+    {
+        RCLCPP_ERROR(nh->get_logger(), "%s hand command: motor_cmd size mismatch. Expected %d, got %ld.",
+                     hand.name.c_str(), numHandJoint_, message->motor_cmd.size());
+        return false;
+    }
+
+    if (!std::isfinite(message->duration) || message->duration < 0.0)
+    {
+        RCLCPP_ERROR(nh->get_logger(), "%s hand command: duration %.3f is not a non-negative number.",
+                     hand.name.c_str(), message->duration);
+        return false;
+    }
+
+    bool clipped = false;
+    for (size_t i = 0; i < static_cast<size_t>(numHandJoint_); ++i)
+    {
+        const auto &joint_info = hand.joints[i];
+        if (!checkMotorCmd_(message->motor_cmd[i], joint_info,
+                            handKpMin_, handKpMax_, handKdMin_, handKdMax_, i, clipped))
+        {
+            return false;
+        }
+
+        // Unlike the body path, clamp q outright. A finger has a hard URDF range
+        // and no torque-implied bound to fall back on.
+        auto &cmd = message->motor_cmd[i];
+        if (cmd.q < joint_info.q_min || cmd.q > joint_info.q_max)
+        {
+            RCLCPP_WARN_ONCE(nh->get_logger(), "Clipping %s hand motor_cmd[%lu] q: %.3f",
+                             hand.name.c_str(), i, cmd.q);
+            cmd.q = std::clamp(cmd.q, joint_info.q_min, joint_info.q_max);
+            clipped = true;
+        }
+    }
+
+    if (clipped)
+    {
+        RCLCPP_WARN_THROTTLE(nh->get_logger(), *nh->get_clock(), 2000,
+                             "%s hand: some motors were clipped to stay within safety limits",
+                             hand.name.c_str());
+    }
+
+    return true;
+}
+
+void sairol_bridge::G1Bridge::handCmdCallBack_(int side, bridge_interface::msg::HandCmd::SharedPtr message)
+{
+    auto &hand = hands_[side];
+
+    if (!handStarted_)
+    {
+        RCLCPP_WARN_ONCE(nh->get_logger(),
+                         "Hand control not started. Call /start_hand_control first.");
+        return;
+    }
+
+    if (!hand.live)
+    {
+        RCLCPP_WARN_THROTTLE(nh->get_logger(), *nh->get_clock(), 2000,
+                             "%s hand was released by a guard; ignoring commands until "
+                             "/start_hand_control is called again.", hand.name.c_str());
+        return;
+    }
+
+    if (!checkHandCommand_(side, message))
+    {
+        RCLCPP_ERROR(nh->get_logger(), "%s hand command check failed; command dropped.",
+                     hand.name.c_str());
+        return;
+    }
+
+    hand.desired = *message;
+
+    // Always a linear ramp from what was last published. The body path's
+    // interpolation_order is deliberately absent here: its order-0 low-pass buys
+    // nothing at 100 Hz and is the confusing half of that knob.
+    for (int i = 0; i < numHandJoint_; ++i)
+    {
+        const auto &target = hand.desired.motor_cmd[i];
+        const auto &last = hand.last.motor_cmd[i];
+        auto &params = hand.params[i];
+
+        params.q_0 = last.q;
+        params.q_1 = target.q - last.q;
+        params.dq_0 = last.dq;
+        params.dq_1 = target.dq - last.dq;
+        params.kp_0 = last.kp;
+        params.kp_1 = target.kp - last.kp;
+        params.kd_0 = last.kd;
+        params.kd_1 = target.kd - last.kd;
+        params.tau_0 = target.tau;
+        params.tau_1 = 0.0;
+    }
+
+    hand.t_start = nh->get_clock()->now().seconds();
+    hand.t_final = hand.t_start + message->duration;
+    hand.t_valid = message->hold_position ? INF_ : hand.t_final + 0.2;
+}
+
+void sairol_bridge::G1Bridge::publishOneHand_(int side, bool limp)
+{
+    auto &hand = hands_[side];
+    if (!hand.cmd_pub)
+    {
+        return;
+    }
+
+    unitree_hg::msg::HandCmd out;
+    // unitree_hg/HandCmd carries an unbounded MotorCmd[], unlike LowCmd's fixed
+    // [35]. Without this resize every index below is out of bounds.
+    out.motor_cmd.resize(numHandJoint_);
+
+    float_t phase = 1.0f;
+    if (hand.t_final - hand.t_start > 1e-6)
+    {
+        phase = static_cast<float_t>((nh->get_clock()->now().seconds() - hand.t_start) /
+                                     (hand.t_final - hand.t_start));
+    }
+    phase = std::clamp(phase, 0.0f, 1.0f);
+
+    for (int i = 0; i < numHandJoint_; ++i)
+    {
+        auto &cmd = out.motor_cmd[i];
+        auto &last = hand.last.motor_cmd[i];
+        cmd.mode = handMode_(i);
+
+        if (limp)
+        {
+            // Zero gains and zero feedforward is what makes the finger slack; q
+            // is carried only so a recording shows where the hand was.
+            cmd.q = (static_cast<int>(hand.state.motor_state.size()) > i)
+                        ? hand.state.motor_state[i].q
+                        : 0.0f;
+            cmd.dq = 0.0f;
+            cmd.tau = 0.0f;
+            cmd.kp = 0.0f;
+            cmd.kd = 0.0f;
+        }
+        else
+        {
+            cmd.q = hand.params[i].q_0 + hand.params[i].q_1 * phase;
+            cmd.dq = hand.params[i].dq_0 + hand.params[i].dq_1 * phase;
+            cmd.kp = hand.params[i].kp_0 + hand.params[i].kp_1 * phase;
+            cmd.kd = hand.params[i].kd_0 + hand.params[i].kd_1 * phase;
+            cmd.tau = hand.params[i].tau_0 + hand.params[i].tau_1 * phase;
+            cmd.q = std::clamp(cmd.q, hand.joints[i].q_min, hand.joints[i].q_max);
+        }
+
+        last.q = cmd.q;
+        last.dq = cmd.dq;
+        last.kp = cmd.kp;
+        last.kd = cmd.kd;
+        last.tau = cmd.tau;
+    }
+
+    hand.cmd_pub->publish(out);
+}
+
+void sairol_bridge::G1Bridge::publishHandCommand_()
+{
+    // Silent while hand control is off. The mode's timeout bit, which every
+    // commanded frame carries, releases the fingers once frames stop arriving.
+    if (!handStarted_)
+    {
+        return;
+    }
+
+    const double now = nh->get_clock()->now().seconds();
+
+    for (int side = 0; side < NUM_HANDS; ++side)
+    {
+        auto &hand = hands_[side];
+
+        if (hand.live)
+        {
+            if (!checkHandState_(side))
+            {
+                RCLCPP_ERROR(nh->get_logger(), "%s hand state check failed; releasing it.",
+                             hand.name.c_str());
+                hand.live = false;
+            }
+            else if (now > hand.t_valid)
+            {
+                RCLCPP_WARN(nh->get_logger(), "%s hand watchdog expired; releasing it.",
+                            hand.name.c_str());
+                hand.live = false;
+            }
+        }
+
+        // Per side, so a silent left hand does not drop the right. A released
+        // hand keeps getting explicit limp frames rather than silence: an
+        // overheating finger should go slack now, not on the device's timeout.
+        publishOneHand_(side, !hand.live);
+    }
+}
+
+void sairol_bridge::G1Bridge::startHandControlServiceCB_(
+    const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+    std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+{
+    (void)request;
+
+    if (!hands_[HAND_LEFT].cmd_pub)
+    {
+        response->success = false;
+        response->message = "hand path is not configured; the config has no hand_* parameters";
+        return;
+    }
+
+    std::string started, silent;
+    for (int side = 0; side < NUM_HANDS; ++side)
+    {
+        auto &hand = hands_[side];
+
+        // Refuse a hand that is not publishing state: nothing would show whether
+        // the fingers answered, and the ramp below needs a real starting q.
+        if (!checkHandState_(side))
+        {
+            hand.live = false;
+            silent += (silent.empty() ? "" : ", ") + hand.name;
+            continue;
+        }
+
+        for (int i = 0; i < numHandJoint_; ++i)
+        {
+            auto &last = hand.last.motor_cmd[i];
+            auto &target = hand.desired.motor_cmd[i];
+            auto &params = hand.params[i];
+
+            // Start from where the hand actually is, at zero gain, so the first
+            // ramp cannot jerk a finger.
+            last.q = hand.state.motor_state[i].q;
+            last.dq = 0.0;
+            last.tau = 0.0;
+            last.kp = 0.0;
+            last.kd = 0.0;
+
+            target.q = handReadyQ_[i];
+            target.dq = 0.0;
+            target.tau = 0.0;
+            target.kp = hand.joints[i].kp;
+            target.kd = hand.joints[i].kd;
+
+            params.q_0 = last.q;
+            params.q_1 = target.q - last.q;
+            params.dq_0 = 0.0;
+            params.dq_1 = 0.0;
+            params.tau_0 = 0.0;
+            params.tau_1 = 0.0;
+            params.kp_0 = 0.0;
+            params.kp_1 = target.kp;
+            params.kd_0 = 0.0;
+            params.kd_1 = target.kd;
+        }
+
+        hand.t_start = nh->get_clock()->now().seconds();
+        hand.t_final = hand.t_start + duration_;
+        hand.t_valid = INF_;   // hold the ready pose until a command arrives
+        hand.live = true;
+        started += (started.empty() ? "" : ", ") + hand.name;
+    }
+
+    if (started.empty())
+    {
+        handStarted_ = false;
+        response->success = false;
+        response->message = "no Dex3 hand is publishing state; nothing started";
+        RCLCPP_ERROR(nh->get_logger(), "%s", response->message.c_str());
+        return;
+    }
+
+    handStarted_ = true;
+    response->success = true;
+    response->message = "hand control started: " + started +
+                        (silent.empty() ? "" : "; silent, not started: " + silent);
+    RCLCPP_INFO(nh->get_logger(), "%s", response->message.c_str());
+}
+
+void sairol_bridge::G1Bridge::stopHandControlServiceCB_(
+    const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+    std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+{
+    (void)request;
+
+    handStarted_ = false;
+    for (int side = 0; side < NUM_HANDS; ++side)
+    {
+        hands_[side].live = false;
+    }
+
+    RCLCPP_INFO(nh->get_logger(), "Stopping hand control...");
+    response->success = true;
+    response->message = "hand control stopped; the mode timeout bit releases the fingers "
+                        "once frames stop";
+}

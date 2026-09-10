@@ -379,3 +379,171 @@ robot_bridge:
       kd: 1.0
       if_strong_joint: false
       if_parallel_joint: false
+
+
+    # --- Dex3-1 hands ------------------------------------------------------
+    # A separate path: own topics (/hand_cmd/left, /hand_cmd/right), own enable
+    # (/start_hand_control), own timer. num_joint above stays 29 -- the hands
+    # are a different device, with their own state topic and rate.
+    #
+    # Limits are the Dex3-1 URDFs, psi0/real/assets/unitree_hand/
+    # unitree_dex3_{left,right}.urdf: q_min/q_max from <limit lower/upper>,
+    # dq_limit from velocity, tau_limit from effort. The two hands are mirrored,
+    # so the ranges differ per side; one shared table would be wrong.
+    num_hand_joint: 7
+    hand_control_dt: 0.01
+    hand_state_timeout: 0.2
+    hand_temperature_limit: 80.0
+
+    hand_kp_min: 0.0
+    hand_kp_max: 10.0
+    hand_kd_min: 0.0
+    hand_kd_max: 2.0
+
+    # Zero is the open, extended end of every range on both hands.
+    hand_ready_q: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+    left_hand_joint_names: ["L_HAND_THUMB_0", "L_HAND_THUMB_1", "L_HAND_THUMB_2", "L_HAND_MIDDLE_0", "L_HAND_MIDDLE_1", "L_HAND_INDEX_0", "L_HAND_INDEX_1"]
+    right_hand_joint_names: ["R_HAND_THUMB_0", "R_HAND_THUMB_1", "R_HAND_THUMB_2", "R_HAND_MIDDLE_0", "R_HAND_MIDDLE_1", "R_HAND_INDEX_0", "R_HAND_INDEX_1"]
+
+    L_HAND_THUMB_0:
+      idx: 0
+      q_min: -1.04719755
+      q_max: 1.04719755
+      dq_limit: 6.857
+      tau_limit: 2.45
+      kp: 2.0
+      kd: 0.5
+      if_strong_joint: false
+      if_parallel_joint: false
+    L_HAND_THUMB_1:
+      idx: 1
+      q_min: -0.72431163
+      q_max: 0.92
+      dq_limit: 12.0
+      tau_limit: 1.4
+      kp: 1.0
+      kd: 0.2
+      if_strong_joint: false
+      if_parallel_joint: false
+    L_HAND_THUMB_2:
+      idx: 2
+      q_min: 0.0
+      q_max: 1.74532925
+      dq_limit: 12.0
+      tau_limit: 1.4
+      kp: 1.0
+      kd: 0.2
+      if_strong_joint: false
+      if_parallel_joint: false
+    L_HAND_MIDDLE_0:
+      idx: 3
+      q_min: -1.57079632
+      q_max: 0.0
+      dq_limit: 12.0
+      tau_limit: 1.4
+      kp: 1.0
+      kd: 0.2
+      if_strong_joint: false
+      if_parallel_joint: false
+    L_HAND_MIDDLE_1:
+      idx: 4
+      q_min: -1.74532925
+      q_max: 0.0
+      dq_limit: 12.0
+      tau_limit: 1.4
+      kp: 1.0
+      kd: 0.2
+      if_strong_joint: false
+      if_parallel_joint: false
+    L_HAND_INDEX_0:
+      idx: 5
+      q_min: -1.57079632
+      q_max: 0.0
+      dq_limit: 12.0
+      tau_limit: 1.4
+      kp: 1.0
+      kd: 0.2
+      if_strong_joint: false
+      if_parallel_joint: false
+    L_HAND_INDEX_1:
+      idx: 6
+      q_min: -1.74532925
+      q_max: 0.0
+      dq_limit: 12.0
+      tau_limit: 1.4
+      kp: 1.0
+      kd: 0.2
+      if_strong_joint: false
+      if_parallel_joint: false
+
+    R_HAND_THUMB_0:
+      idx: 0
+      q_min: -1.04719755
+      q_max: 1.04719755
+      dq_limit: 6.857
+      tau_limit: 2.45
+      kp: 2.0
+      kd: 0.5
+      if_strong_joint: false
+      if_parallel_joint: false
+    R_HAND_THUMB_1:
+      idx: 1
+      q_min: -0.92
+      q_max: 0.72431163
+      dq_limit: 12.0
+      tau_limit: 1.4
+      kp: 1.0
+      kd: 0.2
+      if_strong_joint: false
+      if_parallel_joint: false
+    R_HAND_THUMB_2:
+      idx: 2
+      q_min: -1.74532925
+      q_max: 0.0
+      dq_limit: 12.0
+      tau_limit: 1.4
+      kp: 1.0
+      kd: 0.2
+      if_strong_joint: false
+      if_parallel_joint: false
+    R_HAND_MIDDLE_0:
+      idx: 3
+      q_min: 0.0
+      q_max: 1.57079632
+      dq_limit: 12.0
+      tau_limit: 1.4
+      kp: 1.0
+      kd: 0.2
+      if_strong_joint: false
+      if_parallel_joint: false
+    R_HAND_MIDDLE_1:
+      idx: 4
+      q_min: 0.0
+      q_max: 1.74532925
+      dq_limit: 12.0
+      tau_limit: 1.4
+      kp: 1.0
+      kd: 0.2
+      if_strong_joint: false
+      if_parallel_joint: false
+    R_HAND_INDEX_0:
+      idx: 5
+      q_min: 0.0
+      q_max: 1.57079632
+      dq_limit: 12.0
+      tau_limit: 1.4
+      kp: 1.0
+      kd: 0.2
+      if_strong_joint: false
+      if_parallel_joint: false
+    R_HAND_INDEX_1:
+      idx: 6
+      q_min: 0.0
+      q_max: 1.74532925
+      dq_limit: 12.0
+      tau_limit: 1.4
+      kp: 1.0
+      kd: 0.2
+      if_strong_joint: false
+      if_parallel_joint: false

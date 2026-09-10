@@ -1,4 +1,4 @@
-# Fake wire test
+# Fake wire tests
 
 Runs the real `G1_bridge` against a fake robot on one machine. No hardware.
 
@@ -20,13 +20,13 @@ so it must be built even with `-DBUILD_BOOSTER_T1=OFF`.
 ## 1. Run
 
 ```bash
-./robot_bridge/test/integration/run_fake_wire_test.sh
+./bridge/robot_bridge/tests/integration/run_fake_wire_test.sh
 ```
 
 Uses a synthetic identity config. To use GEAR's own:
 
 ```bash
-GEAR_CONFIG=<path>/g1_29dof_gear_wbc.yaml ./robot_bridge/test/integration/run_fake_wire_test.sh
+GEAR_CONFIG=<path>/g1_29dof_gear_wbc.yaml ./bridge/robot_bridge/tests/integration/run_fake_wire_test.sh
 ```
 
 ## 2. Verify
@@ -42,6 +42,21 @@ bridge forced mode 1         PASS
 bridge forced PR mode        PASS
 ```
 
+## 3. The G1 hand path
+
+```bash
+./bridge/robot_bridge/tests/integration/run_fake_hand_test.sh
+STALE_AFTER=3.5 ./bridge/robot_bridge/tests/integration/run_fake_hand_test.sh
+```
+
+`STALE_AFTER` silences the left hand mid-stream, to prove the release is
+per-side. It must land between 3.0 and 4.0 s: earlier and the left hand never
+tracks, later and the driver has already stopped.
+
+`fake_g1.py` runs too, because the bridge blocks in its constructor until
+something publishes `/lowstate`. That doubles as the check that the hand path
+left the body idle.
+
 ## Parts
 
 | File | Role |
@@ -50,6 +65,10 @@ bridge forced PR mode        PASS
 | `drive_gear_wbc.py` | `start_control`, then 100 commands at 50 Hz through the adapter |
 | `check_lowcmd.py` | asserts the recording, exit 1 on failure |
 | `run_fake_wire_test.sh` | orchestrates the three, cleans up |
+| `fake_dex3.py` | publishes `/dex3/*/state` at 100 Hz, records `/dex3/*/cmd`; `--stale-after`, `--hot-after` |
+| `drive_hand_cmd.py` | `start_hand_control`, then both hands through the hand adapter, then a bad command |
+| `check_hand_cmd.py` | asserts the hand recording; pure offline, needs no ROS |
+| `run_fake_hand_test.sh` | orchestrates the hand run |
 
 ## What breaks it
 
@@ -65,3 +84,9 @@ bridge forced PR mode        PASS
   `/lowcmd`. The bridge log is printed on failure.
 - The fake publishes 35 motor states, the bridge is configured for 29, so a
   one-time `LowState carries 35 motor states` warning is expected.
+- `hand path did not load`: the config has no `hand_*` keys. The bridge warns
+  and runs the body path anyway, which is why the script greps for
+  `Dex3 hand path ready` rather than trusting a clean start.
+- Every hand run ends with both hands limp: the watchdog fires once the driver
+  stops. `check_hand_cmd.py` asserts against the last *commanded* frame, and a
+  new check that reads `samples[-1]` will be reading the release.

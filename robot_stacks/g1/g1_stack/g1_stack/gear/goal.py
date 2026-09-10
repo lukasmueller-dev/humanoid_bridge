@@ -89,6 +89,39 @@ def pose_from_named(angles, default=0.0):
     return pose
 
 
+# The Dex3-1's own order, as the motors appear on rt/dex3/<side>/state and as
+# `/hand_cmd/<side>` and GEAR's HandCommandSender both expect them. The goal
+# array above groups the same seven the other way round -- index, middle, thumb --
+# so the two are never interchangeable.
+DEX3_ORDER = (
+    "thumb_0",
+    "thumb_1",
+    "thumb_2",
+    "middle_0",
+    "middle_1",
+    "index_0",
+    "index_1",
+)
+
+NUM_HAND_JOINTS_PER_HAND = 7
+
+
+def hand_from_pose(pose, side):
+    """The 7 DDS-order hand angles out of a (31,) goal-order pose.
+
+    What to send to `/hand_cmd/<side>`. Resolved by joint name, so reordering
+    UPPER_BODY_JOINTS moves this too; mapping by position is the bug it exists
+    to prevent.
+    """
+    if side not in ("left", "right"):
+        raise ValueError(f"side must be 'left' or 'right', got {side!r}")
+    pose = np.asarray(pose, dtype=np.float32)
+    if pose.shape != (NUM_UPPER_BODY,):
+        raise ValueError(f"pose shape {pose.shape}, expected ({NUM_UPPER_BODY},)")
+    slots = [_SLOT_OF[f"{side}_hand_{joint}_joint"] for joint in DEX3_ORDER]
+    return pose[slots]
+
+
 def goal(pose, navigate_cmd, base_height, target_time, timestamp=None):
     """One goal message.
 

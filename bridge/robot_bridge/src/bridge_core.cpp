@@ -409,85 +409,95 @@ namespace sairol_bridge
         return true;
     }
 
+    bool BridgeCore::checkMotorCmd_(bridge_interface::msg::MotorCmd &cmd,
+                                    const Joint &joint_info,
+                                    float_t kp_min, float_t kp_max,
+                                    float_t kd_min, float_t kd_max,
+                                    size_t index, bool &clipped)
+    {
+        // Check for invalid numbers
+        if (!std::isfinite(cmd.q) || !std::isfinite(cmd.dq) ||
+            !std::isfinite(cmd.tau) || !std::isfinite(cmd.kp) ||
+            !std::isfinite(cmd.kd))
+        {
+            RCLCPP_ERROR(nh->get_logger(),
+                         "Command check failed: motorCmd[%lu] contains invalid (NaN/Inf) values.", index);
+            return false; // Can't clip NaN/Inf, so still return false
+        }
+
+        if (std::abs(cmd.q) > 50 || std::abs(cmd.dq) > 1e2 ||
+            std::abs(cmd.tau) > 1e3 || std::abs(cmd.kp) > 1e4 ||
+            std::abs(cmd.kd) > 1e3)
+        {
+            RCLCPP_ERROR(nh->get_logger(),
+                         "Command check failed: motorCmd[%lu] contains unreasonably large values.", index);
+            RCLCPP_ERROR(nh->get_logger(),
+                         "Values - q: %.3f, dq: %.3f, tau: %.3f, kp: %.3f, kd: %.3f",
+                         cmd.q, cmd.dq, cmd.tau, cmd.kp, cmd.kd);
+            return false; // Values too large, likely an error
+        }
+
+        // Check gains
+        if (cmd.kp < kp_min || cmd.kp > kp_max || cmd.kd < kd_min || cmd.kd > kd_max)
+        {
+            RCLCPP_WARN_ONCE(nh->get_logger(), "Clipping motor_cmd[%lu] gains", index);
+            clipped = true;
+        }
+        cmd.kp = std::clamp(cmd.kp, kp_min, kp_max);
+        cmd.kd = std::clamp(cmd.kd, kd_min, kd_max);
+
+        // Check velocity
+        if (cmd.dq < -joint_info.dq_limit || cmd.dq > joint_info.dq_limit)
+        {
+            RCLCPP_WARN_ONCE(nh->get_logger(), "Clipping motor_cmd[%lu] dq: %.3f", index, cmd.dq);
+            cmd.dq = std::clamp(cmd.dq, -joint_info.dq_limit, joint_info.dq_limit);
+            clipped = true;
+        }
+
+        // Check torque
+        if (cmd.tau < -joint_info.tau_limit || cmd.tau > joint_info.tau_limit)
+        {
+            RCLCPP_WARN_ONCE(nh->get_logger(), "Clipping motor_cmd[%lu] tau: %.3f", index, cmd.tau);
+            cmd.tau = std::clamp(cmd.tau, -joint_info.tau_limit, joint_info.tau_limit);
+            clipped = true;
+        }
+
+        return true;
+    }
+
     bool BridgeCore::checkCommand_(bridge_interface::msg::RobotCmd::SharedPtr robotCommand)
     {
         // Check if the command message has valid data
-        if (robotCommand->motor_cmd.size() != numJoint_)
+        if (robotCommand->motor_cmd.size() != static_cast<size_t>(numJoint_))
         {
             RCLCPP_ERROR(nh->get_logger(),
-                         "Command check failed: motor_cmd size mismatch. Expected %ld, got %ld.",
-                         joints_.size(), lastCommand_.motor_cmd.size());
+                         "Command check failed: motor_cmd size mismatch. Expected %d, got %ld.",
+                         numJoint_, robotCommand->motor_cmd.size());
             return false;
         }
-        int any_value_clipped = -1;
-        for (size_t i = 0; i < numJoint_; ++i)
+
+        bool clipped = false;
+        for (size_t i = 0; i < static_cast<size_t>(numJoint_); ++i)
         {
-            auto &cmd = robotCommand->motor_cmd[i];
-            auto &joint_info = joints_[i];
-            // Check for invalid numbers
-            if (!std::isfinite(cmd.q) || !std::isfinite(cmd.dq) ||
-                !std::isfinite(cmd.tau) || !std::isfinite(cmd.kp) ||
-                !std::isfinite(cmd.kd))
+            const auto &joint_info = joints_[i];
+            // Strong joints are the legs and waist, and carry the wider gain range.
+            const bool strong = joint_info.if_strong_joint;
+            if (!checkMotorCmd_(robotCommand->motor_cmd[i], joint_info,
+                                strong ? lower_limbs_kp_min_ : upper_limbs_kp_min_,
+                                strong ? lower_limbs_kp_max_ : upper_limbs_kp_max_,
+                                strong ? lower_limbs_kd_min_ : upper_limbs_kd_min_,
+                                strong ? lower_limbs_kd_max_ : upper_limbs_kd_max_,
+                                i, clipped))
             {
-                RCLCPP_ERROR(nh->get_logger(),
-                                 "Command check failed: motorCmd[%lu] contains invalid (NaN/Inf) values.", i);
-                return false; // Can't clip NaN/Inf, so still return false
+                return false;
             }
+            // q is deliberately not clamped here; publishLowCommand_ bounds it by
+            // the torque that reaching it would take.
+        }
 
-            if (abs(cmd.q) > 50 || abs(cmd.dq) > 1e2 ||
-                abs(cmd.tau) > 1e3 || abs(cmd.kp) > 1e4 ||
-                abs(cmd.kd) > 1e3)
-            {
-                RCLCPP_ERROR(nh->get_logger(),
-                                 "Command check failed: motorCmd[%lu] contains unreasonably large values.", i);
-                RCLCPP_ERROR(nh->get_logger(),
-                                 "Values - q: %.3f, dq: %.3f, tau: %.3f, kp: %.3f, kd: %.3f",
-                                 cmd.q, cmd.dq, cmd.tau, cmd.kp, cmd.kd);
-                return false; // Values too large, likely an error
-            }
-
-            // Check gains
-            if (joint_info.if_strong_joint) 
-            {
-                if (cmd.kp < lower_limbs_kp_min_ || cmd.kp > lower_limbs_kp_max_) any_value_clipped = i;
-                cmd.kp = std::clamp(cmd.kp, lower_limbs_kp_min_, lower_limbs_kp_max_);
-                cmd.kd = std::clamp(cmd.kd, lower_limbs_kd_min_, lower_limbs_kd_max_);
-            }
-            else
-            {
-                if (cmd.kp < upper_limbs_kp_min_ || cmd.kp > upper_limbs_kp_max_) any_value_clipped = i;
-                cmd.kp = std::clamp(cmd.kp, upper_limbs_kp_min_, upper_limbs_kp_max_);
-                cmd.kd = std::clamp(cmd.kd, upper_limbs_kd_min_, upper_limbs_kd_max_);
-            }
-
-            // // Check position
-            // if (cmd.q < joint_info.q_min || cmd.q > joint_info.q_max)
-            // {
-            //     RCLCPP_WARN_ONCE(nh->get_logger(), "Clipping motor_cmd[%lu] q: %.3f", i, cmd.q);
-            //     cmd.q = std::clamp(cmd.q, joint_info.q_min, joint_info.q_max);
-            //     any_value_clipped = i;
-            // }
-
-            // Check velocity
-            if (cmd.dq < -joint_info.dq_limit || cmd.dq > joint_info.dq_limit)
-            {
-                RCLCPP_WARN_ONCE(nh->get_logger(), "Clipping motor_cmd[%lu] dq: %.3f", i, cmd.dq);
-                cmd.dq = std::clamp(cmd.dq, -joint_info.dq_limit, joint_info.dq_limit);
-                any_value_clipped = i;
-            }
-
-            // Check torque
-            if (cmd.tau < -joint_info.tau_limit || cmd.tau > joint_info.tau_limit)
-            {
-                RCLCPP_WARN_ONCE(nh->get_logger(), "Clipping motor_cmd[%lu] tau: %.3f", i, cmd.tau);
-                cmd.tau = std::clamp(cmd.tau, -joint_info.tau_limit, joint_info.tau_limit);
-                any_value_clipped = i;
-            }
-
-            if (any_value_clipped > 0)
-            {
-                RCLCPP_WARN(nh->get_logger(), "Joint %d were clipped to stay within safety limits", any_value_clipped);
-            }
+        if (clipped)
+        {
+            RCLCPP_WARN(nh->get_logger(), "Some joints were clipped to stay within safety limits");
         }
 
         return true;

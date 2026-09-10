@@ -54,12 +54,12 @@ The bridge drops every `/robot_cmd` until this returns.
 ### 3. Verify
 
 ```bash
-PYTHONPATH=robot_bridge /usr/bin/python3 -m pytest robot_bridge/test/
+/usr/bin/python3 -m pytest bridge/robot_bridge/tests/
 ros2 topic echo /robot_cmd          # 29 motors, duration 0.02
 ```
 
 End to end against the real bridge, no hardware:
-`robot_bridge/test/integration/README.md`.
+`bridge/robot_bridge/tests/integration/README.md`.
 
 ### Mapping
 
@@ -75,6 +75,26 @@ for i in range(NUM_MOTORS):
 `kp`/`kd` are motor-indexed from `MOTOR_KP`/`MOTOR_KD`; a short list leaves the
 tail at 0. `duration` is a constructor argument (default 0.02) because the
 config dict carries no rate.
+
+## GEAR hands (`gear_hands.py`)
+
+Replaces `decoupled_wbc.control.envs.g1.utils.command_sender.HandCommandSender`,
+which `g1_hand.py` resolves from its own namespace.
+
+```python
+from robot_bridge.adapters.gear_hands import install
+
+install(client)                 # before building the env
+client.start_hand_control()     # separate from start_control
+```
+
+Pass-through, no remap: `send_command` takes DDS order and `/hand_cmd/<side>`
+is DDS order. It does carry GEAR's own gains (kp `[2, 1...]`, kd `[0.5, 0.2...]`),
+because it is a drop-in and its caller passes none.
+
+A goal-order pose is a different interface — remap it with
+`g1_stack.gear.goal.hand_from_pose(pose, side)` first. `docs/hands_path.md` has
+the two orderings side by side.
 
 ## What breaks it
 
@@ -94,3 +114,7 @@ config dict carries no rate.
 - `g1_29dof` has identity `JOINT2MOTOR`/`MOTOR2JOINT` and no `-1`, so a
   mapping bug will not show on that config. The unit tests use a non-identity
   fixture instead.
+- Hands need `start_hand_control`, not `start_control`; the two are independent.
+- `HandCommandSender` opens its own `rt/dex3/<side>/cmd` publisher. The adapter
+  must not, and the bridge cannot see it if it does: `checkExternalPublisher_`
+  queries the ROS graph, and `unitree_sdk2py` publishers are not in it.
