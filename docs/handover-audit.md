@@ -354,7 +354,32 @@ Also: the unit count is environment-dependent (116 with a sourced workspace,
    **Done when:** the file is `git rm`-ed and the `std::abs` decision is in
    `PROJECT_STATUS.md`.
 
-### P1, bring-up and the seam
+### P1 — done 2026-09-10
+
+Verified in the container: `tools/test.sh` still `unit PASS 116`, `wire PASS`,
+`hands PASS`. `g1-bringup.sh --no-release --arm-from-measured --robot-is-clear`
+brought the bridge up against `fake_g1.py`, read 29 measured values, armed, and
+produced 2220 `/lowcmd` samples at kp 100. Both refusals fire (no
+`--robot-is-clear`; a 3-value `--arm-from`). shellcheck clean.
+
+Three tools, not two: `g1-measured-pose.py` split out of the bring-up script so
+the pose read is usable on its own.
+
+| Finding | What happened |
+|---|---|
+| A conftest at `bridge/` breaks the tests it was meant to fix | It puts `bridge/` on `sys.path`, where the *source* `bridge_interface/` directory shadows the built ROS package as a PEP 420 namespace package. `importorskip("bridge_interface")` then succeeds and the import fails with "unknown location". Moved to `bridge/robot_bridge/conftest.py`, and the two guards now try the symbol rather than the module. `python -m pytest` puts the cwd on `sys.path` regardless of conftest, so this bites in the split repo too |
+| `start_control` confirmed failing open on live traffic | The end-to-end run answered `success=True, message='start control with invalid size of default position, kp or kd'` to a *correct* 29-value call. The message is unconditional, exactly as `bridge_core.cpp:565` reads |
+
+Still open, and it belongs in the other repo: `humanoid-locoman-vla`'s
+`benches/g1/bench.md` still restates the bring-up ordering and the bridge
+traps rather than linking here. That is a commit in that repo, on its own
+branch, not this one.
+
+Also noted while working: `docker/bench-g1.sh` there sources `.env` after the
+caller's environment, so `BRIDGE_CLONE` cannot be overridden from outside. One
+line, same repo.
+
+### P1, bring-up and the seam (all done)
 
 7. **`tools/g1-release-lowcmd.py` + `tools/g1-bringup.sh`.**
    **Done when:** `--dry-run` prints the full ordering with no robot present,

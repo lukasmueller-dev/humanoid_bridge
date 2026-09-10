@@ -2,9 +2,13 @@
 
 import pytest
 
-pytest.importorskip("bridge_interface", reason="source the colcon workspace first")
-
-from bridge_interface.msg import MotorCmd, RobotCmd  # noqa: E402
+# Not importorskip: with the repo root on sys.path the source bridge_interface/
+# directory shadows the built package as a namespace package, so the module
+# imports and the symbols are missing.
+try:
+    from bridge_interface.msg import MotorCmd, RobotCmd
+except ImportError:
+    pytest.skip("source the colcon workspace first", allow_module_level=True)
 
 from robot_bridge.cmd_client import MOTOR_MODE, TOPIC, pack_robot_cmd  # noqa: E402
 

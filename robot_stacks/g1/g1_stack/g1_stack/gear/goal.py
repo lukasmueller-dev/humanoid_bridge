@@ -1,10 +1,25 @@
 """GEAR WBC goal messages, and the joint order the controller reads them in.
 
 Three joint orderings disagree and none of them is the obvious one, so build a
-pose with `pose_from_named` and never by position.
+pose with `pose_from_named` and never by position:
+
+    order                       waist              left hand
+    this goal array             yaw, roll, pitch   index, middle, thumb
+    a psi0-shaped action        roll, pitch, yaw   thumb, middle, index
+    SIMPLE's own 43-DoF model   n/a                thumb, index, middle
 
 Source, read 2026-09-08: `get_joint_group_indices("upper_body")` on
-`instantiate_g1_robot_model(waist_location="lower_and_upper_body")`.
+`instantiate_g1_robot_model(waist_location="lower_and_upper_body")`. Rederive
+it against a checked-out controller with:
+
+    python -c "
+    from decoupled_wbc.control.robot_model.instantiation.g1 import instantiate_g1_robot_model
+    m = instantiate_g1_robot_model(waist_location='lower_and_upper_body', high_elbow_pose=False)
+    idx = set(m.get_joint_group_indices('upper_body'))
+    print([n for n, i in m.joint_to_dof_index.items() if i in idx])"
+
+Which column of a policy action maps onto which name is the policy's business,
+not this module's.
 """
 
 from __future__ import annotations
