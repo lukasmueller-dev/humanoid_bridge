@@ -56,6 +56,36 @@ def test_an_empty_queue_holds_the_last_goal_rather_than_going_quiet():
     assert all(g["target_upper_body_pose"][0] == 1.0 for g in publisher.sent)
 
 
+def test_the_policy_toggle_rides_exactly_one_goal_even_while_holding():
+    """The hazard this exists for: with an empty queue the pacer republishes
+    the last goal every period, so a toggle stored on that goal would flip the
+    walk policy on and off at `hz`."""
+    stop = threading.Event()
+    publisher = FakePublisher(limit=5, stop=stop)
+    pacer = GoalPacer(publisher, hz=30.0)
+    pacer.extend([a_goal(1.0)])
+    pacer.request_toggle()
+    drive(pacer, stop)
+
+    carried = [i for i, g in enumerate(publisher.sent) if g.get("toggle_policy_action")]
+    assert carried == [0]
+    assert pacer.held == 4          # the rest were republished holds
+
+
+def test_a_toggle_never_sticks_to_the_stored_goal():
+    """`_last` is what gets republished; the key must ride only the copy."""
+    stop = threading.Event()
+    publisher = FakePublisher(limit=3, stop=stop)
+    pacer = GoalPacer(publisher, hz=30.0)
+    goal = a_goal(1.0)
+    pacer.extend([goal])
+    pacer.request_toggle()
+    drive(pacer, stop)
+
+    assert "toggle_policy_action" not in goal
+    assert "toggle_policy_action" not in publisher.sent[-1]
+
+
 def test_target_time_is_stamped_when_published_not_when_queued():
     """A goal queued during a 350 ms policy call would otherwise carry a
     deadline that is already in the past, and be dropped without a word."""
