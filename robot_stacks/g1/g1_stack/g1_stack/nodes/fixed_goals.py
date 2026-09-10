@@ -14,9 +14,9 @@ same sim.
 
 Rehearsal (bridge + GEAR + MuJoCo already up and armed, benches/g1/bench.md):
 
-    drive --walk 0.3 0 0 --duration 20     # walk forward at 0.3 m/s for 20 s
-    drive --walk 0 0 0.4                    # turn in place
-    drive --pose left_elbow_joint=1.0       # hold one arm joint, stand still
+    fixed_goals --walk 0.3 0 0 --duration 20     # walk forward at 0.3 m/s for 20 s
+    fixed_goals --walk 0 0 0.4                    # turn in place
+    fixed_goals --pose left_elbow_joint=1.0       # hold one arm joint, stand still
 
 `navigate_cmd` is vx, vy, vyaw (m/s, m/s, rad/s); `--pose` takes
 `joint=radians` pairs by name (`joint_probe --list` prints the names). The walk

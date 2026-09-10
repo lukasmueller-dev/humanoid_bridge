@@ -9,7 +9,7 @@ whole-body-controller goals.
 | `joints/` | Reading arm and hand angles off Unitree DDS, and their fake |
 | `observation/` | One validated frame of camera plus joints |
 | `gear/` | Goal order, goal messages, the ZMQ publisher and its pacer |
-| `nodes/` | `gear_loop`, `joint_probe` |
+| `nodes/` | `gear_controller`, `joint_probe` |
 
 Depends on `robot_bridge` (the bridge's Python client) and `g1_camera`.
 Nothing under `bridge/` depends on this — that rule is what keeps the bridge

@@ -137,7 +137,7 @@ def goal(pose, navigate_cmd, base_height, target_time, timestamp=None):
     `toggle_policy_action` is deliberately absent too, and is not a field to set
     here. It flips rather than sets, so who sends it and when is the whole
     problem: `gear.status.Engager` decides, and the sender attaches it to one
-    outgoing message (`GoalPacer.request_toggle`, or the drive node on the goal
+    outgoing message (`GoalPacer.request_toggle`, or the fixed_goals node on the goal
     it is about to publish).
     """
     pose = np.asarray(pose, dtype=np.float32)

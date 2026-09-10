@@ -12,7 +12,7 @@ Runs in SIMPLE's venv with the ROS workspace sourced:
 
     source /opt/ros/humble/setup.bash && source ~/bridge_ws/install/setup.bash
     PYTHONPATH=.:$PYTHONPATH \\
-        ~/github/SIMPLE/.venv/bin/python -m g1_stack.nodes.gear_loop \\
+        ~/github/SIMPLE/.venv/bin/python -m g1_stack.nodes.gear_controller \\
         --interface real --enable-waist --messaging-backend zmq --zmq-host 127.0.0.1
 """
 
@@ -26,7 +26,8 @@ NODE_NAME = "gear_wbc_bridge"
 NUM_MOTORS = 29
 
 
-def run(config, rclpy, client_cls, install, loop_main, patch_channel, out=print):
+def run(config, rclpy, client_cls, install, loop_main, patch_channel, out=print,
+        install_hands=None):
     """Start ROS inside GEAR's channel init, then hand `config` to upstream.
 
     The order is the whole point. GEAR's raw CycloneDDS has to create the DDS
@@ -38,7 +39,15 @@ def run(config, rclpy, client_cls, install, loop_main, patch_channel, out=print)
 
     GEAR calls `init_channel` immediately before building `G1Body`, and `G1Body`
     resolves `BodyCommandSender` at construction, so this one hook is both late
-    enough for the channel and early enough for the sender.
+    enough for the channel and early enough for the sender. `G1ThreeFingerHand`
+    resolves `HandCommandSender` at construction too, a few lines later in the
+    same `G1Env.__init__`, so the hands install in the same window.
+
+    Both senders are swapped unconditionally, whatever `with_hands` says. It
+    defaults True and no config here turns it off, so leaving the hand sender
+    alone means GEAR opens `rt/dex3/<side>/cmd` itself and hand commands reach
+    the motors without ever passing the bridge -- the one thing this whole path
+    exists to prevent.
     """
     hz = float(config.control_frequency)
     started = {}
@@ -67,6 +76,10 @@ def run(config, rclpy, client_cls, install, loop_main, patch_channel, out=print)
             f"GEAR -> /robot_cmd at {hz:g} Hz, duration {1.0 / hz:.3f}s. The bridge must be "
             "running and armed with start_control."
         )
+        if install_hands is not None:
+            # Its own rate: GEAR's hand loop runs at 100 Hz, not the body's.
+            install_hands(client)
+            out("GEAR -> /hand_cmd/{left,right}. Armed separately, with start_hand_control.")
 
     restore = patch_channel(on_init_channel)
     try:
@@ -179,6 +192,7 @@ def main(argv=None):
     from decoupled_wbc.control.main.teleop.configs.configs import ControlLoopConfig
     from unitree_sdk2py.core import channel
 
+    from robot_bridge.adapters.gear_hands import install as install_hands
     from robot_bridge.adapters.gear_wbc import install
     from robot_bridge.cmd_client import RobotCmdClient
 
@@ -211,6 +225,7 @@ def main(argv=None):
         install,
         run_g1_control_loop.main,
         channel_patcher(g1_env, channel),
+        install_hands=install_hands,
     )
     return 0
 
