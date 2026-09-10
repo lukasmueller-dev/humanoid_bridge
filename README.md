@@ -85,14 +85,26 @@ ros2 service call /ready_position_control std_srvs/srv/Trigger {}   # or L1 / LB
 ros2 service call /zero_position_control std_srvs/srv/Trigger {}    # or R1 / RB
 ```
 
+### G1 Dex3 hands
+
+A separate path with its own enable, so hands can run with the body idle.
+`docs/hands_path.md` has the whole picture.
+
+```bash
+ros2 service call /start_hand_control std_srvs/srv/Trigger {}
+ros2 topic pub /hand_cmd/left bridge_interface/msg/HandCmd ...   # 7 motors, DDS order
+ros2 service call /stop_hand_control std_srvs/srv/Trigger {}
+```
+
 ## 5. Verify
 
 ```bash
-pytest                                                        # 17 unit tests
-./bridge/robot_bridge/tests/integration/run_fake_wire_test.sh  # 8 checks, no hardware
+pytest                                                          # 101 unit tests
+./bridge/robot_bridge/tests/integration/run_fake_wire_test.sh   # body, 8 checks
+./bridge/robot_bridge/tests/integration/run_fake_hand_test.sh   # G1 Dex3 hands
 ```
 
-The integration script runs the real bridge against a fake robot. Source the
+The integration scripts run the real bridge against a fake robot. Source the
 workspace first.
 
 ## What breaks it
@@ -107,5 +119,7 @@ workspace first.
   even when building with `-DBUILD_BOOSTER_T1=OFF`.
 - **The G1 keymap in `G1_config.yaml` advertises keys that are commented out**
   in the source. See `PROJECT_ROADMAP.md`.
+- **Hand control needs its own `/start_hand_control`.** `/start_control` does
+  not enable it, and it refuses any hand whose state topic is silent.
 
 Limits, gains and joint tables live in `bridge/robot_bridge/params/`.

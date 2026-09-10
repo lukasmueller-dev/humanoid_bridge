@@ -3,11 +3,13 @@ import time
 from copy import copy
 
 import numpy as np
-from bridge_interface.msg import MotorCmd, RobotCmd
+from bridge_interface.msg import HandCmd, MotorCmd, RobotCmd
 from bridge_interface.srv import SetDefaultPosition
 from rclpy.node import Node
 from scipy.spatial.transform import Rotation as R
 from std_srvs.srv import Trigger
+
+from robot_bridge.cmd_client import HAND_SIDES, HAND_TOPIC, NUM_HAND_JOINTS, pack_hand_cmd
 
 
 def rpy_to_quat(rpy):
@@ -530,6 +532,19 @@ class RobotClient:
         self.ready_position_client = self.node.create_client(Trigger, "/ready_position_control")
         self.stop_control_client = self.node.create_client(Trigger, "/stop_control")
 
+        # Dex3 hands: their own topics, enable and rate. Not sized by num_dof,
+        # and independent of start_control.
+        self.hand_cmd_publishers = {
+            side: self.node.create_publisher(HandCmd, HAND_TOPIC.format(side=side), 1)
+            for side in HAND_SIDES
+        }
+        self.start_hand_control_client = self.node.create_client(Trigger, "/start_hand_control")
+        self.stop_hand_control_client = self.node.create_client(Trigger, "/stop_hand_control")
+        self._hand_zeros = np.zeros(NUM_HAND_JOINTS, dtype=np.float32)
+        self._default_hand_kp = None
+        self._default_hand_kd = None
+        self._hand_duration = 0.01
+
         self.control_start_time = None
         self.control_started = False
 
@@ -785,6 +800,68 @@ class RobotClient:
 
         request = Trigger.Request()
         future = self.stop_control_client.call_async(request)
+        return future.result()
+
+    def set_default_hand_cmd(self, default_kp=None, default_kd=None):
+        """
+        Set what send_hand_cmd falls back to when kp or kd is None.
+        """
+        if default_kp is not None:
+            self._default_hand_kp = np.array(default_kp, dtype=np.float32)
+        if default_kd is not None:
+            self._default_hand_kd = np.array(default_kd, dtype=np.float32)
+
+    def send_hand_cmd(
+        self, side, q, dq=None, tau=None, kp=None, kd=None, duration=None, hold_position=False
+    ):
+        """
+        Publish one /hand_cmd/<side>. `q` is 7 long, in DDS order.
+
+        Dropped by the bridge until start_hand_control succeeds. The two hands
+        are independent topics, so driving one leaves the other's watchdog to
+        expire.
+        """
+        if side not in HAND_SIDES:
+            raise ValueError(f"side must be one of {HAND_SIDES}, got {side!r}")
+        if self._default_hand_kp is None and kp is None:
+            raise ValueError("kp is None and no default was set; use set_default_hand_cmd()")
+        if self._default_hand_kd is None and kd is None:
+            raise ValueError("kd is None and no default was set; use set_default_hand_cmd()")
+
+        cmd = pack_hand_cmd(
+            q=q,
+            dq=dq if dq is not None else self._hand_zeros,
+            tau=tau if tau is not None else self._hand_zeros,
+            kp=kp if kp is not None else self._default_hand_kp,
+            kd=kd if kd is not None else self._default_hand_kd,
+            duration=self._hand_duration if duration is None else duration,
+            hold_position=hold_position,
+        )
+        self.hand_cmd_publishers[side].publish(cmd)
+        return cmd
+
+    def start_hand_control(self):
+        """
+        Ramp both hands to the config's ready pose, then accept /hand_cmd/*.
+        """
+        while not self.start_hand_control_client.wait_for_service(timeout_sec=1.0):
+            self.node.get_logger().info(
+                "start_hand_control service not available, waiting again..."
+            )
+
+        request = Trigger.Request()
+        future = self.start_hand_control_client.call_async(request)
+        return future.result()
+
+    def stop_hand_control(self):
+        """
+        Make the bridge ignore /hand_cmd/*.
+        """
+        while not self.stop_hand_control_client.wait_for_service(timeout_sec=1.0):
+            self.node.get_logger().info("stop_hand_control service not available, waiting again...")
+
+        request = Trigger.Request()
+        future = self.stop_hand_control_client.call_async(request)
         return future.result()
 
     def goto_default_position(self):
