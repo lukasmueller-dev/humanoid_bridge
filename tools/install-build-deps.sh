@@ -10,7 +10,12 @@
 #                              rosdep never pulls it
 #   rmw_cyclonedds_cpp         GEAR's sim forces raw CycloneDDS, so every ROS 2
 #                              node has to match it. Humble defaults to Fast DDS
-#   numpy pytest ruff          the test and lint path; no package declares them
+#   the Python deps            the union of g1_stack's and g1_camera's
+#                              install_requires, plus OpenCV, which g1_camera
+#                              deliberately does not declare (no aarch64 wheel
+#                              for the Jetson), plus pytest and ruff. colcon
+#                              installs neither: they are ament_python packages
+#                              and pip never runs
 #
 # Safe to re-run.
 set -euo pipefail
@@ -28,7 +33,7 @@ provide.
 
 Options:
   --dry-run       print the apt and pip commands, install nothing
-  --no-python     skip numpy, pytest and ruff (apt packages only)
+  --no-python     skip the pip packages (apt only)
   --no-cyclone    skip rmw_cyclonedds_cpp (Fast DDS-only host)
   -h, --help      this text
 
@@ -61,7 +66,9 @@ APT=(python3-colcon-common-extensions python3-pip
      "ros-$ROS_DISTRO-rosidl-generator-dds-idl")
 [ "$WITH_CYCLONE" = 1 ] && APT+=("ros-$ROS_DISTRO-rmw-cyclonedds-cpp")
 
-PIP=(numpy pytest ruff)
+# Keep in step with docker/bench-g1.Dockerfile in humanoid-locoman-vla, so a
+# bare host and the bench container agree on what is importable.
+PIP=(numpy pyzmq msgpack msgpack-numpy opencv-python-headless pytest ruff)
 
 SUDO=""
 if [ "$(id -u)" != 0 ]; then

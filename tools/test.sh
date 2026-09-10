@@ -107,8 +107,10 @@ stage_unit() {
         record unit SKIP "no such interpreter: $PYTHON"
         return
     fi
+    # Every module the unit tests import at collection time. cv2 is left out:
+    # g1_camera imports it inside functions, on purpose.
     local missing=""
-    for mod in pytest numpy; do
+    for mod in pytest numpy zmq msgpack msgpack_numpy; do
         "$py" -c "import $mod" >/dev/null 2>&1 || missing="$missing $mod"
     done
     if [ -n "$missing" ]; then
