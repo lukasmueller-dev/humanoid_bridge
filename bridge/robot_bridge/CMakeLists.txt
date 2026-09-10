@@ -193,7 +193,9 @@ install(
 
 # ==============================================================Booster T1===================================================================================
 
-option(BUILD_BOOSTER_T1 "Build Booster T1 bridge" ON)
+# OFF by default: T1 needs the Booster SDK headers at BOOSTER_INCLUDE_PATH,
+# which only a T1 host has. tools/build.sh --t1 turns it on after checking.
+option(BUILD_BOOSTER_T1 "Build Booster T1 bridge" OFF)
 
 if(BUILD_BOOSTER_T1)
   find_package(booster_interface REQUIRED)
@@ -204,7 +206,16 @@ if(BUILD_BOOSTER_T1)
     src/T1_bridge.cpp
   )
 
-  set(BOOSTER_INCLUDE_PATH "$ENV{HOME}/library/booster/include")
+  # Override with -DBOOSTER_INCLUDE_PATH=<dir> when the SDK is elsewhere.
+  if(NOT BOOSTER_INCLUDE_PATH)
+    set(BOOSTER_INCLUDE_PATH "$ENV{HOME}/library/booster/include")
+  endif()
+  if(NOT EXISTS "${BOOSTER_INCLUDE_PATH}")
+    message(FATAL_ERROR
+      "BUILD_BOOSTER_T1=ON but no Booster SDK headers at ${BOOSTER_INCLUDE_PATH}. "
+      "Build them per https://github.com/DFKI-SAIROL/booster_robotics_sdk, pass "
+      "-DBOOSTER_INCLUDE_PATH=<dir>, or build with -DBUILD_BOOSTER_T1=OFF.")
+  endif()
 
   target_include_directories(T1_bridge
     PUBLIC

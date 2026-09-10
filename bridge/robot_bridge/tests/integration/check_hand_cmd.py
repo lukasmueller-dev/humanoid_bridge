@@ -1,4 +1,7 @@
-"""Asserts the recorded /dex3/*/cmd matches what the driver asked for. Exit 1 on failure."""
+"""Asserts the recorded /dex3/*/cmd matches what the driver asked for. Exit 1 on failure.
+
+Offline analysis: must not import rclpy, so it runs anywhere the recording does.
+"""
 
 import argparse
 import json

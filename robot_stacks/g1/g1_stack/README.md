@@ -8,8 +8,8 @@ whole-body-controller goals.
 | `robot.py` | What the G1 is: joint counts, the 29-joint state layout |
 | `joints/` | Reading arm and hand angles off Unitree DDS, and their fake |
 | `observation/` | One validated frame of camera plus joints |
-| `gear/` | Goal order, goal messages, the ZMQ publisher and its pacer |
-| `nodes/` | `gear_controller`, `joint_probe` |
+| `gear/` | Goal order, goal messages, the ZMQ publisher, its pacer, and the walk-policy status reader |
+| `nodes/` | `gear_controller`, `fixed_goals`, `joint_probe`, `dex3_probe` |
 
 Depends on `robot_bridge` (the bridge's Python client) and `g1_camera`.
 Nothing under `bridge/` depends on this — that rule is what keeps the bridge
@@ -43,6 +43,8 @@ height, target_time)` is the general form.
 ```bash
 pytest robot_stacks/g1/g1_stack/tests/
 ```
+
+Everything, including the bridge against a fake robot: `tools/test.sh`.
 
 ## What breaks it
 
