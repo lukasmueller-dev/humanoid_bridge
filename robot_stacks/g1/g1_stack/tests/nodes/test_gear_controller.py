@@ -6,11 +6,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from g1_stack.nodes import gear_loop
+from g1_stack.nodes import gear_controller
 
 
 class FakeRclpy:
-    """rclpy, with the executor behaviour gear_loop waits on.
+    """rclpy, with the executor behaviour gear_controller waits on.
 
     A node reaches the global executor only when something spins it, which is
     the race `wait_for_node` closes: GEAR's simulator indexes `get_nodes()[0]`
@@ -96,21 +96,25 @@ class Harness:
     def install(self, client, duration):
         self.events.append(("install", client, duration))
 
+    def install_hands(self, client):
+        self.events.append(("install-hands", client))
+
     def default_loop(self, config):
         # GEAR builds its env here, and that is what calls init_channel
         self.events.append("loop-start")
         self.g1_env.init_channel(config={"DOMAIN_ID": 0})
         self.events.append("loop-body")
 
-    def run(self, hz=50):
-        gear_loop.run(
+    def run(self, hz=50, hands=True):
+        gear_controller.run(
             SimpleNamespace(control_frequency=hz),
             self.rclpy,
             self.client_cls,
             self.install,
             self.loop_main,
-            gear_loop.channel_patcher(self.g1_env, self.channel),
+            gear_controller.channel_patcher(self.g1_env, self.channel),
             out=lambda *_: None,
+            install_hands=self.install_hands if hands else None,
         )
 
     @property
@@ -136,12 +140,30 @@ def test_installs_the_adapter_before_the_loop_builds_the_body():
         "node",
         "client",
         "install",
+        "install-hands",
         "loop-body",
         "destroy",
         "shutdown",
     ]
-    assert ("client", gear_loop.NUM_MOTORS, 50.0) in h.events
+    assert ("client", gear_controller.NUM_MOTORS, 50.0) in h.events
     assert ("install", "client", pytest.approx(0.02)) in h.events
+
+
+def test_the_hand_sender_is_swapped_too():
+    """`with_hands` defaults True and nothing here turns it off, so leaving
+    GEAR's HandCommandSender in place means it opens rt/dex3/<side>/cmd and
+    hand commands reach the motors without passing the bridge."""
+    h = Harness()
+    h.run()
+    assert ("install-hands", "client") in h.events
+
+
+def test_the_hand_sender_is_swapped_before_the_env_is_built():
+    # G1ThreeFingerHand resolves HandCommandSender at construction, a few lines
+    # after G1Body does, inside the same G1Env.__init__.
+    h = Harness()
+    h.run()
+    assert h.kinds.index("install-hands") < h.kinds.index("loop-body")
 
 
 def test_the_simulators_second_channel_init_does_not_clash():
@@ -245,7 +267,7 @@ def test_refuses_to_run_if_the_node_never_joins_the_executor():
     h = Harness()
     h.rclpy = FakeRclpy(h.events, spin_joins=False)
     with pytest.raises(RuntimeError, match="global executor"):
-        gear_loop.wait_for_node(h.rclpy, timeout=0.05, sleep=lambda _s: None)
+        gear_controller.wait_for_node(h.rclpy, timeout=0.05, sleep=lambda _s: None)
 
 
 def test_refuses_to_run_when_the_config_no_longer_says_multicast_default():

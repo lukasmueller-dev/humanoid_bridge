@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 
 from g1_stack.gear import goal as goal_mod
-from g1_stack.nodes import drive
+from g1_stack.nodes import fixed_goals
 
 
 class FakeClock:
@@ -39,7 +39,7 @@ class Args:
 
 
 def test_pose_maps_by_name_not_position():
-    pose = drive.parse_pose(["left_elbow_joint=1.0"])
+    pose = fixed_goals.parse_pose(["left_elbow_joint=1.0"])
     slot = goal_mod.UPPER_BODY_JOINTS.index("left_elbow_joint")
     assert pose[slot] == pytest.approx(1.0)
     assert pose.shape == (goal_mod.NUM_UPPER_BODY,)
@@ -48,18 +48,18 @@ def test_pose_maps_by_name_not_position():
 
 def test_an_unknown_joint_is_refused():
     with pytest.raises(KeyError):
-        drive.parse_pose(["not_a_joint=1.0"])
+        fixed_goals.parse_pose(["not_a_joint=1.0"])
 
 
 def test_a_malformed_pair_is_refused():
     with pytest.raises(ValueError):
-        drive.parse_pose(["left_elbow_joint"])
+        fixed_goals.parse_pose(["left_elbow_joint"])
 
 
 def test_the_walk_command_ramps_in_over_ramp_seconds():
     clock = FakeClock()
     pose = np.zeros(goal_mod.NUM_UPPER_BODY, dtype=np.float32)
-    gen = drive.frames(pose, [0.4, 0.0, 0.0], Args(hz=10, duration=1.0, ramp=0.5), clock)
+    gen = fixed_goals.frames(pose, [0.4, 0.0, 0.0], Args(hz=10, duration=1.0, ramp=0.5), clock)
     first, _ = next(gen)
     assert first["navigate_cmd"][0] == pytest.approx(0.0)  # scale 0 at t=0
     clock.advance(0.5)
@@ -70,7 +70,7 @@ def test_the_walk_command_ramps_in_over_ramp_seconds():
 def test_target_time_leads_the_clock_like_the_pacer():
     clock = FakeClock()
     pose = np.zeros(goal_mod.NUM_UPPER_BODY, dtype=np.float32)
-    goal, _ = next(drive.frames(pose, [0.0, 0.0, 0.0], Args(hz=10), clock))
+    goal, _ = next(fixed_goals.frames(pose, [0.0, 0.0, 0.0], Args(hz=10), clock))
     assert goal["target_time"] == pytest.approx(0.1)  # one period ahead
     assert "interpolation_garbage_collection_time" not in goal
 
@@ -122,7 +122,7 @@ def _run(rec, status, **kw):
     if status is not None:
         status.attach_clock(clock)   # a live controller stamps every status
     pose = np.zeros(goal_mod.NUM_UPPER_BODY, dtype=np.float32)
-    drive.drive(
+    fixed_goals.drive(
         rec,
         pose,
         [0.4, 0.0, 0.0],
@@ -147,7 +147,7 @@ def test_stops_asking_once_the_controller_says_it_is_engaged():
     rec = Recorder()
     status = FakeStatus(engaged=False)
     clock = FakeClock()
-    engager = drive.Engager(status, retry=1.0, out=lambda *_: None)
+    engager = fixed_goals.Engager(status, retry=1.0, out=lambda *_: None)
     assert engager.wants(clock.now) is True     # first ask
     status.engage_now()
     clock.advance(5.0)
@@ -158,7 +158,7 @@ def test_waits_out_the_round_trip_before_asking_again():
     # Back-to-back asks would undo each other before the status can answer.
     status = FakeStatus(engaged=False, stamp=0.0)
     clock = FakeClock()
-    engager = drive.Engager(status, retry=1.0, out=lambda *_: None)
+    engager = fixed_goals.Engager(status, retry=1.0, out=lambda *_: None)
     assert engager.wants(clock.now) is True
     clock.advance(0.1)
     assert engager.wants(clock.now) is False
@@ -177,7 +177,7 @@ def test_never_asks_twice_on_a_status_older_than_the_ask():
     status = FakeStatus(engaged=False, stamp=5.0)
     clock = FakeClock()
     clock.now = 10.0
-    engager = drive.Engager(status, retry=1.0, out=lambda *_: None)
+    engager = fixed_goals.Engager(status, retry=1.0, out=lambda *_: None)
     assert engager.wants(clock.now) is True       # ask, against status @5.0
 
     clock.advance(60.0)                            # far beyond retry
@@ -191,11 +191,11 @@ def test_warns_when_the_controller_never_answers():
     # A wrong --status-host is otherwise a silent full-length run with the legs
     # held: "walk policy engaged" is the only thing Engager ever prints.
     said = []
-    engager = drive.Engager(FakeStatus(silent=True), out=said.append)
+    engager = fixed_goals.Engager(FakeStatus(silent=True), out=said.append)
     clock = FakeClock()
     engager.wants(clock.now)
     assert said == []
-    clock.advance(drive.Engager.SILENCE_WARNING_S + 0.1)
+    clock.advance(fixed_goals.Engager.SILENCE_WARNING_S + 0.1)
     engager.wants(clock.now)
     assert any("status" in line for line in said)
     clock.advance(60.0)
@@ -209,7 +209,7 @@ def test_the_walk_command_stays_at_zero_until_the_policy_is_engaged():
     clock = FakeClock()
     pose = np.zeros(goal_mod.NUM_UPPER_BODY, dtype=np.float32)
     engaged_at = {"t": None}
-    gen = drive.frames(pose, [0.4, 0.0, 0.0], Args(hz=10, duration=5.0, ramp=1.0),
+    gen = fixed_goals.frames(pose, [0.4, 0.0, 0.0], Args(hz=10, duration=5.0, ramp=1.0),
                        clock, ramp_from=lambda: engaged_at["t"])
 
     for _ in range(20):                       # 2 s with the policy still off
@@ -252,7 +252,7 @@ def test_drive_ends_with_a_zero_walk_command():
     clock = FakeClock()
     pose = np.zeros(goal_mod.NUM_UPPER_BODY, dtype=np.float32)
     rec = Recorder()
-    drive.drive(
+    fixed_goals.drive(
         rec,
         pose,
         [0.4, 0.0, 0.0],
