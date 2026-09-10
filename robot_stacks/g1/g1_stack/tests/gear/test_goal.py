@@ -70,6 +70,18 @@ def test_goal_omits_the_key_the_control_loop_stamps_itself():
     assert "interpolation_garbage_collection_time" not in msg
 
 
+def test_goal_carries_no_policy_toggle_by_default():
+    # The controller toggles on the key's presence, so a goal that always
+    # carried it would flip the legs on and off at loop rate.
+    msg = goal_mod.goal(np.zeros(31), np.zeros(4), 0.75, target_time=1.0)
+    assert "toggle_policy_action" not in msg
+
+
+def test_engaging_asks_the_controller_for_the_walk_policy():
+    msg = goal_mod.goal(np.zeros(31), np.zeros(4), 0.75, target_time=1.0, engage_policy=True)
+    assert msg["toggle_policy_action"] is True
+
+
 def test_a_wrong_length_pose_is_refused():
     with pytest.raises(ValueError, match="pose shape"):
         goal_mod.goal(np.zeros(28), np.zeros(4), 0.75, target_time=1.0)

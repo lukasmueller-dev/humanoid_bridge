@@ -33,6 +33,7 @@ import numpy as np
 
 from ..gear import goal as goal_mod
 from ..gear.publisher import GOAL_PORT, GoalPublisher
+from ..gear.status import STATUS_PORT, Engager, PolicyStatus
 
 # DEFAULT_BASE_HEIGHT in decoupled_wbc/control/main/constants.py.
 BASE_HEIGHT = 0.74
@@ -75,10 +76,14 @@ def frames(pose, navigate_cmd, args, clock=time.monotonic):
         )
 
 
-def drive(publisher, pose, navigate_cmd, args, out=print, clock=time.monotonic, sleep=time.sleep):
+def drive(publisher, pose, navigate_cmd, args, out=print, clock=time.monotonic, sleep=time.sleep,
+          status=None):
     period = 1.0 / args.hz
     sent = 0
+    engager = Engager(status if args.engage else None, out=out)
     for goal, elapsed in frames(pose, navigate_cmd, args, clock):
+        if engager.wants(clock()):
+            goal["toggle_policy_action"] = True
         publisher.send(goal)
         sent += 1
         if sent % int(args.hz) == 0:
@@ -136,6 +141,20 @@ def parse_args(argv=None):
     parser.add_argument(
         "--ramp", type=float, default=2.0, help="seconds to ease the walk command in and out"
     )
+    parser.add_argument(
+        "--no-engage",
+        dest="engage",
+        action="store_false",
+        help="do not ask for the walk policy; the legs stay held unless "
+        "somebody has already engaged it (']' at the loop's keyboard)",
+    )
+    parser.add_argument("--status-host", default="127.0.0.1")
+    parser.add_argument(
+        "--status-port",
+        type=int,
+        default=STATUS_PORT,
+        help="the control loop's lower-body policy status (default: %(default)s)",
+    )
     parser.add_argument("--hz", type=float, default=30.0)
     parser.add_argument("--zmq-port", type=int, default=GOAL_PORT)
     parser.add_argument(
@@ -156,15 +175,19 @@ def main(argv=None):
         return 2
 
     publisher = GoalPublisher(port=args.zmq_port, bind_host=args.bind_host)
+    status = PolicyStatus(host=args.status_host, port=args.status_port) if args.engage else None
     print(f"goal     tcp://{args.bind_host}:{args.zmq_port}")
     print(f"walk     vx {args.walk[0]} vy {args.walk[1]} vyaw {args.walk[2]}")
+    print(f"status   tcp://{args.status_host}:{args.status_port}" if status else "status   off")
     print("THIS NODE COMMANDS. MuJoCo only, bridge armed.")
     try:
-        drive(publisher, pose, args.walk, args)
+        drive(publisher, pose, args.walk, args, status=status)
     except KeyboardInterrupt:
         print("\nstopped")
     finally:
         publisher.close()
+        if status is not None:
+            status.close()
     return 0
 
 

@@ -32,6 +32,7 @@ class GoalPacer:
         self._stop = threading.Event()
         self._thread = None
         self._last = None
+        self._toggle = False
         self.published = 0
         self.held = 0
 
@@ -42,6 +43,17 @@ class GoalPacer:
         not here: queueing time is not publishing time."""
         with self._lock:
             self._queue.extend(goals)
+
+    def request_toggle(self):
+        """Put `toggle_policy_action` on the next goal out, and only that one.
+
+        Out of band rather than on a queued goal, because a goal can be
+        republished: with an empty queue `_tick` re-sends `_last` every period,
+        which would flip the walk policy on and off at `hz`. The key rides the
+        copy `_tick` sends, never the stored goal.
+        """
+        with self._lock:
+            self._toggle = True
 
     def drop_queued(self):
         """Forget anything not yet published. Used on the way out, so a stop
@@ -71,6 +83,10 @@ class GoalPacer:
         goal = dict(goal)
         goal["target_time"] = now + self._period
         goal["timestamp"] = now
+        with self._lock:
+            toggle, self._toggle = self._toggle, False
+        if toggle:
+            goal["toggle_policy_action"] = True
         self._publisher.send(goal)
         self.published += 1
         if is_hold:
