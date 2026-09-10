@@ -53,6 +53,15 @@ class PolicyStatus:
             return None
         return bool(status.get("use_policy_action", False))
 
+    def stamp(self):
+        """When the loop wrote the newest status, on its own monotonic clock.
+
+        The same clock the goal protocol already assumes both ends share, so it
+        can be compared against the time an ask went out.
+        """
+        status = self.latest()
+        return None if status is None else status.get("timestamp")
+
     def close(self):
         self._socket.close()
         if self._owns_context:
@@ -66,36 +75,78 @@ class Engager:
     the status topic, so neither sending it once nor sending it always works.
     Once is lost when ZMQ PUB drops what it publishes before the subscriber has
     finished connecting -- which is exactly the first frames. Always flips the
-    legs on and off at loop rate. So: ask, wait for the status to come back
-    engaged, and ask again only if it has not.
+    legs on and off at loop rate.
 
-    `retry` has to outlast one goal-to-status round trip or the second ask
-    undoes the first.
+    So: ask, then re-ask only once the controller has published a status
+    *written after that ask* which still says it is not engaged. A plain timer
+    is not enough. If a round trip ever outlasts the timer -- a stalled loop, a
+    slow chunk -- a second ask lands on a controller that already engaged and
+    turns the legs back off mid-walk. Comparing against the status's own
+    timestamp makes that impossible rather than unlikely.
+
+    `engaged()` is the authority throughout; this never assumes an ask landed.
     """
+
+    #: Say something if the controller has not published a status by now.
+    SILENCE_WARNING_S = 5.0
 
     def __init__(self, status, retry=1.0, out=print):
         self._status = status
         self._retry = retry
         self._out = out
         self._asked_at = None
+        self._asked_stamp = None
+        self._first_seen = None
+        self._engaged_at = None
         self._announced = False
+        self._warned = False
+
+    def engaged_at(self):
+        """When the controller first reported the policy engaged, or None.
+
+        A walk command must ramp from this, not from process start: until it
+        the legs hold their measured angles and the command does nothing.
+        """
+        return self._engaged_at
 
     def wants(self, now):
         """True when this goal should carry the toggle."""
         if self._status is None:
             return False
+        if self._first_seen is None:
+            self._first_seen = now
+
         engaged = self._status.engaged()
         if engaged is None:
-            # The loop has published no status, so it is not reading goals yet
+            # The loop has published no status, so it is not reading goals
             # either: an ask now is dropped, and we could not tell whether it
-            # landed. Wait to be told which state it is in.
+            # landed. Wait to be told which state it is in -- but say so, or a
+            # wrong --status-host is a silent 20 s walk with the legs held.
+            if not self._warned and now - self._first_seen > self.SILENCE_WARNING_S:
+                self._out(
+                    "no policy status yet; check --status-host/--status-port. "
+                    "The legs stay held until the controller answers."
+                )
+                self._warned = True
             return False
+
         if engaged:
             if not self._announced:
                 self._out("walk policy engaged")
                 self._announced = True
+                self._engaged_at = now
             return False
-        if self._asked_at is not None and now - self._asked_at < self._retry:
-            return False
+
+        if self._asked_at is not None:
+            if now - self._asked_at < self._retry:
+                return False
+            stamp = self._status.stamp()
+            if (stamp is not None and self._asked_stamp is not None
+                    and stamp <= self._asked_stamp):
+                # Still the status from before the ask: the controller has not
+                # answered yet. Asking again now would double-toggle.
+                return False
+
         self._asked_at = now
+        self._asked_stamp = self._status.stamp()
         return True

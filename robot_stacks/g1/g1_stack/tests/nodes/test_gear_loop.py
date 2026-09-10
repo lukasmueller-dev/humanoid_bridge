@@ -10,9 +10,18 @@ from g1_stack.nodes import gear_loop
 
 
 class FakeRclpy:
-    def __init__(self, events):
+    """rclpy, with the executor behaviour gear_loop waits on.
+
+    A node reaches the global executor only when something spins it, which is
+    the race `wait_for_node` closes: GEAR's simulator indexes `get_nodes()[0]`
+    with no length check.
+    """
+
+    def __init__(self, events, spin_joins=True):
         self.events = events
         self.node = SimpleNamespace(destroy_node=lambda: events.append("destroy"))
+        self._spin_joins = spin_joins
+        self._nodes = []
 
     def init(self):
         self.events.append("rclpy-init")
@@ -27,6 +36,11 @@ class FakeRclpy:
     def spin(self, node):
         # a real spin blocks on a daemon thread; the fake just notes the node
         self.events.append(("spin", node is self.node))
+        if self._spin_joins:
+            self._nodes.append(node)
+
+    def get_global_executor(self):
+        return SimpleNamespace(get_nodes=lambda: list(self._nodes))
 
 
 def fake_gear_env(events):
@@ -58,7 +72,13 @@ def fake_channel(events):
             events.append("domain-created")
             return True
 
-    return SimpleNamespace(ChannelFactory=ChannelFactory)
+    # The real template, in the shape Init consumes it.
+    config = (
+        '<CycloneDDS><Domain Id="any"><General><Interfaces>'
+        '<NetworkInterface name="$__IF_NAME__$" priority="default" multicast="default"/>'
+        "</Interfaces></General></Domain></CycloneDDS>"
+    )
+    return SimpleNamespace(ChannelFactory=ChannelFactory, ChannelConfigHasInterface=config)
 
 
 class Harness:
@@ -192,4 +212,46 @@ def test_refuses_to_run_when_upstream_moved_init_channel():
 def test_refuses_to_run_when_upstream_moved_the_channel_factory():
     h = Harness(channel=SimpleNamespace())
     with pytest.raises(RuntimeError, match="ChannelFactory"):
+        h.run()
+
+
+def test_multicast_is_forced_on_so_lo_needs_no_root():
+    """`multicast="default"` resolves to off on lo, and the template goes
+    straight to Domain(), out of CYCLONEDDS_URI's reach. Without this a
+    rehearsal needs `ip link set lo multicast on` as root on every machine."""
+    h = Harness()
+    seen = {}
+
+    def loop(config):
+        h.g1_env.init_channel(config={"DOMAIN_ID": 0})
+        seen["config"] = h.channel.ChannelConfigHasInterface
+
+    h.loop_main = loop
+    h.run()
+    assert 'multicast="true"' in seen["config"]
+    assert 'multicast="default"' not in seen["config"]
+
+
+def test_the_forced_config_is_put_back_afterwards():
+    h = Harness()
+    original = h.channel.ChannelConfigHasInterface
+    h.run()
+    assert h.channel.ChannelConfigHasInterface == original
+
+
+def test_refuses_to_run_if_the_node_never_joins_the_executor():
+    """GEAR's simulator does `get_nodes()[0]` unguarded, so returning early
+    turns into an IndexError from upstream that reads as an unrelated crash."""
+    h = Harness()
+    h.rclpy = FakeRclpy(h.events, spin_joins=False)
+    with pytest.raises(RuntimeError, match="global executor"):
+        gear_loop.wait_for_node(h.rclpy, timeout=0.05, sleep=lambda _s: None)
+
+
+def test_refuses_to_run_when_the_config_no_longer_says_multicast_default():
+    # A silent no-op here would put the root requirement back without a word.
+    channel = fake_channel([])
+    channel.ChannelConfigHasInterface = "<CycloneDDS/>"
+    h = Harness(channel=channel)
+    with pytest.raises(RuntimeError, match="multicast"):
         h.run()
