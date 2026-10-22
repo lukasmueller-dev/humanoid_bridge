@@ -34,7 +34,7 @@ Closes roadmap `feat/g1-finish-control-release`.
 - Latched, `/lowstate` older than 1.2 s (0.2 s `state_loss` + 1 s): the latch goes silent and stays silent until reset (`LATCHED … silent`). A robot that restarts meanwhile runs its own motion service; old frames would fight it (2026-10-20).
 - G1 arming is also refused while any other program publishes `/lowcmd` (a restarted robot's motion service): release it first.
 - Hands: a released hand whose state is gone for 1.2 s gets no more limp frames.
-- Arming moves the robot: `initControl_` ramps to the start pose over `duration` (2 s).
+- Arming moves the robot: `initControl_` ramps to the start pose over `duration` (2 s). It zeroes dq and tau: the last client's feedforward never rides on the arming hold, which has no timeout.
 - One entry point `enterStop_(cause)` for every trigger, any thread. It sets the state atomically, snapshots measured q under `mutex_`, then calls `finishControl_`.
 - Mode changes while stopped: an operator e-stop sets the mode it names (hold after damp re-stiffens at the current pose). A fault only turns `hold` into `damp`.
 - Faults and combos fire at onset only (author, 2026-10-19): an operator hold during a lasting fault stays. Combo hold → damp (L1 added) fires; damp → hold (L1 released first) does not.
