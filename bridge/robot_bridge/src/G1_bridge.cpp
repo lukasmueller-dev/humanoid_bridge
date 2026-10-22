@@ -62,7 +62,7 @@ sairol_bridge::G1Bridge::G1Bridge(rclcpp::Node::SharedPtr node) : BridgeCore(nod
                         cmd_topic.c_str());
         }
 
-        hand.state_time = nh->get_clock()->now();
+        hand.state_time = steadyClock_.now();
         hand.desired.motor_cmd.resize(numHandJoint_);
         hand.last.motor_cmd.resize(numHandJoint_);
         hand.params.resize(numHandJoint_);
@@ -153,7 +153,7 @@ void sairol_bridge::G1Bridge::lowStateHandler_(unitree_hg::msg::LowState::Shared
     }
 
     // Update the last state time using the same clock source
-    last_state_time_ = nh->get_clock()->now();
+    last_state_time_ = steadyClock_.now();
 
     // unitree_hg::msg::LowState declares `MotorState[35] motor_state`, a fixed
     // array, so size() is always 35 whatever the robot. currentState_ is a
@@ -195,7 +195,7 @@ void sairol_bridge::G1Bridge::lowStateHandler_(unitree_hg::msg::LowState::Shared
     remoteKeys_ = keys;
     if (estop::remoteHeader(msg->wireless_remote.data(), msg->wireless_remote.size()))
     {
-        lastRemoteHeader_ = nh->get_clock()->now().seconds();
+        lastRemoteHeader_ = steadyClock_.now().seconds();
     }
     const estop::Cause remote = estop::remoteOnset(estop::remoteCause(keys, estopConfig_), lastRemote_);
     if (remote != estop::Cause::None)
@@ -206,7 +206,7 @@ void sairol_bridge::G1Bridge::lowStateHandler_(unitree_hg::msg::LowState::Shared
 
 void sairol_bridge::G1Bridge::publishLowCommand_()
 {
-    rclcpp::Time current = nh->get_clock()->now();
+    rclcpp::Time current = steadyClock_.now();
 
     float_t phase = 1.0f;
     if (tFinal_ - tStart_ > 1e-6) {
@@ -481,7 +481,7 @@ void sairol_bridge::G1Bridge::handStateHandler_(int side, unitree_hg::msg::HandS
 {
     auto &hand = hands_[side];
     hand.state = *msg;
-    hand.state_time = nh->get_clock()->now();
+    hand.state_time = steadyClock_.now();
     hand.state_seen = true;
 }
 
@@ -497,7 +497,7 @@ bool sairol_bridge::G1Bridge::checkHandState_(int side)
         return false;
     }
 
-    const double dt_state = (nh->get_clock()->now() - hand.state_time).seconds();
+    const double dt_state = (steadyClock_.now() - hand.state_time).seconds();
     if (dt_state > handStateTimeout_)
     {
         RCLCPP_ERROR_THROTTLE(nh->get_logger(), *nh->get_clock(), 2000,
@@ -649,7 +649,7 @@ void sairol_bridge::G1Bridge::handCmdCallBack_(int side, bridge_interface::msg::
         params.tau_1 = 0.0;
     }
 
-    hand.t_start = nh->get_clock()->now().seconds();
+    hand.t_start = steadyClock_.now().seconds();
     hand.t_final = hand.t_start + message->duration;
     hand.t_valid = message->hold_position ? INF_ : hand.t_final + 0.2;
 }
@@ -670,7 +670,7 @@ void sairol_bridge::G1Bridge::publishOneHand_(int side, bool limp)
     float_t phase = 1.0f;
     if (hand.t_final - hand.t_start > 1e-6)
     {
-        phase = static_cast<float_t>((nh->get_clock()->now().seconds() - hand.t_start) /
+        phase = static_cast<float_t>((steadyClock_.now().seconds() - hand.t_start) /
                                      (hand.t_final - hand.t_start));
     }
     phase = std::clamp(phase, 0.0f, 1.0f);
@@ -735,7 +735,7 @@ void sairol_bridge::G1Bridge::publishHandCommand_()
         }
     }
 
-    const double now = nh->get_clock()->now().seconds();
+    const double now = steadyClock_.now().seconds();
 
     for (int side = 0; side < NUM_HANDS; ++side)
     {
@@ -762,7 +762,7 @@ void sairol_bridge::G1Bridge::publishHandCommand_()
         // overheating finger should go slack now, not on the device's timeout.
         // Not once its state is gone for 1.2 s: a restarted hand must not get old frames.
         const bool gone = !hand.state_seen ||
-                          (nh->get_clock()->now() - hand.state_time).seconds() >
+                          (steadyClock_.now() - hand.state_time).seconds() >
                               estop::STATE_LOSS_S + estop::SILENCE_AFTER_S;
         if (!hand.live && gone)
         {
@@ -847,7 +847,7 @@ void sairol_bridge::G1Bridge::startHandControlServiceCB_(
             params.kd_1 = target.kd;
         }
 
-        hand.t_start = nh->get_clock()->now().seconds();
+        hand.t_start = steadyClock_.now().seconds();
         hand.t_final = hand.t_start + duration_;
         hand.t_valid = INF_;   // hold the ready pose until a command arrives
         hand.live = true;

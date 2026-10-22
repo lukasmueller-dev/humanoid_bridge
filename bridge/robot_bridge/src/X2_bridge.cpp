@@ -473,7 +473,7 @@ void sairol_bridge::X2Bridge::publishLowCommand_()
         return;
     }
 
-    rclcpp::Time current = nh->get_clock()->now();
+    rclcpp::Time current = steadyClock_.now();
 
     float_t phase = 1.0f;
     if (tFinal_ - tStart_ > 1e-6) {
