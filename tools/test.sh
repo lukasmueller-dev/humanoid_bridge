@@ -7,7 +7,7 @@
 # with the reason, not failed. --docker needs only docker: it builds and runs
 # every stage in tools/Dockerfile.test with the container network off.
 #
-#   unit   pure Python: clients, adapters, goal order, observation, camera
+#   unit   pure Python: clients, adapters, goal order, observation, camera, tools/tests
 #   cpp    gtests test_estop, test_gates, test_crc: e-stop latch, stop frames, remote keys,
 #          target gates, the /lowcmd CRC against Unitree's SDK
 #   wire   the real G1_bridge against a fake robot, body path
@@ -179,7 +179,7 @@ stage_unit() {
     # Every module the unit tests import at collection time. cv2 is left out:
     # g1_camera imports it inside functions, on purpose.
     local missing=""
-    for mod in pytest numpy zmq msgpack msgpack_numpy; do
+    for mod in pytest numpy yaml zmq msgpack msgpack_numpy; do
         "$py" -c "import $mod" >/dev/null 2>&1 || missing="$missing $mod"
     done
     if [ -n "$missing" ]; then
