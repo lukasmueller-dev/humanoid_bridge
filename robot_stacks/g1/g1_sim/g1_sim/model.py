@@ -67,8 +67,13 @@ def build_spec(mjcf=DEFAULT_MJCF):
     if not (mjcf.parent / spec.meshdir).is_dir() and (mjcf.parent / "meshes").is_dir():
         spec.meshdir = "meshes"  # fetch_assets.sh renames mjlab's assets/ to meshes/
 
+    spec.add_texture(name="floor", type=mujoco.mjtTexture.mjTEXTURE_2D,
+                     builtin=mujoco.mjtBuiltin.mjBUILTIN_CHECKER, width=300, height=300,
+                     rgb1=[0.2, 0.3, 0.4], rgb2=[0.1, 0.2, 0.3])  # fmt: skip
+    floor = spec.add_material(name="floor", texrepeat=[5, 5], texuniform=True)
+    floor.textures[mujoco.mjtTextureRole.mjTEXROLE_RGB] = "floor"
     spec.worldbody.add_geom(
-        name="floor", type=mujoco.mjtGeom.mjGEOM_PLANE, size=[0, 0, 0.05], rgba=[0.3, 0.35, 0.4, 1]
+        name="floor", type=mujoco.mjtGeom.mjGEOM_PLANE, size=[0, 0, 0.05], material="floor"
     )
     spec.worldbody.add_light(pos=[0, 0, 4], dir=[0, 0, -1], diffuse=[0.7, 0.7, 0.7])
     for name in JOINT_NAMES:

@@ -13,6 +13,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libgl1 \
         libosmesa6 \
     && rm -rf /var/lib/apt/lists/*
-RUN pip3 install --no-cache-dir mujoco==3.3.6 pyzmq
+RUN pip3 install --no-cache-dir mujoco==3.3.6 pyzmq opencv-python-headless==4.10.0.84
 
 ENV RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+# Mesa's EGL renders without a GPU; with one passed in, it uses it.
+ENV MUJOCO_GL=egl

@@ -8,6 +8,7 @@ MuJoCo G1 in place of the robot: publishes `/lowstate` at 500 Hz, reads `/lowcmd
 | Added | floor, pelvis IMU sensors, motor armature, joint friction, `d435` camera on `torso_link` |
 | Motors | `tau + kp(q - q_j) + kd(dq - dq_j)` per `/lowcmd` motor, clipped to its effort; mode 0 = no torque |
 | `LowState` | remote header `0x55 0x51`, `mode_machine` 5, IMU quaternion/rpy/gyro/accel, `tick` = sim ms |
+| Camera | `d435` rendered at 30 Hz, served by `g1_camera.CameraServer`: ZMQ 5556, preview `:5557/frame.jpg`; `--no-camera` |
 | Gantry | spring on the pelvis, feet 5 cm up; on at start |
 | Inputs | `/g1_sim/gantry` (Bool), `/g1_sim/remote` (Bool), `/g1_sim/keys` (UInt16), `/g1_sim/reset` (Empty) |
 
@@ -15,7 +16,7 @@ MuJoCo G1 in place of the robot: publishes `/lowstate` at 500 Hz, reads `/lowcmd
 
 ```bash
 g1_web_commander/scripts/fetch_assets.sh     # mjlab g1.xml -> ~/.local/share/g1_web_commander/g1_mjlab
-docker build -t g1-sim:humble robot_stacks/g1/g1_sim   # ROS 2 Humble + mujoco 3.3.6
+docker build -t g1-sim:humble robot_stacks/g1/g1_sim   # ROS 2 Humble, mujoco 3.3.6, MUJOCO_GL=egl
 ```
 
 ## 1. Build
@@ -43,12 +44,14 @@ ros2 topic pub -1 /g1_sim/gantry std_msgs/msg/Bool "{data: false}"   # drop it
 
 ```bash
 pytest robot_stacks/g1/g1_sim/tests/     # no ROS; skips without mujoco or g1.xml
-tools/test.sh --sim                      # bridge arms the sim, holds, follows /robot_cmd, remote damp
+tools/test.sh --sim                      # bridge arms the sim, holds, /robot_cmd, camera, remote damp
 ```
 
 ## What breaks it
 
 - **`no G1 model`** → run `fetch_assets.sh`, or set `G1_MJCF`.
+- **`camera off: ...`** → no GL: `MUJOCO_GL=egl` (Mesa, no GPU needed) or `osmesa`; the image sets `egl`.
+- **Camera ports in use** → a second sim, or a real/fake camera server on 5556/5557: `--camera-port`, `--preview-port`.
 - **Bridge damps with "Robot signal lost"** → the sim fell behind real time (log: `behind real time`); `/lowstate` older than 0.2 s trips it.
 - **Robot falls after `/g1_sim/gantry false`** → expected: the bridge holds joints, it does not balance.
 - **Sim DDS reaches the robot** → never source `scripts/setup_unitree.sh` in a sim shell; source `loopback_dds.sh`.

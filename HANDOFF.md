@@ -14,24 +14,22 @@
 
 ## State
 
-Decision (Lukas, 2026-10-22): option B — own sim `robot_stacks/g1/g1_sim`, not GEAR's `base_sim`. Steps 1–2 done.
+Decision (Lukas, 2026-10-22): option B — own sim `robot_stacks/g1/g1_sim`, not GEAR's `base_sim`. Steps 1–2 and the camera done.
 
-- `g1_sim` (rclpy node, mjlab `g1.xml`, gantry, remote header, d435 camera body) — `robot_stacks/g1/g1_sim/README.md`.
-- `tools/test.sh --sim` passes in `g1-sim:humble` (arm, hold `ready_q` ≤0.037 rad, `/robot_cmd` elbows ≤0.032 rad, remote L1+R1 damp). 11 unit tests pass.
+- `g1_sim`: rclpy node, mjlab `g1.xml`, gantry, remote header, d435 camera on the `g1_camera` wire (5556/5557) — `robot_stacks/g1/g1_sim/README.md`.
+- `tools/test.sh --sim` passes in `g1-sim:humble` (11 checks: arm, hold, `/robot_cmd`, camera ZMQ + preview, remote damp). EGL (Mesa, no GPU) and OSMesa both render; steady state has no real-time lag.
 - Workspace `~/.cache/g1_sim/ws` (own; `~/.cache/g1_web_commander/test_ws` belongs to the codebase-health session).
-- GEAR survey facts (why not `base_sim`): PROJECT_STATUS decision line 2026-10-22.
 
 ## Next action
 
-1. Camera: render `d435` in the sim process and serve the `g1_camera` wire (ZMQ 5556 `b"get"` → `[rgb_jpeg, ir_jpeg, depth]`, HTTP 5557). Check offscreen GL (`MUJOCO_GL=egl` or `osmesa`, both in the image) first.
-2. Commander (g1_web_commander, branch `mujoco-sim`, own worktree — the main checkout is on `chore-codebase-health`): sim core config (camera `127.0.0.1:5557`, no `ssh g1`), loopback DDS option in `tools/g1-commander.sh`.
-3. Optional: GEAR on `lo` against `g1_sim` (`--interface lo`, not `sim`), then close the roadmap item "`--interface sim` does not reach the bridge".
+1. Commander (g1_web_commander, branch `mujoco-sim`, own worktree — the main checkout is on `chore-codebase-health`): sim core config (camera `127.0.0.1:5557`, no `ssh g1`), loopback DDS option in `tools/g1-commander.sh`. Run the page against `g1_sim` + `G1_bridge` in one container with `-p` for the page port.
+2. Optional: GEAR on `lo` against `g1_sim` (`--interface lo`, not `sim`), then close the roadmap item "`--interface sim` does not reach the bridge".
 
 **Done when:** a sim run drives the same client path as hardware (GEAR or the page → `/robot_cmd` → `G1_bridge` → `rt/lowcmd` → MuJoCo), and the commander page shows the sim camera through port 5557.
 
 ## Blockers
 
-- GPU containers fail on the lab PC: the sim camera must render with OSMesa there (no GPU).
+None.
 
 ## Gotchas (unpromoted)
 

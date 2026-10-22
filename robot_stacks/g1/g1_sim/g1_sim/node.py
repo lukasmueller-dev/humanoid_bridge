@@ -5,6 +5,7 @@ Inputs: /g1_sim/gantry (Bool, hold the pelvis), /g1_sim/remote (Bool, remote hea
 """
 
 import argparse
+import os
 import sys
 import threading
 import time
@@ -16,6 +17,9 @@ from rclpy.utilities import remove_ros_args
 from std_msgs.msg import Bool, Empty, UInt16
 from unitree_hg.msg import LowCmd, LowState
 
+from g1_camera import wire
+from g1_camera.server import CameraServer
+from g1_sim.camera import SimCamera
 from g1_sim.model import DEFAULT_MJCF, NUM_JOINT, Command, G1Sim
 
 MODE_MACHINE = 5  # as fake_g1; the bridge logs "G1 type:" once it is non-zero
@@ -111,12 +115,36 @@ class G1SimNode(Node):
                 time.sleep(-lag)
 
 
+def start_camera(node, args):
+    """The g1_camera wire on the d435 view; None, logged, when GL fails."""
+    try:
+        camera = SimCamera(node.sim, node.lock, size=wire.DEFAULT_SIZE, hz=args.camera_hz).start()
+    except Exception as exc:  # noqa: BLE001
+        node.get_logger().error(f"camera off: {exc!r}; set MUJOCO_GL=egl or osmesa")
+        return None
+    server = CameraServer(
+        port=args.camera_port,
+        source=camera,
+        source_name="g1_sim d435",
+        preview_port=args.preview_port,
+    ).start()
+    node.get_logger().info(
+        f"camera on tcp://0.0.0.0:{server.port}, preview http://0.0.0.0:{server.preview_port}"
+        f"/frame.jpg ({os.environ.get('MUJOCO_GL', 'default GL')})"
+    )
+    return server
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--mjcf", default=str(DEFAULT_MJCF), help="mjlab g1.xml ($G1_MJCF)")
     parser.add_argument("--clearance", type=float, default=0.05, help="feet above floor, m")
     parser.add_argument("--no-gantry", action="store_true", help="start on the floor, unheld")
     parser.add_argument("--viewer", action="store_true", help="MuJoCo window; needs a display")
+    parser.add_argument("--camera-port", type=int, default=wire.DEFAULT_PORT, help="ZMQ REP")
+    parser.add_argument("--preview-port", type=int, default=wire.DEFAULT_PREVIEW_PORT, help="HTTP")
+    parser.add_argument("--camera-hz", type=float, default=30.0)
+    parser.add_argument("--no-camera", action="store_true", help="no rendering, no camera ports")
     argv = sys.argv if argv is None else argv
     rclpy.init(args=argv)
     args = parser.parse_args(remove_ros_args(argv)[1:])
@@ -128,6 +156,7 @@ def main(argv=None):
         f"{args.mjcf}: {sim.model.nq} qpos, dt {sim.dt * 1000:.0f} ms, "
         f"gantry {'on' if sim.gantry else 'off'} at {sim.anchor[2]:.3f} m"
     )
+    server = None if args.no_camera else start_camera(node, args)  # GL setup stalls physics
     node.thread.start()
     try:
         rclpy.spin(node)
@@ -136,6 +165,8 @@ def main(argv=None):
     finally:
         node.running = False
         node.thread.join(timeout=1.0)
+        if server is not None:
+            server.stop()
         if rclpy.ok():
             rclpy.shutdown()
 

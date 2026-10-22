@@ -4,8 +4,10 @@ Exit 1 on failure. run_sim_bridge_test.sh starts the sim and the bridge first.
 """
 
 import argparse
+import json
 import sys
 import time
+import urllib.request
 
 import rclpy
 import yaml
@@ -13,6 +15,8 @@ from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import String, UInt16
 from unitree_hg.msg import LowState
 
+from g1_camera import wire
+from g1_camera.client import CameraClient
 from robot_bridge.cmd_client import RobotCmdClient
 
 NUM_MOTORS = 29
@@ -72,6 +76,16 @@ class Driver:
         q = [m.q for m in self.low.motor_state[:NUM_MOTORS]]
         return max(abs(a - b) for a, b in zip(q, target, strict=True))
 
+    def check_camera(self):
+        rgb = CameraClient(host="127.0.0.1").read_rgb()
+        width, height = wire.DEFAULT_SIZE
+        self.check("camera frame on ZMQ", rgb.shape == (height, width, 3), str(rgb.shape))
+        url = f"http://127.0.0.1:{wire.DEFAULT_PREVIEW_PORT}"
+        health = json.load(urllib.request.urlopen(f"{url}/health", timeout=2))
+        self.check("camera preview /health", health["source"] == "g1_sim d435", str(health))
+        jpeg = urllib.request.urlopen(f"{url}/frame.jpg", timeout=2).read()
+        self.check("camera preview /frame.jpg", jpeg[:2] == b"\xff\xd8", f"{len(jpeg)} bytes")
+
     def stream(self, target, seconds):
         end = time.monotonic() + seconds
         while time.monotonic() < end:
@@ -102,6 +116,8 @@ class Driver:
         self.stream(target, 3.0)
         err = self.error(target)
         self.check("/robot_cmd moves the elbows", err < TOL, f"max error {err:.3f} rad")
+
+        self.check_camera()
 
         self.keys.publish(UInt16(data=KEY_L1 | KEY_R1))  # remote_combo_damp
         self.spin(0.5)
