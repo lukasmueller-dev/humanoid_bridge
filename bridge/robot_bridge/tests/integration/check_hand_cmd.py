@@ -88,7 +88,10 @@ def main():
         "--expect-nan-dropped", metavar="PHASES", help="drive_hand_cmd.py --phases output"
     )
     parser.add_argument("--expect-clamped", action="store_true")
-    parser.add_argument("--expect-left-released", action="store_true")
+    parser.add_argument(
+        "--expect-left-released", action="store_true", help="fake_dex3 --stale-after"
+    )
+    parser.add_argument("--expect-left-hot", action="store_true", help="fake_dex3 --hot-after")
     args = parser.parse_args()
 
     with open(args.samples) as handle:
@@ -223,13 +226,16 @@ def main():
             ),
         )
 
-    if args.expect_left_released:
+    for wanted, cause in ((args.expect_left_released, "stale"), (args.expect_left_hot, "hot")):
+        if not wanted:
+            continue
         # Both hands end limp on every run, so "left went limp" proves nothing on
         # its own. What per-side release means is that the left stopped being
         # commanded well before the right did.
-        left_live, right_live = last_live(recorded["left"]), last_live(recorded["right"])
+        left, right = recorded["left"], recorded["right"]
+        left_live, right_live = last_live(left), last_live(right)
         check(
-            "a stale left hand released early",
+            f"a {cause} left hand released early",
             left_live is not None
             and right_live is not None
             and right_live["t"] - left_live["t"] > MIN_EARLY_RELEASE_GAP,
@@ -241,12 +247,25 @@ def main():
         check(
             "the right hand kept going",
             right_live is not None and any(v > 0.0 for v in right_live["kp"]),
-            "per-side release: a silent left hand must not drop the right",
+            f"per-side release: a {cause} left hand must not drop the right",
         )
         check(
             "the released left hand went slack",
-            all(is_limp(s) for s in recorded["left"][-5:]),
+            all(is_limp(s) for s in left[-5:]),
         )
+        if cause == "hot":
+            # Its state still arrives, so it gets limp frames, not silence, while the right works.
+            after = [s for s in left if left_live is not None and s["t"] > left_live["t"]]
+            check(
+                "the hot left hand stays limp, not silent",
+                bool(after)
+                and all(is_limp(s) for s in after)
+                and right_live is not None
+                and after[-1]["t"] >= right_live["t"],
+                "{} limp frames, the last at {}".format(
+                    len(after), after[-1]["t"] if after else "never"
+                ),
+            )
 
     if failures:
         print("\n{} check(s) failed: {}".format(len(failures), ", ".join(failures)))

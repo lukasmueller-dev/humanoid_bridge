@@ -120,11 +120,13 @@ GEAR's own gains, because it is a drop-in and its caller passes none.
 Hands are not mounted, so all of this is verified against a fake only.
 
 ```bash
-tools/test.sh                       # unit, body path (8 checks), hand path
-tools/test.sh --stale-after 3.5     # per-side release
+tools/test.sh --hands               # plain, hands-stale, hands-hot runs
+tools/test.sh --hands --stale-after 3.9 --hot-after 3.2
 ```
 
-`--stale-after` counts from the first `/dex3/left/cmd`, which is
+The hand stage runs three times: plain; the left hand's state stops at
+`--stale-after`; it reports over temperature at `--hot-after` (both default
+3.5 s). Both count from the first `/dex3/left/cmd`, which is
 `start_hand_control`, so 3.0 to 4.0 lands mid-stream.
 
 `fake_dex3.py` publishes state at 100 Hz and records `/dex3/*/cmd`;
@@ -133,8 +135,8 @@ node publishes `/lowcmd` and while the body is tilted, drives both hands through
 deliberately bad command; `check_hand_cmd.py` asserts the mode bits, the
 left/right split, the ramp, the clamps, that NaN commands leave the last good
 target in force, and that the body stayed idle (a `/lowcmd` probe proves the
-fake records). `STALE_AFTER` silences the left hand mid-stream to exercise the
-per-side release.
+fake records). The stale and hot runs check that only the left hand releases;
+a hot hand keeps getting limp frames.
 
 ## What breaks it
 

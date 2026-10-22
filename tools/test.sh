@@ -16,7 +16,8 @@
 #   wire   the real G1_bridge against a fake robot, body path
 #   estop  the real G1_bridge's e-stop against a fake robot
 #   gates  a fresh G1_bridge's target gates (range, speed, arming seed) against a fake robot
-#   hands  the real G1_bridge against fake Dex3 hands, per-side release
+#   hands  the real G1_bridge against fake Dex3 hands, three runs: plain, the left hand's
+#          state stops (hands-stale), the left hand overheats (hands-hot)
 #   config the real G1_bridge refuses broken copies of G1_config.yaml
 #
 # No stage touches hardware. Nothing here opens a real NIC: the DDS settings
@@ -37,7 +38,8 @@ RUN_GATES=0
 RUN_HANDS=0
 RUN_CONFIG=0
 RMW_CHOICE="auto"
-STALE_AFTER="${STALE_AFTER:-}"
+STALE_AFTER="${STALE_AFTER:-3.5}"
+HOT_AFTER="${HOT_AFTER:-3.5}"
 PYTHON="${PYTHON:-python3}"
 DOCKER=0
 REBUILD=0
@@ -60,8 +62,10 @@ Options:
   --config              broken-config refusal test only
   --rmw <impl>          cyclonedds | fastrtps | auto (default auto)
   --python <path>       interpreter for the unit stage (default python3, or $PYTHON)
-  --stale-after <s>     hand stage: silence the left hand at <s> seconds to
-                        exercise the per-side release. Must be 3.0 to 4.0
+  --stale-after <s>     hands-stale run: the left hand's state stops <s> seconds after
+                        start_hand_control (default 3.5). 3.0 to 4.0: mid-stream
+  --hot-after <s>       hands-hot run: the left hand reports over temperature at <s>
+                        seconds, same clock and range (default 3.5)
   --docker              build and run the stages in a ROS 2 Humble container
                         (tools/Dockerfile.test), network off; workspace in $HB_TEST_WS
                         (default ~/.cache/humanoid_bridge/test_ws-<cksum of this clone's path>)
@@ -89,6 +93,7 @@ while [ $# -gt 0 ]; do
         --rmw)   RMW_CHOICE="${2:?--rmw needs cyclonedds, fastrtps or auto}"; shift ;;
         --python) PYTHON="${2:?--python needs an interpreter path}"; shift ;;
         --stale-after) STALE_AFTER="${2:?--stale-after needs seconds}"; shift ;;
+        --hot-after) HOT_AFTER="${2:?--hot-after needs seconds}"; shift ;;
         --docker)  DOCKER=1 ;;
         --rebuild) REBUILD=1 ;;
         --allow-skip) ALLOW_SKIP=1 ;;
@@ -102,12 +107,16 @@ if [ "$RUN_UNIT$RUN_CPP$RUN_WIRE$RUN_ESTOP$RUN_GATES$RUN_HANDS$RUN_CONFIG" = "00
     RUN_UNIT=1; RUN_CPP=1; RUN_WIRE=1; RUN_ESTOP=1; RUN_GATES=1; RUN_HANDS=1; RUN_CONFIG=1
 fi
 
-if [ -n "$STALE_AFTER" ] \
-   && { [ "${STALE_AFTER%%.*}" -lt 3 ] || [ "${STALE_AFTER%%.*}" -ge 4 ]; }; then
-    echo "--stale-after must be between 3.0 and 4.0 seconds; got $STALE_AFTER" >&2
-    echo "    earlier and the left hand never tracks; later and the driver has stopped" >&2
-    exit 2
-fi
+# 3.0 to 4.0 s after start_hand_control: earlier and the left hand never tracks,
+# later and the driver has stopped.
+for window in "--stale-after $STALE_AFTER" "--hot-after $HOT_AFTER"; do
+    value="${window#* }"
+    if ! [[ "$value" =~ ^[0-9]+(\.[0-9]+)?$ ]] \
+       || ! awk -v s="$value" 'BEGIN { exit !(s >= 3.0 && s <= 4.0) }'; then
+        echo "${window%% *} must be a number from 3.0 to 4.0 seconds; got '$value'" >&2
+        exit 2
+    fi
+done
 
 # --- docker ----------------------------------------------------------------
 # Re-runs this script in the container on a workspace of its own, after an
@@ -130,7 +139,7 @@ run_in_docker() {
     [ "$RUN_ESTOP" = 1 ] && inner+=(--estop)
     [ "$RUN_GATES" = 1 ] && inner+=(--gates)
     [ "$RUN_HANDS" = 1 ] && inner+=(--hands)
-    [ -n "$STALE_AFTER" ] && inner+=(--stale-after "$STALE_AFTER")
+    inner+=(--stale-after "$STALE_AFTER" --hot-after "$HOT_AFTER")
     inner+=(--rmw "$RMW_CHOICE")
     [ "$ALLOW_SKIP" = 1 ] && inner+=(--allow-skip)
     echo "docker: $image, workspace $ws"
@@ -177,7 +186,7 @@ FAILED=0
 SKIPPED=0
 
 record() {
-    RESULTS+=("$(printf '%-8s %-6s %s' "$1" "$2" "$3")")
+    RESULTS+=("$(printf '%-12s %-6s %s' "$1" "$2" "$3")")
     if [ "$2" = SKIP ]; then SKIPPED=$((SKIPPED + 1)); fi
 }
 
@@ -251,9 +260,9 @@ stage_integration() {   # $1 name, $2 script, rest: script args
     fi
     echo "=== $name ==="
     if "$script" "$@"; then
-        record "$name" PASS "$(basename "$script")"
+        record "$name" PASS "$(basename "$script") $*"
     else
-        record "$name" FAIL "$(basename "$script")"
+        record "$name" FAIL "$(basename "$script") $*"
         FAILED=1
     fi
 }
@@ -310,9 +319,9 @@ if [ "$RUN_GATES" = 1 ]; then
     stage_integration gates "$INTEGRATION/run_fake_gates_test.sh"
 fi
 if [ "$RUN_HANDS" = 1 ]; then
-    # run_fake_hand_test.sh reads STALE_AFTER from the environment.
-    if [ -n "$STALE_AFTER" ]; then export STALE_AFTER; else unset STALE_AFTER; fi
     stage_integration hands "$INTEGRATION/run_fake_hand_test.sh"
+    stage_integration hands-stale "$INTEGRATION/run_fake_hand_test.sh" --stale-after "$STALE_AFTER"
+    stage_integration hands-hot "$INTEGRATION/run_fake_hand_test.sh" --hot-after "$HOT_AFTER"
 fi
 if [ "$RUN_CONFIG" = 1 ]; then
     stage_integration config "$INTEGRATION/run_config_test.sh"

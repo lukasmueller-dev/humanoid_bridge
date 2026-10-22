@@ -207,7 +207,7 @@ under `bridge/`: rebuild and source again.
 tools/test.sh --docker              # every stage in a ROS 2 Humble container; needs only docker
 tools/test.sh                       # the same on a sourced workspace
 tools/test.sh --unit                # needs no ROS
-tools/test.sh --stale-after 3.5     # per-side hand release
+tools/test.sh --hands --stale-after 3.9   # move the left hand's stale release (3.0 to 4.0)
 ```
 
 `--docker` builds `tools/Dockerfile.test` once (`--rebuild` again), then this

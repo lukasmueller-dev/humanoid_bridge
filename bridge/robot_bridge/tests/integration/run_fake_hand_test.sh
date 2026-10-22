@@ -2,6 +2,8 @@
 # Runs the real G1_bridge's hand path against fake Dex3 hands. No hardware.
 # Exit 1 on failure.
 #
+#   run_fake_hand_test.sh [--stale-after <s> | --hot-after <s>]
+#
 # The bridge blocks in its constructor until something publishes /lowstate, so
 # fake_g1 runs too. That doubles as the check that the body path is untouched.
 set -euo pipefail
@@ -13,15 +15,22 @@ PKG="$(cd "$HERE/../.." && pwd)"
 PARAMS="$PKG/params/G1_config.yaml"
 OUT="$(mktemp -d)"
 
-# STALE_AFTER=<seconds> silences the left hand mid-stream, to exercise the
-# per-side freshness release. The clock starts at the first /dex3/left/cmd,
-# which is start_hand_control, so it must land after the 2.5 s ramp-and-hold
-# and before the driver stops about 2.4 s later, or the left hand never tracks
-# and the run is not testing what it looks like it is testing. 3.5 is the
-# middle of that window.
-STALE="${STALE_AFTER:-}"
-if [ -n "$STALE" ] && { [ "${STALE%%.*}" -lt 3 ] || [ "${STALE%%.*}" -ge 4 ]; }; then
-    echo "STALE_AFTER must be between 3.0 and 4.0 seconds; got $STALE"; exit 1
+# --stale-after silences the left hand's state, --hot-after reports it over
+# temperature: either releases that hand alone. The clock starts at the first
+# /dex3/left/cmd, which is start_hand_control, so it must land after the 2.5 s
+# ramp-and-hold and before the driver stops about 2.4 s later, or the left hand
+# never tracks and the run is not testing what it looks like it is testing.
+STALE=""; HOT=""
+case "${1:-}" in
+    --stale-after) STALE="${2:?--stale-after needs seconds}" ;;
+    --hot-after)   HOT="${2:?--hot-after needs seconds}" ;;
+    "") ;;
+    *) echo "usage: $0 [--stale-after <s> | --hot-after <s>]"; exit 1 ;;
+esac
+GUARD="${STALE}${HOT}"
+if [ -n "$GUARD" ] && { ! [[ "$GUARD" =~ ^[0-9]+(\.[0-9]+)?$ ]] \
+   || ! awk -v s="$GUARD" 'BEGIN { exit !(s >= 3.0 && s <= 4.0) }'; }; then
+    echo "$1 must be a number from 3.0 to 4.0 seconds; got '$GUARD'"; exit 1
 fi
 
 export PYTHONPATH="$PKG:$HERE:${PYTHONPATH:-}"
@@ -43,7 +52,7 @@ command -v ros2 >/dev/null || { echo "source the ROS workspace first"; exit 1; }
 python3 "$HERE/fake_g1.py" "$OUT/lowcmd.json" > "$OUT/fake_g1.log" 2>&1 &
 FAKE_PID=$!
 python3 "$HERE/fake_dex3.py" "$OUT/handcmd.json" ${STALE:+--stale-after "$STALE"} \
-    > "$OUT/fake_dex3.log" 2>&1 &
+    ${HOT:+--hot-after "$HOT"} > "$OUT/fake_dex3.log" 2>&1 &
 HAND_PID=$!
 sleep 2
 
@@ -70,7 +79,7 @@ kill -TERM "$FAKE_PID"; wait "$FAKE_PID" 2>/dev/null || true; FAKE_PID=""
 echo
 python3 "$HERE/check_hand_cmd.py" "$OUT/handcmd.json" \
     --expect-clamped --expect-nan-dropped "$OUT/phases.json" \
-    ${STALE:+--expect-left-released}
+    ${STALE:+--expect-left-released} ${HOT:+--expect-left-hot}
 
 echo
 # Non-interference: this run never called start_control, so the hand path must

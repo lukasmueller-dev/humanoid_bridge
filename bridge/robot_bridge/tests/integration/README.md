@@ -56,14 +56,15 @@ tools/test.sh --estop
 ## 3. The G1 hand path
 
 ```bash
-tools/test.sh --hands
-tools/test.sh --hands --stale-after 3.5
+tools/test.sh --hands                                   # hands, hands-stale, hands-hot
+tools/test.sh --hands --stale-after 3.9 --hot-after 3.2
 ```
 
-`--stale-after` silences the left hand mid-stream, to prove the release is
-per-side. The clock starts at the first `/dex3/left/cmd`, which is
-`start_hand_control`, so it must land between 3.0 and 4.0 s: earlier and the
-left hand never tracks, later and the driver has already stopped.
+`hands-stale` silences the left hand's state mid-stream, `hands-hot` reports it
+over temperature (`run_fake_hand_test.sh --stale-after|--hot-after <s>`, default
+3.5): either must release the left hand alone. The clock starts at the first
+`/dex3/left/cmd`, which is `start_hand_control`, so it must land between 3.0 and
+4.0 s: earlier and the left hand never tracks, later and the driver has already stopped.
 
 `fake_g1.py` runs too, because the bridge blocks in its constructor until
 something publishes `/lowstate`. That doubles as the check that the hand path
