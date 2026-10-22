@@ -25,6 +25,7 @@ bend one finger by hand and watch which side and which motor index answers.
 from __future__ import annotations
 
 import argparse
+import math
 import sys
 import time
 
@@ -244,6 +245,14 @@ def command(args, out=print, clock=time.monotonic, sleep=time.sleep) -> int:
 # --- cli -------------------------------------------------------------------
 
 
+def finite_float(text: str) -> float:
+    """argparse type: a float that is not NaN or inf. NaN passes every `abs(x) > limit` check."""
+    value = float(text)
+    if not math.isfinite(value):
+        raise argparse.ArgumentTypeError(f"{text!r} is not a finite number")
+    return value
+
+
 def parse_args(argv=None):
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -261,10 +270,10 @@ def parse_args(argv=None):
         help="DDS network interface. enp4s0 on the lab machine; omit on the Jetson",
     )
     parser.add_argument("--domain", type=int, default=0)
-    parser.add_argument("--hz", type=float, default=5.0)
-    parser.add_argument("--duration", type=float, default=20.0)
+    parser.add_argument("--hz", type=finite_float, default=5.0)
+    parser.add_argument("--duration", type=finite_float, default=20.0)
     parser.add_argument(
-        "--wait", type=float, default=5.0, help="seconds to wait for a first sample"
+        "--wait", type=finite_float, default=5.0, help="seconds to wait for a first sample"
     )
     parser.add_argument(
         "--motors",
@@ -276,15 +285,17 @@ def parse_args(argv=None):
     parser.add_argument(
         "--limits", action="store_true", help="print the motor table for --side and exit"
     )
-    parser.add_argument("--tau", type=float, default=0.0, help="command: feed-forward torque, Nm")
+    parser.add_argument(
+        "--tau", type=finite_float, default=0.0, help="command: feed-forward torque, Nm"
+    )
     parser.add_argument(
         "--q",
-        type=float,
+        type=finite_float,
         default=None,
         help="command: position target, rad. Without it the command is pure torque, kp=kd=0",
     )
     parser.add_argument(
-        "--ramp", type=float, default=2.0, help="command: seconds to reach the full value"
+        "--ramp", type=finite_float, default=2.0, help="command: seconds to reach the full value"
     )
     parser.add_argument(
         "--yes",
