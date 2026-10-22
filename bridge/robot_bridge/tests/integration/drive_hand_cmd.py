@@ -54,6 +54,11 @@ def main():
         action="store_true",
         help="first check that start_hand_control is refused while another node publishes /lowcmd",
     )
+    parser.add_argument(
+        "--check-tilt-guard",
+        action="store_true",
+        help="first check that start_hand_control is refused while fake_g1 reports a tilt",
+    )
     args = parser.parse_args()
 
     import rclpy
@@ -79,6 +84,22 @@ def main():
             raise SystemExit("start_hand_control not refused with another /lowcmd publisher")
         node.destroy_publisher(other)
         time.sleep(1.0)
+
+    if args.check_tilt_guard:
+        from std_msgs.msg import Float32
+
+        # A body state fault blocks hand arming too: roll 1.5 rad, over imu_rpy_threshold (1.0).
+        roll = node.create_publisher(Float32, "/fake_g1/roll", 10)
+        time.sleep(1.0)  # until fake_g1 sees the publisher
+        roll.publish(Float32(data=1.5))
+        time.sleep(0.5)
+        response = client.start_hand_control(timeout_sec=30.0)
+        print("drive: start_hand_control, tilted ->", response, flush=True)
+        if response.success or "imu" not in response.message:
+            raise SystemExit("start_hand_control not refused on a tilt")
+        roll.publish(Float32(data=0.0))
+        time.sleep(0.5)
+        node.destroy_publisher(roll)
 
     print("drive: calling start_hand_control", flush=True)
     response = client.start_hand_control(timeout_sec=30.0)
