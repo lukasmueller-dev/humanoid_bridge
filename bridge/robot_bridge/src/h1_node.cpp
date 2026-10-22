@@ -19,7 +19,7 @@ int main(int argc, char **argv)
     auto h1_bridge = std::make_shared<sairol_bridge::H1Bridge>(nh);
     bridge = h1_bridge;
 
-    if (bridge)
+    if (bridge && rclcpp::ok())   // not after Ctrl-C in the constructor's waits: spin would throw
     {   
         bridge->start();
         rclcpp::spin(nh);
