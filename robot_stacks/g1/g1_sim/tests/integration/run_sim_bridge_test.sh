@@ -22,7 +22,7 @@ trap cleanup EXIT
 
 command -v ros2 >/dev/null || { echo "source the ROS workspace first"; exit 1; }
 
-setsid ros2 run g1_sim g1_sim > "$OUT/sim.log" 2>&1 &
+setsid ros2 run g1_sim g1_sim --no-viewer > "$OUT/sim.log" 2>&1 &
 SIM_PID=$!; disown "$SIM_PID"  # no 'Killed' notice when cleanup kills it
 sleep 3
 grep -q "gantry on" "$OUT/sim.log" || { echo "sim did not come up:"; tail -20 "$OUT/sim.log"; exit 1; }

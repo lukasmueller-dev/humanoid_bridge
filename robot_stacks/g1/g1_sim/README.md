@@ -9,6 +9,7 @@ MuJoCo G1 in place of the robot: publishes `/lowstate` at 500 Hz, reads `/lowcmd
 | Motors | `tau + kp(q - q_j) + kd(dq - dq_j)` per `/lowcmd` motor, clipped to its effort; mode 0 = no torque |
 | `LowState` | remote header `0x55 0x51`, `mode_machine` 5, IMU quaternion/rpy/gyro/accel, `tick` = sim ms |
 | Camera | `d435` rendered at 30 Hz, served by `g1_camera.CameraServer`: ZMQ 5556, preview `:5557/frame.jpg`; `--no-camera` |
+| Viewer | MuJoCo window when `$DISPLAY` is set; in docker: `-e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix:ro` |
 | Gantry | spring on the pelvis, feet 5 cm up; on at start |
 | Inputs | `/g1_sim/gantry` (Bool), `/g1_sim/remote` (Bool), `/g1_sim/keys` (UInt16), `/g1_sim/reset` (Empty) |
 
@@ -34,7 +35,7 @@ docker run --rm -it --user $(id -u):$(id -g) -e HOME=/tmp \
 
 ```bash
 . /ws/install/setup.bash && . /ws/src/humanoid_bridge/bridge/robot_bridge/tests/integration/loopback_dds.sh
-ros2 run g1_sim g1_sim &          # --no-gantry, --viewer (needs a display)
+ros2 run g1_sim g1_sim &          # --no-gantry; MuJoCo window when $DISPLAY is set (--no-viewer)
 ros2 run robot_bridge G1_bridge --ros-args -r __node:=robot_bridge \
   --params-file /ws/src/humanoid_bridge/bridge/robot_bridge/params/G1_config.yaml
 ros2 topic pub -1 /g1_sim/gantry std_msgs/msg/Bool "{data: false}"   # drop it

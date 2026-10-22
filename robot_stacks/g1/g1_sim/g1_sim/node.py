@@ -24,13 +24,13 @@ from g1_sim.model import DEFAULT_MJCF, NUM_JOINT, Command, G1Sim
 
 MODE_MACHINE = 5  # as fake_g1; the bridge logs "G1 type:" once it is non-zero
 LAG_WARN_S = 0.05  # the bridge damps on /lowstate older than 0.2 s
+VIEWER_PERIOD_S = 0.02
 
 
 class G1SimNode(Node):
-    def __init__(self, sim, viewer=False):
+    def __init__(self, sim):
         super().__init__("g1_sim")
         self.sim = sim
-        self.viewer = viewer
         self.lock = threading.Lock()
         self.cmd = Command()
         self.reset_pending = False
@@ -88,11 +88,6 @@ class G1SimNode(Node):
         self.publisher.publish(self.state)
 
     def _loop(self):
-        viewer = None
-        if self.viewer:
-            import mujoco.viewer
-
-            viewer = mujoco.viewer.launch_passive(self.sim.model, self.sim.data)
         dt = self.sim.dt
         due = time.monotonic()
         while self.running and rclpy.ok():
@@ -104,8 +99,6 @@ class G1SimNode(Node):
                 self.sim.step(self.cmd)
                 state = self.sim.state()
             self._publish(state)
-            if viewer is not None and self.state.tick % 20 == 0:
-                viewer.sync()
             due += dt
             lag = time.monotonic() - due
             if lag > LAG_WARN_S:
@@ -113,6 +106,27 @@ class G1SimNode(Node):
                 due = time.monotonic()
             elif lag < 0:
                 time.sleep(-lag)
+
+
+def start_viewer(node):
+    """The MuJoCo window, synced on its own thread; None, logged, when it cannot open."""
+    try:
+        import mujoco.viewer
+
+        viewer = mujoco.viewer.launch_passive(node.sim.model, node.sim.data)
+    except Exception as exc:  # noqa: BLE001
+        node.get_logger().error(f"viewer off: {exc!r}")
+        return None
+
+    def sync():
+        while node.running and viewer.is_running():
+            with node.lock:
+                viewer.sync()
+            time.sleep(VIEWER_PERIOD_S)
+
+    threading.Thread(target=sync, daemon=True).start()
+    node.get_logger().info(f"viewer on {os.environ.get('DISPLAY')}")
+    return viewer
 
 
 def start_camera(node, args):
@@ -140,7 +154,12 @@ def main(argv=None):
     parser.add_argument("--mjcf", default=str(DEFAULT_MJCF), help="mjlab g1.xml ($G1_MJCF)")
     parser.add_argument("--clearance", type=float, default=0.05, help="feet above floor, m")
     parser.add_argument("--no-gantry", action="store_true", help="start on the floor, unheld")
-    parser.add_argument("--viewer", action="store_true", help="MuJoCo window; needs a display")
+    parser.add_argument(
+        "--viewer",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="MuJoCo window (default: on when $DISPLAY is set)",
+    )
     parser.add_argument("--camera-port", type=int, default=wire.DEFAULT_PORT, help="ZMQ REP")
     parser.add_argument("--preview-port", type=int, default=wire.DEFAULT_PREVIEW_PORT, help="HTTP")
     parser.add_argument("--camera-hz", type=float, default=30.0)
@@ -151,12 +170,15 @@ def main(argv=None):
 
     sim = G1Sim(args.mjcf, clearance=0.0 if args.no_gantry else args.clearance)
     sim.gantry = not args.no_gantry
-    node = G1SimNode(sim, viewer=args.viewer)
+    node = G1SimNode(sim)
     node.get_logger().info(
         f"{args.mjcf}: {sim.model.nq} qpos, dt {sim.dt * 1000:.0f} ms, "
         f"gantry {'on' if sim.gantry else 'off'} at {sim.anchor[2]:.3f} m"
     )
-    server = None if args.no_camera else start_camera(node, args)  # GL setup stalls physics
+    # Both before the physics thread: GL setup stalls it.
+    server = None if args.no_camera else start_camera(node, args)
+    show = bool(os.environ.get("DISPLAY")) if args.viewer is None else args.viewer
+    viewer = start_viewer(node) if show else None
     node.thread.start()
     try:
         rclpy.spin(node)
@@ -167,6 +189,8 @@ def main(argv=None):
         node.thread.join(timeout=1.0)
         if server is not None:
             server.stop()
+        if viewer is not None:
+            viewer.close()
         if rclpy.ok():
             rclpy.shutdown()
 
