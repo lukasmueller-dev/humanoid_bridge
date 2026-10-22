@@ -188,7 +188,8 @@ stage_unit() {
     fi
     echo "=== unit ==="
     local out
-    if out="$(cd "$REPO" && "$py" -m pytest -q 2>&1)"; then
+    # No autoloaded plugin: a sourced ROS adds launch_testing's and ament's hooks, a venv its own.
+    if out="$(cd "$REPO" && PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 "$py" -m pytest -q 2>&1)"; then
         echo "$out" | tail -3
         record unit PASS "$(echo "$out" | tail -1)"
     else
