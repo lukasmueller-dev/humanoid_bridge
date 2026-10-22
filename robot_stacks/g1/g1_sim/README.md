@@ -11,6 +11,7 @@ MuJoCo G1 in place of the robot: publishes `/lowstate` at 500 Hz, reads `/lowcmd
 | Camera | `d435` rendered at 30 Hz, served by `g1_camera.CameraServer`: ZMQ 5556, preview `:5557/frame.jpg`; `--no-camera` |
 | Viewer | MuJoCo window when `$DISPLAY` is set; in docker: `-e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix:ro` |
 | Gantry | spring on the pelvis, feet 5 cm up; on at start |
+| Guard | refuses to start unless DDS stays on loopback (`CYCLONEDDS_URI` names only `lo`, or `ROS_LOCALHOST_ONLY=1`) |
 | Inputs | `/g1_sim/gantry` (Bool), `/g1_sim/remote` (Bool), `/g1_sim/keys` (UInt16), `/g1_sim/reset` (Empty) |
 
 ## Requirements
@@ -55,4 +56,4 @@ tools/test.sh --sim                      # bridge arms the sim, holds, /robot_cm
 - **Camera ports in use** → a second sim, or a real/fake camera server on 5556/5557: `--camera-port`, `--preview-port`.
 - **Bridge damps with "Robot signal lost"** → the sim fell behind real time (log: `behind real time`); `/lowstate` older than 0.2 s trips it.
 - **Robot falls after `/g1_sim/gantry false`** → expected: the bridge holds joints, it does not balance.
-- **Sim DDS reaches the robot** → never source `scripts/setup_unitree.sh` in a sim shell; source `loopback_dds.sh`.
+- **`g1_sim refused: CYCLONEDDS_URI binds ...`** → the shell points DDS at a NIC (`setup_unitree.sh`); source `loopback_dds.sh`.

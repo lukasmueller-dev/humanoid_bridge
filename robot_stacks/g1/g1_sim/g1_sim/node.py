@@ -20,6 +20,7 @@ from unitree_hg.msg import LowCmd, LowState
 from g1_camera import wire
 from g1_camera.server import CameraServer
 from g1_sim.camera import SimCamera
+from g1_sim.guard import FIX, not_loopback
 from g1_sim.model import DEFAULT_MJCF, NUM_JOINT, Command, G1Sim
 
 MODE_MACHINE = 5  # as fake_g1; the bridge logs "G1 type:" once it is non-zero
@@ -165,6 +166,10 @@ def main(argv=None):
     parser.add_argument("--camera-hz", type=float, default=30.0)
     parser.add_argument("--no-camera", action="store_true", help="no rendering, no camera ports")
     argv = sys.argv if argv is None else argv
+    refused = not_loopback(os.environ)  # before rclpy.init: no DDS participant yet
+    if refused:
+        sys.exit(f"g1_sim refused: {refused}. On a robot NIC, G1_bridge would read simulated "
+                 f"/lowstate; {FIX}.")  # fmt: skip
     rclpy.init(args=argv)
     args = parser.parse_args(remove_ros_args(argv)[1:])
 
