@@ -10,10 +10,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
-source "$HERE/loopback_dds.sh"
-PKG="$(cd "$HERE/../.." && pwd)"
-PARAMS="$PKG/params/G1_config.yaml"
-OUT="$(mktemp -d)"
+source "$HERE/harness.sh"
 
 # --stale-after silences the left hand's state, --hot-after reports it over
 # temperature: either releases that hand alone. The clock starts at the first
@@ -33,19 +30,15 @@ if [ -n "$GUARD" ] && { ! [[ "$GUARD" =~ ^[0-9]+(\.[0-9]+)?$ ]] \
     echo "$1 must be a number from 3.0 to 4.0 seconds; got '$GUARD'"; exit 1
 fi
 
-export PYTHONPATH="$PKG:$HERE:${PYTHONPATH:-}"
-
 FAKE_PID=""; HAND_PID=""; BRIDGE_PID=""
 cleanup() {
-    # ros2 run is a launcher: killing it orphans G1_bridge, which keeps holding
-    # /lowcmd and blocks the next run. Kill the whole process group.
-    [ -n "$BRIDGE_PID" ] && kill -9 -- "-$BRIDGE_PID" 2>/dev/null || true
-    [ -n "$HAND_PID" ] && kill -9 "$HAND_PID" 2>/dev/null || true
-    [ -n "$FAKE_PID" ] && kill -9 "$FAKE_PID" 2>/dev/null || true
+    kill_group "$BRIDGE_PID"
+    kill_pid "$HAND_PID"
+    kill_pid "$FAKE_PID"
 }
 trap cleanup EXIT
 
-command -v ros2 >/dev/null || { echo "source the ROS workspace first"; exit 1; }
+require_ros
 
 # The fakes first: /lowstate and /dex3/*/state must exist, and nothing may
 # publish /lowcmd or /dex3/*/cmd.
@@ -56,14 +49,10 @@ python3 "$HERE/fake_dex3.py" "$OUT/handcmd.json" ${STALE:+--stale-after "$STALE"
 HAND_PID=$!
 sleep 2
 
-setsid ros2 run robot_bridge G1_bridge --ros-args -r __node:=robot_bridge \
-    --params-file "$PARAMS" > "$OUT/bridge.log" 2>&1 &
+start_bridge "$OUT/bridge.log"
 BRIDGE_PID=$!
 sleep 4
-
-if ! grep -q "G1 type:" "$OUT/bridge.log"; then
-    echo "bridge did not come up:"; tail -20 "$OUT/bridge.log"; exit 1
-fi
+bridge_up "$OUT/bridge.log"
 if ! grep -q "Dex3 hand path ready" "$OUT/bridge.log"; then
     echo "hand path did not load; check the hand_* parameters:"
     grep -i hand "$OUT/bridge.log" | tail -20; exit 1
