@@ -91,6 +91,8 @@ fake_g1 records `/lowcmd` at all.
 
 ## What breaks it
 
+- `step ramps at <= v rad/s FAIL  max 2·v`: a lost `/lowcmd` frame, since speed
+  is the step between received frames over `control_dt`. Re-run; a steady 2·v is the bridge.
 - `the sourced robot_bridge is older than bridge/...` or `was built from <path>,
   not this clone`: `tools/test.sh` refuses to test another build. Rebuild
   (`tools/build.sh`) and source that workspace, or use `--docker`.

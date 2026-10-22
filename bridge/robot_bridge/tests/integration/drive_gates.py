@@ -16,7 +16,7 @@ from robot_bridge.cmd_client import RobotCmdClient
 NUM_MOTORS = 29
 L_HIP_PITCH, R_ELBOW = 0, 25
 RAMP_SECONDS = 2.5  # `duration` 2.0 plus margin
-WINDOW = 0.05  # s; speed over a window, so receive jitter and a dropped frame do not count
+TOLERANCE = 0.05  # on speed and ramp time, both from the frame count: no receive jitter in them
 
 
 def load_params(path):
@@ -30,6 +30,7 @@ def load_params(path):
         "q_min": [float(params[n]["q_min"]) for n in names],
         "q_max": [float(params[n]["q_max"]) for n in names],
         "rate": [float(params[n].get("q_rate_limit", default)) for n in names],
+        "dt": float(params["control_dt"]),
     }
 
 
@@ -71,17 +72,12 @@ class Driver:
         )
 
     def max_speed(self, frames, joint):
-        """Fastest |dq/dt| over any WINDOW-long stretch of frames."""
-        fastest, j = 0.0, 0
-        for i, (t, q) in enumerate(frames):
-            j = max(j, i)
-            while j < len(frames) and frames[j][0] - t < WINDOW:
-                j += 1
-            if j == len(frames):
-                break
-            t2, q2 = frames[j]
-            fastest = max(fastest, abs(q2[joint] - q[joint]) / (t2 - t))
-        return fastest
+        """Fastest |dq| between consecutive frames over the bridge's control_dt, not receive time.
+
+        A lost frame shows as twice the step: the subscription is reliable, depth 100.
+        """
+        steps = [abs(b[joint] - a[joint]) for (_, a), (_, b) in zip(frames, frames[1:])]
+        return max(steps, default=0.0) / self.params["dt"]
 
     def run(self, start_q):
         p = self.params
@@ -113,16 +109,16 @@ class Driver:
             speed = self.max_speed(step, joint)
             self.check(
                 f"{name} step ramps at <= {rate} rad/s",
-                rate > 0 and speed <= 1.25 * rate,
-                f"max {speed:.2f} rad/s",
+                rate > 0 and speed <= (1 + TOLERANCE) * rate,
+                f"max {speed:.3f} rad/s",
             )
-            moving = [t for t, f in step if abs(f[joint] - start_q) > 1e-3]
-            reached = [t for t, f in step if abs(f[joint] - q[joint]) < 1e-3]
-            took = (reached[0] - moving[0]) if moving and reached else None
+            moving = [i for i, (_, f) in enumerate(step) if abs(f[joint] - start_q) > 1e-3]
+            reached = [i for i, (_, f) in enumerate(step) if abs(f[joint] - q[joint]) < 1e-3]
+            took = (reached[0] - moving[0] + 1) * p["dt"] if moving and reached else None
             self.check(
-                f"{name} takes >= 1.0 / {rate} s",
-                took is not None and took >= 0.85 / rate,
-                f"took {took if took is None else round(took, 3)} s",
+                f"{name} takes 1.0 / {rate} s",
+                took is not None and abs(took * rate - 1.0) <= TOLERANCE,
+                f"took {took if took is None else round(took, 3)} s of frames",
             )
 
         # Gate 1: a target past q_max stops at q_max.
