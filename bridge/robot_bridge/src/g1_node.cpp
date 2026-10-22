@@ -8,6 +8,7 @@
 
 
 int main(int argc, char **argv)
+try
 {
     rclcpp::init(argc, argv);
 
@@ -39,6 +40,16 @@ int main(int argc, char **argv)
         std::_Exit(0);
     }).detach();
     return 0;
+}
+catch (const std::exception &)
+{
+    // Ctrl-C before spin (main's sleep, the parameter load, between an ok() check and the next
+    // graph call): that call threw on the shut-down context. Exit as after spin; anything else aborts.
+    if (!rclcpp::ok())
+    {
+        return 0;
+    }
+    throw;
 }
 
 
