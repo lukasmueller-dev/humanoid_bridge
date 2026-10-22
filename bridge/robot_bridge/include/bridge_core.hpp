@@ -176,6 +176,10 @@ namespace sairol_bridge
         void zeroPositionControlServiceCB_(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
                                            std::shared_ptr<std_srvs::srv::Trigger::Response> response);
 
+        // Ready and zero: the arming checks, then a ramp to q over duration_.
+        void movePose_(const std::string &name, const std::vector<double> &q,
+                       std::shared_ptr<std_srvs::srv::Trigger::Response> response);
+
         void startControlServiceCB_(const std::shared_ptr<bridge_interface::srv::SetDefaultPosition::Request> request,
                                           std::shared_ptr<bridge_interface::srv::SetDefaultPosition::Response> response);
 

@@ -855,27 +855,18 @@ namespace sairol_bridge
         const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
         std::shared_ptr<std_srvs::srv::Trigger::Response> response)
     {
-        std::string why;
-        // Moves every joint, so it counts as arming even while tracking.
-        const bool allowed = controlStarted_ ? remoteAllowsArming_(why) && robotAllowsArming_(why)
-                                             : armControl_(bridge_interface::msg::RobotCmd(), why);
-        if (!allowed)
-        {
-            RCLCPP_WARN(nh->get_logger(), "Ready position refused: %s", why.c_str());
-            response->success = false;
-            response->message = why;
-            return;
-        }
-        readyPositionControl_();
-        calculateInterpolationParams_(duration_, 1, true);
-        RCLCPP_INFO(nh->get_logger(), "Ready position control activated");
-        response->success = true;
-        response->message = "Ready position control activated";
+        movePose_("Ready", ready_q_, response);
     }
 
     void BridgeCore::zeroPositionControlServiceCB_(
         const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
         std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+    {
+        movePose_("Zero", std::vector<double>(numJoint_, 0.0), response);
+    }
+
+    void BridgeCore::movePose_(const std::string &name, const std::vector<double> &q,
+                               std::shared_ptr<std_srvs::srv::Trigger::Response> response)
     {
         std::string why;
         // Moves every joint, so it counts as arming even while tracking.
@@ -883,16 +874,16 @@ namespace sairol_bridge
                                              : armControl_(bridge_interface::msg::RobotCmd(), why);
         if (!allowed)
         {
-            RCLCPP_WARN(nh->get_logger(), "Zero position refused: %s", why.c_str());
+            RCLCPP_WARN(nh->get_logger(), "%s position refused: %s", name.c_str(), why.c_str());
             response->success = false;
             response->message = why;
             return;
         }
-        zeroPositionControl_();
+        setPose_(q);
         calculateInterpolationParams_(duration_, 1, true);
-        RCLCPP_INFO(nh->get_logger(), "Zero position control activated");
+        RCLCPP_INFO(nh->get_logger(), "%s position control activated", name.c_str());
         response->success = true;
-        response->message = "Zero position control activated";
+        response->message = name + " position control activated";
     }
 
     void BridgeCore::startControlServiceCB_(
