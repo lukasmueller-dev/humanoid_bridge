@@ -24,14 +24,14 @@ First item — `tools/g1-bringup.sh --foreground`, so the page can supervise the
 
 ## Next action
 
-1. Rebase onto `origin/main` once `mujoco-sim` and the codebase-health `fix/*` branches have merged; this branch starts at `e60bbd6`, before both.
+1. Rebase onto `origin/main` once `feat-sim-closed-loop` and the codebase-health `fix/*` branches have merged; this branch starts at `e60bbd6`, before both.
 2. Add `--foreground`; check it with `--dry-run` (release, then exec); update `--help`.
 
 **Done when:** `--foreground --dry-run` prints the release, then the exec; page Start/Stop of the bridge works on the gantry.
 
 ## Blockers
 
-Waits for the `mujoco-sim` and `fix/*` merges (step 1).
+Waits for the `feat-sim-closed-loop` and `fix/*` merges (step 1).
 
 ## Gotchas (unpromoted)
 
