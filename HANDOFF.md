@@ -10,38 +10,28 @@
 - **Repo:** humanoid_bridge
 - **Branch:** `mujoco-sim`
 - **Worktree:** /home/lukas-mueller/git/worktrees/humanoid_bridge/mujoco-sim
-- **Last updated:** 2026-10-22 11:09 CEST · local (turing)
+- **Last updated:** 2026-10-22 · local (turing)
 
 ## State
 
-Not started. Roadmap item (`PROJECT_ROADMAP.md`, Cleanups): "`--interface sim` does not reach the bridge".
+Decision (Lukas, 2026-10-22): option B — own sim `robot_stacks/g1/g1_sim`, not GEAR's `base_sim`. Steps 1–2 done.
 
-- **Goal (Lukas, 2026-10-22):** run `G1_bridge` and `g1_web_commander` against a MuJoCo G1 in place of the robot, to test both with physics. Include a camera server with the same interface as the real one on the Jetson.
-- **The intended path exists in part:**
-  - GEAR's MuJoCo simulator (`base_sim.py`, SIMPLE image / `$SIMPLE_VENV`) reads `rt/lowcmd` and publishes `rt/lowstate` over unitree_sdk2py DDS.
-  - `robot_stacks/g1/g1_stack/g1_stack/nodes/gear_controller.py:217-221`: with `--interface sim`, nothing writes `rt/lowcmd` unless a `G1_bridge` runs against the sim.
-  - Same file, docstring :118-150: GEAR's DDS start is already patched so rclpy and the sim share one domain on `lo` with `multicast="true"`.
-- **Precedent:** g1_web_commander `tests/integration/run_fake_console_test.sh` runs `fake_g1` + `G1_bridge` + commander with `bridge/robot_bridge/tests/integration/loopback_dds.sh`. The sim replaces `fake_g1` (no physics).
-- **Real camera interface** (`robot_stacks/g1/g1_camera`): ZMQ REQ/REP on 5556, `b"get"` → `[rgb_jpeg, ir_jpeg, depth]` (contract `wire.py`); HTTP preview on 5557 (`/frame.jpg`, `/health`); sources in `sources.py` (videohub, v4l2); `fake.py` synthetic frames. Sim camera = a new source that renders a MuJoCo camera at the head-camera pose, same wire, so the page and psi0 read it unchanged.
-- **Robot model on the page:** the commander's Joint Probe 3D view loads a URDF converted from mjlab's `g1.xml` (`mjlab @ 6fc2a60`, 29 DoF rev 1.0, rubber hands) by `g1_web_commander/scripts/fetch_assets.sh`. The sim should simulate the same model, so page, sim and robot agree.
-- **Commander changes** go on a `mujoco-sim` branch in g1_web_commander:
-  - a sim core config for `--config`: camera at `127.0.0.1:5557`, a local camera process (`config/g1.yaml` hard-codes `192.168.123.164` and `ssh g1`);
-  - a loopback DDS option in `tools/g1-commander.sh`, which always sources `setup_unitree.sh` for `BRIDGE_IFACE`.
+- `g1_sim` (rclpy node, mjlab `g1.xml`, gantry, remote header, d435 camera body) — `robot_stacks/g1/g1_sim/README.md`.
+- `tools/test.sh --sim` passes in `g1-sim:humble` (arm, hold `ready_q` ≤0.037 rad, `/robot_cmd` elbows ≤0.032 rad, remote L1+R1 damp). 11 unit tests pass.
+- Workspace `~/.cache/g1_sim/ws` (own; `~/.cache/g1_web_commander/test_ws` belongs to the codebase-health session).
+- GEAR survey facts (why not `base_sim`): PROJECT_STATUS decision line 2026-10-22.
 
 ## Next action
 
-1. In the SIMPLE image, find how to start GEAR's simulator alone, without GEAR's control loop. Record:
-   - its DDS domain ID and interface;
-   - whether its `LowState` carries the remote header (`wireless_remote[0:2] = 0x55 0x51`) and `mode_machine`;
-   - the MJCF it loads, compared with mjlab's `g1.xml @ 6fc2a60`: joint names and order, limits, hands, head-camera mount. Record each difference.
-2. Start the sim and `G1_bridge` with loopback DDS (as `loopback_dds.sh`). Check: the bridge leaves "Waiting for publisher on topic /lowstate"; `/bridge_state` is DISARMED; `start_control` arms and the sim robot holds its pose.
-3. Then the commander on top (its `mujoco-sim` branch), then the camera source.
+1. Camera: render `d435` in the sim process and serve the `g1_camera` wire (ZMQ 5556 `b"get"` → `[rgb_jpeg, ir_jpeg, depth]`, HTTP 5557). Check offscreen GL (`MUJOCO_GL=egl` or `osmesa`, both in the image) first.
+2. Commander (g1_web_commander, branch `mujoco-sim`, own worktree — the main checkout is on `chore-codebase-health`): sim core config (camera `127.0.0.1:5557`, no `ssh g1`), loopback DDS option in `tools/g1-commander.sh`.
+3. Optional: GEAR on `lo` against `g1_sim` (`--interface lo`, not `sim`), then close the roadmap item "`--interface sim` does not reach the bridge".
 
 **Done when:** a sim run drives the same client path as hardware (GEAR or the page → `/robot_cmd` → `G1_bridge` → `rt/lowcmd` → MuJoCo), and the commander page shows the sim camera through port 5557.
 
 ## Blockers
 
-- GPU containers fail on the lab PC (g1_web_commander `workspaces/humanoid_locoman_vla/workspace.yaml`: `GPU: "0"`). A MuJoCo camera needs offscreen GL (EGL or OSMesa) in the container: check it before you design the camera source.
+- GPU containers fail on the lab PC: the sim camera must render with OSMesa there (no GPU).
 
 ## Gotchas (unpromoted)
 

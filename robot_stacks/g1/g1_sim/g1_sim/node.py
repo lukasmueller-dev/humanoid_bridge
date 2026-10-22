@@ -1,0 +1,144 @@
+"""MuJoCo G1 on /lowstate at 500 Hz in real time; reads /lowcmd. Never publishes /lowcmd.
+
+Inputs: /g1_sim/gantry (Bool, hold the pelvis), /g1_sim/remote (Bool, remote header on/off),
+/g1_sim/keys (UInt16, remote key mask), /g1_sim/reset (Empty, back on the gantry).
+"""
+
+import argparse
+import sys
+import threading
+import time
+
+import numpy as np
+import rclpy
+from rclpy.node import Node
+from rclpy.utilities import remove_ros_args
+from std_msgs.msg import Bool, Empty, UInt16
+from unitree_hg.msg import LowCmd, LowState
+
+from g1_sim.model import DEFAULT_MJCF, NUM_JOINT, Command, G1Sim
+
+MODE_MACHINE = 5  # as fake_g1; the bridge logs "G1 type:" once it is non-zero
+LAG_WARN_S = 0.05  # the bridge damps on /lowstate older than 0.2 s
+
+
+class G1SimNode(Node):
+    def __init__(self, sim, viewer=False):
+        super().__init__("g1_sim")
+        self.sim = sim
+        self.viewer = viewer
+        self.lock = threading.Lock()
+        self.cmd = Command()
+        self.reset_pending = False
+        self.publisher = self.create_publisher(LowState, "/lowstate", 10)
+        self.create_subscription(LowCmd, "/lowcmd", self._on_cmd, 10)
+        self.create_subscription(Bool, "/g1_sim/gantry", self._on_gantry, 10)
+        self.create_subscription(Bool, "/g1_sim/remote", self._on_remote, 10)
+        self.create_subscription(UInt16, "/g1_sim/keys", self._on_keys, 10)
+        self.create_subscription(Empty, "/g1_sim/reset", self._on_reset, 10)
+
+        self.state = LowState()
+        self.state.mode_machine = MODE_MACHINE
+        self.state.wireless_remote[0] = 0x55  # header bytes as the real G1 sends them
+        self.state.wireless_remote[1] = 0x51
+        self.running = True
+        self.thread = threading.Thread(target=self._loop, daemon=True)
+
+    def _on_cmd(self, msg):
+        cmd = Command()
+        for i in range(NUM_JOINT):
+            m = msg.motor_cmd[i]
+            cmd.mode[i], cmd.q[i], cmd.dq[i] = m.mode, m.q, m.dq
+            cmd.kp[i], cmd.kd[i], cmd.tau[i] = m.kp, m.kd, m.tau
+        with self.lock:
+            self.cmd = cmd
+
+    def _on_gantry(self, msg):
+        with self.lock:
+            self.sim.gantry = bool(msg.data)
+        self.get_logger().info(f"gantry {'on' if msg.data else 'off'}")
+
+    def _on_remote(self, msg):
+        header = (0x55, 0x51) if msg.data else (0, 0)  # remote off: the G1 sends all 40 bytes 0
+        self.state.wireless_remote[0], self.state.wireless_remote[1] = header
+
+    def _on_keys(self, msg):
+        self.state.wireless_remote[2] = msg.data & 0xFF  # key mask, little-endian
+        self.state.wireless_remote[3] = msg.data >> 8
+
+    def _on_reset(self, _msg):
+        with self.lock:
+            self.reset_pending = True
+
+    def _publish(self, s):
+        for i in range(NUM_JOINT):
+            ms = self.state.motor_state[i]
+            ms.q, ms.dq = float(s["q"][i]), float(s["dq"][i])
+            ms.ddq, ms.tau_est = float(s["ddq"][i]), float(s["tau_est"][i])
+        imu = self.state.imu_state
+        imu.quaternion = s["quaternion"].astype(np.float32).tolist()
+        imu.rpy = s["rpy"].astype(np.float32).tolist()
+        imu.gyroscope = s["gyroscope"].astype(np.float32).tolist()
+        imu.accelerometer = s["accelerometer"].astype(np.float32).tolist()
+        self.state.tick = int(s["time"] * 1000)
+        self.publisher.publish(self.state)
+
+    def _loop(self):
+        viewer = None
+        if self.viewer:
+            import mujoco.viewer
+
+            viewer = mujoco.viewer.launch_passive(self.sim.model, self.sim.data)
+        dt = self.sim.dt
+        due = time.monotonic()
+        while self.running and rclpy.ok():
+            with self.lock:
+                if self.reset_pending:
+                    self.sim.reset()
+                    self.sim.gantry = True
+                    self.reset_pending = False
+                self.sim.step(self.cmd)
+                state = self.sim.state()
+            self._publish(state)
+            if viewer is not None and self.state.tick % 20 == 0:
+                viewer.sync()
+            due += dt
+            lag = time.monotonic() - due
+            if lag > LAG_WARN_S:
+                self.get_logger().warn(f"{lag * 1000:.0f} ms behind real time; skipping ahead")
+                due = time.monotonic()
+            elif lag < 0:
+                time.sleep(-lag)
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--mjcf", default=str(DEFAULT_MJCF), help="mjlab g1.xml ($G1_MJCF)")
+    parser.add_argument("--clearance", type=float, default=0.05, help="feet above floor, m")
+    parser.add_argument("--no-gantry", action="store_true", help="start on the floor, unheld")
+    parser.add_argument("--viewer", action="store_true", help="MuJoCo window; needs a display")
+    argv = sys.argv if argv is None else argv
+    rclpy.init(args=argv)
+    args = parser.parse_args(remove_ros_args(argv)[1:])
+
+    sim = G1Sim(args.mjcf, clearance=0.0 if args.no_gantry else args.clearance)
+    sim.gantry = not args.no_gantry
+    node = G1SimNode(sim, viewer=args.viewer)
+    node.get_logger().info(
+        f"{args.mjcf}: {sim.model.nq} qpos, dt {sim.dt * 1000:.0f} ms, "
+        f"gantry {'on' if sim.gantry else 'off'} at {sim.anchor[2]:.3f} m"
+    )
+    node.thread.start()
+    try:
+        rclpy.spin(node)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        node.running = False
+        node.thread.join(timeout=1.0)
+        if rclpy.ok():
+            rclpy.shutdown()
+
+
+if __name__ == "__main__":
+    main()
