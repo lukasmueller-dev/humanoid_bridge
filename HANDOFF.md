@@ -25,10 +25,13 @@ Task (renamed from `mujoco-sim`): `feat-sim-closed-loop` in three repos. Design 
 
 ## Next action
 
-Done since the last baton: lab tests green (667, incl. `test_tryform.py`); commander form tests (222); workspace `try_bridge` and `try`; docs (`docs/bridge-try.md`, commander `form_from`); page form and lists verified through the commander's API on turing.
+Done (2026-10-22, turing): all Q26 done-when points except an online wandb record (dev runs used `WANDB_MODE=offline`).
+- Terminal bridge try and page bridge try (commander `try_bridge`, form from `lab form try`, `--live`): end to end, episode 0 of g1-pick-smoke: timeout, 0/1, robot standing (base z 0.75).
+- Page plain try, same checkpoint and episode (`--controller-path interface`): success in 192 steps, 1/1.
+- Tests: lab 667, commander 222. Docs: humanoid-locoman-vla `docs/bridge-try.md`, commander `form_from`.
 
-1. Page bridge try end to end (in progress): commander container on `~/.cache/g1_sim/hostws` (src symlinks to the worktrees, host paths), driven by `$SCRATCH/drive_try.py` through the API. Then the same checkpoint and episode as a page plain `try` (done-when 2).
-2. Ask Lukas whether the codebase-health fixes have merged; rebase all three branches onto main; open PRs (humanoid-locoman-vla last); seed the real-robot branch (rehearsal + GEAR kd/hands repairs) with /handoff-brief telling it to rebase.
+1. Ask Lukas whether the codebase-health fixes have merged; then rebase all three branches onto main, rerun the tests, open PRs (humanoid-locoman-vla last), seed the real-robot branch (rehearsal + GEAR kd/hands repairs) with /handoff-brief telling it to rebase.
+2. Open finding for Lukas: the bridge changes the outcome (success in-process, timeout through the bridge). Candidates: the Dex3 hand path through the bridge (hand kp/kd ranges and PD vs SIMPLE's in-process hand gains; the task needs a grasp), the bridge's rate limits and interpolation, the policy query running while physics continues. Compare the two runs' state logs (`runs/results/try/*r86d8d7*` vs `*ref571b*`).
 
 **Dev env for a bridge try (turing):** `BRIDGE_CLONE=~/git/worktrees/humanoid_bridge/mujoco-sim BRIDGE_WS_HOST=~/.cache/g1_sim/bench_ws` (built with `docker/bench-g1.sh build`), `PYTHONPATH=<locoman worktree> ~/github/humanoid-locoman-vla/.venv/bin/python -u -m lab try ...`, `WANDB_MODE=offline` for dev runs.
 
