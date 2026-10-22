@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libegl1 \
         libgl1 \
         libosmesa6 \
+        iproute2 \
     && rm -rf /var/lib/apt/lists/*
 RUN pip3 install --no-cache-dir mujoco==3.3.6 pyzmq opencv-python-headless==4.10.0.84
 
