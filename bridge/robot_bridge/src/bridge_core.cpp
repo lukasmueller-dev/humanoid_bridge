@@ -483,7 +483,7 @@ namespace sairol_bridge
         const rclcpp::Time last_state_time = last_state_time_;
         lock.unlock();
 
-        auto &clock = *nh->get_clock();
+        auto &clock = steadyClock_;   // throttles too: a backward clock step must not silence them
         const auto dt_state_ = (steadyClock_.now() - last_state_time).seconds();
 
         // Check if the state message is received within the expected interval
@@ -511,7 +511,7 @@ namespace sairol_bridge
         const auto imu = imu_;
         lock.unlock();
 
-        auto &clock = *nh->get_clock();
+        auto &clock = steadyClock_;
 
         // Check if the state message has valid data
         if (motor_state.size() != static_cast<size_t>(numJoint_))

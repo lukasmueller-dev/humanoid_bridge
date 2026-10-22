@@ -242,7 +242,7 @@ void sairol_bridge::G1Bridge::publishLowCommand_()
         // Gates 1 and 2 (docs/psi0_gates.md): the joint range, then the target speed.
         if (cmd.q < joint_info.q_min || cmd.q > joint_info.q_max)
         {
-            RCLCPP_WARN_THROTTLE(nh->get_logger(), *nh->get_clock(), 1000,
+            RCLCPP_WARN_THROTTLE(nh->get_logger(), steadyClock_, 1000,
                                  "joint %d target %.3f outside [%.3f, %.3f]: clamped",
                                  i, cmd.q, joint_info.q_min, joint_info.q_max);
         }
@@ -491,7 +491,7 @@ bool sairol_bridge::G1Bridge::checkHandState_(int side)
 
     if (!hand.state_seen)
     {
-        RCLCPP_ERROR_THROTTLE(nh->get_logger(), *nh->get_clock(), 2000,
+        RCLCPP_ERROR_THROTTLE(nh->get_logger(), steadyClock_, 2000,
                               "%s hand: nothing has arrived on /dex3/%s/state.",
                               hand.name.c_str(), hand.name.c_str());
         return false;
@@ -500,7 +500,7 @@ bool sairol_bridge::G1Bridge::checkHandState_(int side)
     const double dt_state = (steadyClock_.now() - hand.state_time).seconds();
     if (dt_state > handStateTimeout_)
     {
-        RCLCPP_ERROR_THROTTLE(nh->get_logger(), *nh->get_clock(), 2000,
+        RCLCPP_ERROR_THROTTLE(nh->get_logger(), steadyClock_, 2000,
                               "%s hand signal lost! No HandState for %.2f s (limit %.2f s).",
                               hand.name.c_str(), dt_state, handStateTimeout_);
         return false;
@@ -510,7 +510,7 @@ bool sairol_bridge::G1Bridge::checkHandState_(int side)
     // fixed [35], so the length is whatever the device sent. Bound every read.
     if (static_cast<int>(hand.state.motor_state.size()) < numHandJoint_)
     {
-        RCLCPP_ERROR_THROTTLE(nh->get_logger(), *nh->get_clock(), 2000,
+        RCLCPP_ERROR_THROTTLE(nh->get_logger(), steadyClock_, 2000,
                               "%s hand state has %ld motors, expected at least %d.",
                               hand.name.c_str(), hand.state.motor_state.size(), numHandJoint_);
         return false;
@@ -592,7 +592,7 @@ bool sairol_bridge::G1Bridge::checkHandCommand_(int side, bridge_interface::msg:
 
     if (clipped)
     {
-        RCLCPP_WARN_THROTTLE(nh->get_logger(), *nh->get_clock(), 2000,
+        RCLCPP_WARN_THROTTLE(nh->get_logger(), steadyClock_, 2000,
                              "%s hand: some motors were clipped to stay within safety limits",
                              hand.name.c_str());
     }
@@ -613,7 +613,7 @@ void sairol_bridge::G1Bridge::handCmdCallBack_(int side, bridge_interface::msg::
 
     if (!hand.live)
     {
-        RCLCPP_WARN_THROTTLE(nh->get_logger(), *nh->get_clock(), 2000,
+        RCLCPP_WARN_THROTTLE(nh->get_logger(), steadyClock_, 2000,
                              "%s hand was released by a guard; ignoring commands until "
                              "/start_hand_control is called again.", hand.name.c_str());
         return;
