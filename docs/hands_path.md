@@ -84,8 +84,7 @@ untouched, so older configs and the H1 still work.
 `BridgeCore::checkMotorCmd_` is the shared per-motor half; both loops call it.
 
 A release is `kp = kd = 0`, deliberately unlike the body's hold-last-pose: a
-hand here holds nothing critical, and limp cannot cook a stalled finger. See the
-open `finishControl_` question in `PROJECT_STATUS.md`.
+hand here holds nothing critical, and limp cannot cook a stalled finger.
 
 A released hand keeps getting explicit limp frames. `stop_hand_control` instead
 goes silent and lets the mode's timeout bit release the fingers.
@@ -149,8 +148,10 @@ getting limp frames.
 - **`unitree_hg/HandCmd.motor_cmd` is an unbounded sequence**, unlike
   `LowCmd`'s fixed `[35]`. It must be resized to 7 before indexing, or nothing
   is published.
-- **Commanding one hand releases the other**, because the topics are
-  independent and each has its own watchdog.
+- **Each hand has its own watchdog.** After `start_hand_control` a hand holds
+  its ready pose until its first command; once its commands stop it goes limp
+  `duration + 0.2 s` later, unless `hold_position`. Commanding one hand leaves
+  the other alone.
 - **Every run ends with both hands limp.** The watchdog fires once the driver
   stops, so a recording's last frame has zero gains — assert against the last
   *commanded* frame, not the last frame.

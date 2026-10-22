@@ -9,11 +9,8 @@ _Last updated: 2026-10-22 · turing_
 
 ### Handover
 
-- [ ] Finish the handover pass in `docs/handover-audit.md`: bring-up scripts,
-  the `bridge/` conftest, moving bridge-behaviour facts out of the consumer
-  repo, and the dead-code cleanup.
-  **Done when:** every P1 and P2 item in that plan is done and the audit is
-  deleted.
+- [ ] Delete `docs/handover-audit.md`: its plan (P0–P2) is done.
+  **Done when:** the file is gone and `PROJECT_STATUS.md` no longer points at it.
 
 ### Hand path
 

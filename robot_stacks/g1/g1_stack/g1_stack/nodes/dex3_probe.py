@@ -6,8 +6,9 @@ after the read half has shown the hand alive:
 - `read` (default): print `rt/dex3/{side}/state` live. Read-only.
 - `command`: publish `rt/dex3/{side}/cmd`. **This moves fingers.**
 
-Both talk raw `unitree_sdk2py` DDS, not the bridge and not GEAR: the bridge
-never touches the dex3 topics (`g1_stack/joints/dds.py`).
+Both talk raw `unitree_sdk2py` DDS, not through the bridge or GEAR. The G1
+bridge's hand path uses the same topics (`docs/hands_path.md`) and cannot see
+this probe's publisher.
 
 Lab machine, over the wire, from a venv that has `unitree_sdk2py` (SIMPLE's):
 

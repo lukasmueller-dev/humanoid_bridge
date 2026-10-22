@@ -12,13 +12,13 @@ source /opt/ros/humble/setup.bash && tools/build.sh
 source <workspace>/install/setup.bash
 ```
 
-No ROS on the host: `tools/test.sh --docker [--wire|--estop|--gates|--hands]`
+No ROS on the host: `tools/test.sh --docker [--wire|--estop|--gates|--hands|--config]`
 builds and runs them in a container.
 
 `robot_bridge`'s `package.xml` depends on `booster_interface` unconditionally,
 so it builds even with T1 off.
 
-`tools/test.sh` runs both scripts below and handles the DDS setting they need.
+`tools/test.sh` runs every `run_*.sh` below; each pins DDS to loopback (`loopback_dds.sh`).
 
 ## 1. Run
 
@@ -47,10 +47,12 @@ bridge echoed mode_machine   PASS  5 wanted 5
 timeout latches hold         PASS  kp[0]=100.0 q[0]=0.0100
 ```
 
-E-stop, ends `all checks passed` (design: `docs/estop.md`):
+E-stop, target gates, broken configs; each driver ends `all checks passed`:
 
 ```bash
-tools/test.sh --estop
+tools/test.sh --estop      # docs/estop.md
+tools/test.sh --gates      # docs/psi0_gates.md
+tools/test.sh --config
 ```
 
 ## 3. The G1 hand path
@@ -82,6 +84,9 @@ fake_g1 records `/lowcmd` at all.
 | `drive_shutdown.py` | runs last in the e-stop run: arms, SIGINTs the bridge's process group, checks damp frames for 1 s, then silence |
 | `run_fake_estop_test.sh` | orchestrates the e-stop run; then SIGINT to a second bridge in its `/lowcmd` wait: exit 0 within 5 s |
 | `run_fake_wire_test.sh` | orchestrates the three, cleans up |
+| `drive_gates.py` | gates 1, 2 and 4 of a fresh bridge against `fake_g1.py --start-q` |
+| `run_fake_gates_test.sh` | orchestrates the gate run, then `drive_no_estop_block.py` on a second bridge |
+| `loopback_dds.sh` | sourced by every `run_*.sh`: discovery on loopback only |
 | `fake_dex3.py` | publishes `/dex3/*/state` at 100 Hz, records `/dex3/*/cmd`; `--stale-after`, `--hot-after`, both timed from the first left command |
 | `drive_hand_cmd.py` | `start_hand_control` refused with another `/lowcmd` publisher and on a tilt, then accepted, then both hands through the hand adapter, then an over-limit and a NaN command, then (`--check-estop`) `/estop_damp` mid-stream with both hands live, then a `/lowcmd` probe; `--phases` writes the NaN phase's times |
 | `check_hand_cmd.py` | asserts the hand recording; pure offline, needs no ROS |
