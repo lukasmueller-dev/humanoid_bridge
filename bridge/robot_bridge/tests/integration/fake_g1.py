@@ -2,10 +2,13 @@
 
 Test inputs: /fake_g1/keys (UInt16, remote key mask), /fake_g1/roll (Float32, rad),
 /fake_g1/remote (Bool, remote header on/off), /fake_g1/pause (Bool, stop /lowstate).
+Bad robot data, joint 0 / roll: /fake_g1/nan_q (Bool), /fake_g1/dq (Float32, rad/s),
+/fake_g1/nan_imu (Bool).
 """
 
 import argparse
 import json
+import math
 import signal
 import sys
 import time
@@ -30,7 +33,14 @@ class FakeG1(Node):
         self.create_subscription(Float32, "/fake_g1/roll", self._on_roll, 10)
         self.create_subscription(Bool, "/fake_g1/remote", self._on_remote, 10)
         self.create_subscription(Bool, "/fake_g1/pause", self._on_pause, 10)
+        self.create_subscription(Bool, "/fake_g1/nan_q", self._on_nan_q, 10)
+        self.create_subscription(Float32, "/fake_g1/dq", self._on_dq, 10)
+        self.create_subscription(Bool, "/fake_g1/nan_imu", self._on_nan_imu, 10)
         self.paused = False
+        self.nan_q = False
+        self.dq0 = 0.0
+        self.roll = 0.0
+        self.nan_imu = False
 
         self.state = LowState()
         self.state.mode_machine = MODE_MACHINE
@@ -50,6 +60,10 @@ class FakeG1(Node):
         for i in range(NUM_JOINT):
             self.state.motor_state[i].q = self.q[i]
             self.state.motor_state[i].dq = 0.0
+        if self.nan_q:
+            self.state.motor_state[0].q = math.nan
+        self.state.motor_state[0].dq = self.dq0
+        self.state.imu_state.rpy = [math.nan if self.nan_imu else self.roll, 0.0, 0.0]
         self.state.tick = int((time.monotonic() - self.t0) * 1000)
         self.publisher.publish(self.state)
 
@@ -58,7 +72,16 @@ class FakeG1(Node):
         self.state.wireless_remote[3] = msg.data >> 8
 
     def _on_roll(self, msg):
-        self.state.imu_state.rpy = [float(msg.data), 0.0, 0.0]
+        self.roll = float(msg.data)
+
+    def _on_nan_q(self, msg):
+        self.nan_q = bool(msg.data)
+
+    def _on_dq(self, msg):
+        self.dq0 = float(msg.data)
+
+    def _on_nan_imu(self, msg):
+        self.nan_imu = bool(msg.data)
 
     def _on_remote(self, msg):
         header = (0x55, 0x51) if msg.data else (0, 0)  # remote off: the G1 sends all 40 bytes 0
