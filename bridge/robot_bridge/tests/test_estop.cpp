@@ -461,6 +461,21 @@ TEST(Shutdown, TurnsHoldIntoDampAndIsFinal)
     EXPECT_FALSE(latch.commitArm(latch.generation()));
 }
 
+TEST(Shutdown, OverADampLatchIsFinal)
+{
+    auto latch = latchedFromTracking(Cause::ServiceDamp);
+    const auto generation = latch.generation();
+    EXPECT_TRUE(latch.trigger(Cause::Shutdown, false).changed);   // /bridge_state shows it
+    EXPECT_EQ(latch.describe(false), "LATCHED damp shutdown");
+    EXPECT_NE(latch.generation(), generation);
+
+    std::string why;
+    EXPECT_FALSE(latch.reset(false, why));
+    EXPECT_EQ(why, "shutting down");
+    EXPECT_FALSE(latch.trigger(Cause::RemoteHold, false).changed);
+    EXPECT_EQ(latch.mode(), Mode::Damp);
+}
+
 TEST(Shutdown, WhileDisarmedStaysSilent)
 {
     SafetyLatch latch;

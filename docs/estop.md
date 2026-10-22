@@ -41,7 +41,7 @@ Closes roadmap `feat/g1-finish-control-release`.
 - Faults and combos fire at onset only (author, 2026-10-19): an operator hold during a lasting fault stays. Combo hold → damp (L1 added) fires; damp → hold (L1 released first) does not.
 - A non-finite measured q never reaches `/lowcmd`: in a stop frame that joint gets damp at q 0; a tracking frame with any non-finite field is not sent and latches `state_invalid`.
 - Hands: in `LATCHED` the hand timer sends its existing limp frames. `STOPPED` leaves the hands alone.
-- SIGINT or SIGTERM while publishing: latches `damp shutdown`, sends damp frames for 1 s (`SHUTDOWN_DAMP_S`), then exits silent. Final: no reset, re-arm or mode change. From `DISARMED` or a silent latch it exits silent at once. SIGKILL or a crash: silent at once (G0).
+- SIGINT or SIGTERM while publishing: latches `damp shutdown` over any earlier cause, sends damp frames for 1 s (`SHUTDOWN_DAMP_S`), then exits silent. Final: no reset, re-arm or mode change. From `DISARMED` or a silent latch it exits silent at once. SIGKILL or a crash: silent at once (G0).
 - New topic `/bridge_state` (`std_msgs/String`, transient-local, on change), e.g. `LATCHED damp remote_damp`.
 
 ## Stop frames

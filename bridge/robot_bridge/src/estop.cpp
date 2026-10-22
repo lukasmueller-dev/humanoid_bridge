@@ -237,7 +237,9 @@ namespace sairol_bridge::estop
             break;
         }
 
-        if (next_state == state_ && next_mode == mode_ && next_publishing == publishing_)
+        // Shutdown always takes the cause, even over a damp latch: the final rule hangs on it.
+        if (cause != Cause::Shutdown && next_state == state_ && next_mode == mode_ &&
+            next_publishing == publishing_)
         {
             return result;
         }
