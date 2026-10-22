@@ -40,6 +40,11 @@ Decided and fake-tested on `g1-web-interface` (`docs/psi0_gates.md`).
 - [ ] IMU trip: measure the standing tilt under GEAR and psi0 in the rehearsal, then lower `imu_rpy_threshold` from 1.0 to about 0.5.
   **Done when:** the new value is in `G1_config.yaml` and G6-IMU passes on the gantry with it.
 
+### GEAR on the robot
+
+- [ ] GEAR's robot mode sends waist pitch (motor 14) kd 5 − 10 = −5 (`decoupled_wbc` `configs.py:64-66`, in the pinned SIMPLE image); `adapters/gear_wbc.py` forwards it and the bridge clips it to 0 (`bridge_core.cpp:697-703`). **Done when:** the intended robot kd is known and `/robot_cmd` carries it for motor 14, checked with `ros2 topic echo /robot_cmd`.
+- [ ] GEAR waits forever for Dex3 state on a G1 without hands: `with_hands` defaults to True (`configs.py:108`); neither `g1_stack/nodes/gear_controller.py` nor the commander workspace passes `--no-with-hands`, and robot-mode `calibrate_hands` blocks with no timeout. **Done when:** a hand-less G1 run reaches "GEAR -> /robot_cmd at 50 Hz".
+
 ### Gantry acceptance
 
 - [ ] Run the post-PR #7 acceptance test on the gantry: `docs/estop.md`, "Gantry acceptance, after PR #7". Then switch the robot's bridge to that build.
