@@ -7,6 +7,8 @@
 # reason. Exit: 0 every requested stage passed, 1 a stage failed, 2 a stage was
 # skipped (--allow-skip: a skip passes). --docker needs only docker: it builds
 # and runs every stage in tools/Dockerfile.test with the container network off.
+# Every stage but unit fails on a sourced robot_bridge built from another clone,
+# or older than the newest file under bridge/.
 #
 #   unit   pure Python: clients, adapters, goal order, observation, camera, tools/tests
 #   cpp    gtests test_estop, test_gates, test_crc: e-stop latch, stop frames, remote keys,
@@ -209,6 +211,29 @@ stage_unit() {
     fi
 }
 
+# Why the sourced robot_bridge is not this clone's current build; nothing if it is.
+# colcon rewrites build/<pkg>/colcon_build.rc on every build, a no-op one too.
+stale_build() {
+    local prefix ws build home newest
+    prefix="$(ros2 pkg prefix robot_bridge)"
+    ws="${prefix%/install/robot_bridge}"
+    build="$ws/build/robot_bridge"
+    if [ ! -f "$build/CMakeCache.txt" ] || [ ! -f "$build/colcon_build.rc" ]; then
+        echo "no colcon build dir $build for the sourced $prefix; tools/build.sh, then source its install/setup.bash"
+        return
+    fi
+    home="$(sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' "$build/CMakeCache.txt")"
+    if [ "$(realpath -m "$home")" != "$(realpath -m "$REPO/bridge/robot_bridge")" ]; then
+        echo "the sourced robot_bridge was built from $home, not this clone; tools/build.sh here, then source its install/setup.bash"
+        return
+    fi
+    newest="$(find "$REPO/bridge" \( -name __pycache__ -o -name .pytest_cache \) -prune \
+        -o -type f -newer "$build/colcon_build.rc" -print -quit)"
+    if [ -n "$newest" ]; then
+        echo "the sourced robot_bridge is older than ${newest#"$REPO/"}; tools/build.sh --workspace $ws, then source $ws/install/setup.bash"
+    fi
+}
+
 stage_integration() {   # $1 name, $2 script, rest: script args
     local name="$1" script="$2"; shift 2
     if ! command -v ros2 >/dev/null; then
@@ -217,6 +242,11 @@ stage_integration() {   # $1 name, $2 script, rest: script args
     fi
     if ! ros2 pkg prefix robot_bridge >/dev/null 2>&1; then
         record "$name" SKIP "robot_bridge not in the sourced workspace; tools/build.sh"
+        return
+    fi
+    if [ -n "$BUILD_PROBLEM" ]; then
+        record "$name" FAIL "$BUILD_PROBLEM"
+        FAILED=1
         return
     fi
     echo "=== $name ==="
@@ -232,6 +262,11 @@ stage_cpp() {
     local prefix bin name out
     if ! prefix="$(ros2 pkg prefix robot_bridge 2>/dev/null)"; then
         record cpp SKIP "robot_bridge not in the sourced workspace; tools/build.sh"
+        return
+    fi
+    if [ -n "$BUILD_PROBLEM" ]; then
+        record cpp FAIL "$BUILD_PROBLEM"
+        FAILED=1
         return
     fi
     for name in test_estop test_gates test_crc; do
@@ -251,6 +286,12 @@ stage_cpp() {
         fi
     done
 }
+
+BUILD_PROBLEM=""
+if [ "$RUN_CPP$RUN_WIRE$RUN_ESTOP$RUN_GATES$RUN_HANDS" != 00000 ] && command -v ros2 >/dev/null \
+   && ros2 pkg prefix robot_bridge >/dev/null 2>&1; then
+    BUILD_PROBLEM="$(stale_build)"
+fi
 
 if [ "$RUN_UNIT" = 1 ]; then
     stage_unit

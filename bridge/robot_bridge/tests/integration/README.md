@@ -89,6 +89,9 @@ left the body idle.
 
 ## What breaks it
 
+- `the sourced robot_bridge is older than bridge/...` or `was built from <path>,
+  not this clone`: `tools/test.sh` refuses to test another build. Rebuild
+  (`tools/build.sh`) and source that workspace, or use `--docker`.
 - `Detected 1 publishers on /lowcmd`: an orphaned `G1_bridge` from an earlier
   run. `pkill -9 -x G1_bridge`. The script starts the bridge with `setsid` and
   kills the process group, because `ros2 run` is a launcher and killing it
