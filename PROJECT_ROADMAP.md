@@ -59,7 +59,7 @@ Decided and fake-tested on `g1-web-interface` (`docs/psi0_gates.md`).
 ### Upstream fixes — one branch each
 
 - [ ] `fix/g1-default-pos-29`: G1 `_default_pos` is 27 long while kp/kd are 29 (`robot_client.py`). **Done when:** all three are 29 and a length check fails loudly.
-- [ ] `fix/config-keymaps`: the stale keymap headers are corrected here (G1 and H1_2 advertised four keys the source comments out; T1 omitted `RT` from the start combo; H1 was right). Still to send upstream. **Done when:** the PR is open.
+- [ ] `fix/config-keymaps`: the keymap headers in `params/*.yaml` are corrected here: each key names its handler, `robot_client.py` or the bridge. Still to send upstream. **Done when:** the PR is open.
 - [ ] `feat/g1-finish-control-release`: e-stop latch built on `g1-web-interface` (`docs/estop.md`), fake-tested only. **Done when:** gantry tests G0–G6 in `docs/estop.md` pass and the branch is merged.
 
 ### Cleanups
