@@ -187,7 +187,7 @@ class Driver:
         self.spin(1.0)
 
         # A stalled /lowstate refuses arming and names the cause. 0.3 s: past state_loss
-        # (0.2 s), inside the remote timeout (0.5 s), which /lowstate also carries.
+        # (0.2 s). checkState_ runs before the remote check, so the reply names state_loss.
         self.pause.publish(Bool(data=True))
         self.spin(0.3)
         reply = self.start(0.123)
