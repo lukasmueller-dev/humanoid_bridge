@@ -8,7 +8,7 @@ MuJoCo G1 in place of the robot: publishes `/lowstate` at 500 Hz, reads `/lowcmd
 | Added | floor, pelvis IMU sensors, motor armature, joint friction, `d435` camera on `torso_link` |
 | Motors | `tau + kp(q - q_j) + kd(dq - dq_j)` per `/lowcmd` motor, clipped to its effort; mode 0 = no torque |
 | `LowState` | remote header `0x55 0x51`, `mode_machine` 5, IMU quaternion/rpy/gyro/accel, `tick` = sim ms |
-| Camera | `d435` rendered at 30 Hz, served by `g1_camera.CameraServer`: ZMQ 5556, preview `:5557/frame.jpg`; `--no-camera` |
+| Camera | `d435` rendered at 30 Hz, served by `g1_camera.CameraServer`: ZMQ 5556, preview `:5557/frame.jpg`, on 127.0.0.1 (`--camera-bind`); `--no-camera` |
 | Viewer | MuJoCo window when `$DISPLAY` is set; in docker: `-e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix:ro` |
 | Gantry | spring on the pelvis, feet 5 cm up; on at start |
 | Guard | refuses to start unless DDS stays on loopback (`CYCLONEDDS_URI` names only `lo`, or `ROS_LOCALHOST_ONLY=1`) |

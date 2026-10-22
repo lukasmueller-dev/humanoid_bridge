@@ -142,9 +142,11 @@ def start_camera(node, args):
         source=camera,
         source_name="g1_sim d435",
         preview_port=args.preview_port,
+        bind=args.camera_bind,
     ).start()
     node.get_logger().info(
-        f"camera on tcp://0.0.0.0:{server.port}, preview http://0.0.0.0:{server.preview_port}"
+        f"camera on tcp://{server.bind}:{server.port}, "
+        f"preview http://{server.bind}:{server.preview_port}"
         f"/frame.jpg ({os.environ.get('MUJOCO_GL', 'default GL')})"
     )
     return server
@@ -164,6 +166,7 @@ def main(argv=None):
     parser.add_argument("--camera-port", type=int, default=wire.DEFAULT_PORT, help="ZMQ REP")
     parser.add_argument("--preview-port", type=int, default=wire.DEFAULT_PREVIEW_PORT, help="HTTP")
     parser.add_argument("--camera-hz", type=float, default=30.0)
+    parser.add_argument("--camera-bind", default="127.0.0.1", help="camera and preview address")
     parser.add_argument("--no-camera", action="store_true", help="no rendering, no camera ports")
     argv = sys.argv if argv is None else argv
     refused = not_loopback(os.environ)  # before rclpy.init: no DDS participant yet
