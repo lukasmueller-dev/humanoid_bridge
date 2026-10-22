@@ -73,18 +73,19 @@ untouched, so older configs and the H1 still work.
 
 | | Body | Hand |
 |---|---|---|
-| state freshness | 0.2 s, aborts control | per side, releases that hand |
-| state NaN/Inf, `dq` limit | yes | yes, plus a temperature ceiling |
+| state freshness | 0.2 s, latches `damp state_loss` | per side, releases that hand |
+| state NaN/Inf, `dq` limit | latches `damp state_invalid` | yes, plus a temperature ceiling |
 | cmd size | 29 or reject | 7 or reject |
 | cmd NaN/Inf, absurd magnitude | reject | reject |
 | `kp`/`kd` | clamped by strong/weak class | clamped by `hand_kp_*`/`hand_kd_*` |
 | `q` | torque-implied bound in `publishLowCommand_` | clamped to `[q_min, q_max]` |
-| watchdog | `duration + 0.2 s`, then holds last pose | `duration + 0.2 s`, then limp |
+| watchdog | `duration + 0.2 s`, then latches `hold cmd_timeout` | `duration + 0.2 s`, then limp |
 
 `BridgeCore::checkMotorCmd_` is the shared per-motor half; both loops call it.
 
-A release is `kp = kd = 0`, deliberately unlike the body's hold-last-pose: a
-hand here holds nothing critical, and limp cannot cook a stalled finger.
+Body modes per cause: `estop.mode` in `G1_config.yaml` (`docs/estop.md`). A hand
+release is `kp = kd = 0`, unlike the body's `hold` on a command timeout: a hand
+here holds nothing critical, and limp cannot cook a stalled finger.
 
 A released hand keeps getting explicit limp frames. `stop_hand_control` instead
 goes silent and lets the mode's timeout bit release the fingers.
