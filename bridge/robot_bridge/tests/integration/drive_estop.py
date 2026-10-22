@@ -134,10 +134,13 @@ class Driver:
         return worst < 1e-2, f"worst |q - wanted| {worst:.4f}"
 
     def feedforward(self, dq, tau, frames):
-        """Every frame sends this dq and tau. Ankles excepted: the bridge converts their torque."""
-        body = [i for i, parallel in enumerate(self.params["parallel"]) if not parallel]
+        """Every frame sends this dq and tau. Parallel joints: dq only, the bridge converts their torque."""
+        parallel = self.params["parallel"]
         bad = sum(
-            any(abs(f_dq[i] - dq) > 1e-6 or abs(f_tau[i] - tau) > 1e-6 for i in body)
+            any(
+                abs(f_dq[i] - dq) > 1e-6 or (not parallel[i] and abs(f_tau[i] - tau) > 1e-6)
+                for i in range(len(parallel))
+            )
             for _, _, _, f_dq, f_tau in frames
         )
         return bool(frames) and bad == 0, f"{bad} of {len(frames)} frames off"
