@@ -22,9 +22,11 @@ Decision (Lukas, 2026-10-22): option B — own sim `robot_stacks/g1/g1_sim`, not
 
 ## Next action
 
-1. Open PRs: humanoid_bridge `mujoco-sim` → `main`; g1_web_commander `mujoco-sim` → `main` (needs the bridge PR for `g1_sim`).
-2. Optional: GEAR on `lo` against `g1_sim` (`--interface lo`, not `sim`), then close the roadmap item "`--interface sim` does not reach the bridge"; else reword it to the GEAR path only.
-3. Before the task ends: promote the gotchas below, delete this file.
+Order (Lukas, 2026-10-22):
+1. Wait until the codebase-health fixes merge: commander `chore-codebase-health`, bridge `fix/*` (another session drives them; in progress, no PRs yet).
+2. Rebase `mujoco-sim` in both repos onto `origin/main`, rerun the sim stages (`tools/test.sh --sim` both repos), open the PRs, merge.
+3. Then `feat-ui-requests` (both repos, briefs pushed at `14ad933` / `8287476`) starts: bring-up layout, guarded real-bridge button, more UI requests.
+- Optional: GEAR on `lo` against `g1_sim` (`--interface lo`), then close the roadmap item "`--interface sim` does not reach the bridge".
 
 **Done when:** a sim run drives the same client path as hardware (GEAR or the page → `/robot_cmd` → `G1_bridge` → `rt/lowcmd` → MuJoCo), and the commander page shows the sim camera through port 5557.
 
