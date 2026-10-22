@@ -14,16 +14,17 @@
 
 ## State
 
-Decision (Lukas, 2026-10-22): option B — own sim `robot_stacks/g1/g1_sim`, not GEAR's `base_sim`. Steps 1–2 and the camera done.
+Decision (Lukas, 2026-10-22): option B — own sim `robot_stacks/g1/g1_sim`, not GEAR's `base_sim`. Sim, camera and page done; rebased on `main` (`e60bbd6`, PR #7 + #8 merged).
 
-- `g1_sim`: rclpy node, mjlab `g1.xml`, gantry, remote header, d435 camera on the `g1_camera` wire (5556/5557) — `robot_stacks/g1/g1_sim/README.md`.
-- `tools/test.sh --sim` passes in `g1-sim:humble` (11 checks: arm, hold, `/robot_cmd`, camera ZMQ + preview, remote damp). EGL (Mesa, no GPU) and OSMesa both render; steady state has no real-time lag.
-- Workspace `~/.cache/g1_sim/ws` (own; `~/.cache/g1_web_commander/test_ws` belongs to the codebase-health session).
+- `g1_sim`: rclpy node, mjlab `g1.xml`, gantry, remote header, d435 on the `g1_camera` wire (5556/5557) — `robot_stacks/g1/g1_sim/README.md`.
+- Page: g1_web_commander branch `mujoco-sim` (`5289e91`, pushed, worktree `~/git/worktrees/g1_web_commander/mujoco-sim`): `tools/g1-commander.sh --sim`, `config/g1_sim.yaml` (bring-up starts `g1_sim` + `G1_bridge`).
+- Passing in `g1-sim:humble`, workspace `~/.cache/g1_sim/ws`: bridge `tools/test.sh --sim --cpp --estop`; commander `tools/test.sh --ws /ws --sim --console`; `g1-commander.sh --sim --check`; unit 114 + 206.
 
 ## Next action
 
-1. Commander (g1_web_commander, branch `mujoco-sim`, own worktree — the main checkout is on `chore-codebase-health`): sim core config (camera `127.0.0.1:5557`, no `ssh g1`), loopback DDS option in `tools/g1-commander.sh`. Run the page against `g1_sim` + `G1_bridge` in one container with `-p` for the page port.
-2. Optional: GEAR on `lo` against `g1_sim` (`--interface lo`, not `sim`), then close the roadmap item "`--interface sim` does not reach the bridge".
+1. Open PRs: humanoid_bridge `mujoco-sim` → `main`; g1_web_commander `mujoco-sim` → `main` (needs the bridge PR for `g1_sim`).
+2. Optional: GEAR on `lo` against `g1_sim` (`--interface lo`, not `sim`), then close the roadmap item "`--interface sim` does not reach the bridge"; else reword it to the GEAR path only.
+3. Before the task ends: promote the gotchas below, delete this file.
 
 **Done when:** a sim run drives the same client path as hardware (GEAR or the page → `/robot_cmd` → `G1_bridge` → `rt/lowcmd` → MuJoCo), and the commander page shows the sim camera through port 5557.
 
@@ -33,10 +34,11 @@ None.
 
 ## Gotchas (unpromoted)
 
-- Based on `g1-web-interface` (PR #7), not `main`. PR #7's baton: `git show origin/g1-web-interface:HANDOFF.md`. Merge into `main` only after PR #7 merges.
 - `estop.require_remote` refuses every arm without the remote header in `/lowstate`. Let the sim set it, or use a sim-only params file. Never turn it off in `G1_config.yaml`.
 - The bridge latches damp when `/lowstate` is older than 0.2 s: a sim slower than real time trips it. Bridge timers use wall-clock time.
 - The bridge waits forever while any other program publishes `/lowcmd`: the sim must only read `rt/lowcmd`.
 - Never let sim DDS reach the robot NIC: pin it to `lo`; never source `scripts/setup_unitree.sh` in a sim shell.
 - A codebase-health audit runs in parallel (`chore-codebase-health`, both repos). Approved fixes touch the commander's `supervisor.py`, `service.py`, `ros.py` and the bridge's service creation (`fix/arming-services-after-startup`): expect rebase conflicts there.
-- Agent sandbox: `docker`, `git fetch/push` and bridge git writes need the unsandboxed retry.
+- Agent sandbox: `docker`, `git fetch/push` and bridge git writes need the unsandboxed retry; the unsandboxed `$TMPDIR` is `/tmp`, so name the scratchpad path explicitly.
+- `pytest` at the repo root fails collection on `main`: upstream's `bridge/robot_bridge/examples/x2/joint_test.py` imports rclpy. Workaround `--ignore=bridge/robot_bridge/examples`; fix: `examples` in `norecursedirs`.
+- In a `--network none` container, `g1-commander.sh` needs `--host`: `ip route get` has no route.
