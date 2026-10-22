@@ -65,6 +65,8 @@ namespace sairol_bridge
 
         void readyPositionControl_();
         void zeroPositionControl_();
+        // Every joint to q at its config gains, dq and tau 0.
+        void setPose_(const std::vector<double> &q);
         void update_();
         virtual void publishLowCommand_() = 0;
         virtual bool initControl_(bridge_interface::msg::RobotCmd default_cmd) = 0;

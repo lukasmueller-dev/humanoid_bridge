@@ -344,21 +344,19 @@ namespace sairol_bridge
 
     void BridgeCore::zeroPositionControl_()
     {
-        for (int i = 0; i < numJoint_; ++i)
-        {
-            lowCommandDesired_.motor_cmd[i].q = 0.0;
-            lowCommandDesired_.motor_cmd[i].dq = 0.0;
-            lowCommandDesired_.motor_cmd[i].tau = 0.0;
-            lowCommandDesired_.motor_cmd[i].kp = joints_[i].kp;
-            lowCommandDesired_.motor_cmd[i].kd = joints_[i].kd;
-        }
+        setPose_(std::vector<double>(numJoint_, 0.0));
     }
 
     void BridgeCore::readyPositionControl_()
     {
+        setPose_(ready_q_);
+    }
+
+    void BridgeCore::setPose_(const std::vector<double> &q)
+    {
         for (int i = 0; i < numJoint_; ++i)
         {
-            lowCommandDesired_.motor_cmd[i].q = ready_q_[i];
+            lowCommandDesired_.motor_cmd[i].q = q[i];
             lowCommandDesired_.motor_cmd[i].dq = 0.0;
             lowCommandDesired_.motor_cmd[i].tau = 0.0;
             lowCommandDesired_.motor_cmd[i].kp = joints_[i].kp;
