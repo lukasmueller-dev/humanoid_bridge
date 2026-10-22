@@ -328,6 +328,11 @@ class Driver:
         self.check("[] ramped to ready_q", *self.at(self.params["ready_q"]))
 
         # Ready and zero move every joint: armed, they still need the remote.
+        # Armed at 0.2 (not ready_q), so an accepted ready must move every joint.
+        self.client.stop_control()
+        self.check("start_control at 0.2", self.start(0.2).success)
+        self.spin(RAMP_SECONDS)
+        self.check("ramp reached 0.2", *self.frame(kp, kd, q=0.2))
         self.remote.publish(Bool(data=False))
         self.spin(1.0)
         for name, client in (("ready", self.ready), ("zero", self.zero)):
@@ -337,12 +342,14 @@ class Driver:
                 not reply.success and "remote" in reply.message,
                 reply.message,
             )
+        self.check("refused ready/zero kept 0.2", *self.frame(kp, kd, q=0.2))
         self.remote.publish(Bool(data=True))
         self.spin(0.3)
         reply = self.client._call(self.ready, Trigger.Request(), 30.0)
         self.check("ready accepted while armed with the remote", reply.success, reply.message)
+        self.spin(RAMP_SECONDS)
         self.check_state("ARMED after ready", "ARMED")
-        self.check("ready held ready_q", *self.at(self.params["ready_q"]))
+        self.check("ready moved 0.2 -> ready_q", *self.at(self.params["ready_q"]))
 
         # Command timeout: hold, latched.
         self.send(0.25, hold_position=False, duration=0.1)
