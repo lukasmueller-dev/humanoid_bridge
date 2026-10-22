@@ -201,10 +201,14 @@ ros2 service call /stop_hand_control std_srvs/srv/Trigger {}
 No hardware. Stages that cannot run are skipped with the reason.
 
 ```bash
-tools/test.sh                       # unit, then body wire, then hands
+tools/test.sh --docker              # every stage in a ROS 2 Humble container; needs only docker
+tools/test.sh                       # the same on a sourced workspace
 tools/test.sh --unit                # needs no ROS
 tools/test.sh --stale-after 3.5     # per-side hand release
 ```
+
+`--docker` builds `tools/Dockerfile.test` once (`--rebuild` again), then this
+clone into `~/.cache/humanoid_bridge/test_ws-<cksum>`, network off.
 
 The unit count depends on the environment: without a sourced workspace the
 tests that need `bridge_interface` skip. `tools/test.sh` prints what it ran.

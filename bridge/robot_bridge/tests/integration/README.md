@@ -12,6 +12,9 @@ source /opt/ros/humble/setup.bash && tools/build.sh
 source <workspace>/install/setup.bash
 ```
 
+No ROS on the host: `tools/test.sh --docker [--wire|--estop|--gates|--hands]`
+builds and runs them in a container.
+
 `robot_bridge`'s `package.xml` depends on `booster_interface` unconditionally,
 so it builds even with T1 off.
 

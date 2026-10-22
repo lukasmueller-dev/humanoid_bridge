@@ -3,8 +3,9 @@
 # covers.
 #
 # Needs: numpy and pytest for the unit stage; ROS 2 sourced plus a built
-# workspace for the two integration stages. Stages that cannot run are skipped
-# with the reason, not failed.
+# workspace for the other stages. Stages that cannot run are skipped
+# with the reason, not failed. --docker needs only docker: it builds and runs
+# every stage in tools/Dockerfile.test with the container network off.
 #
 #   unit   pure Python: clients, adapters, goal order, observation, camera
 #   cpp    gtests test_estop, test_gates: e-stop latch, stop frames, remote keys, target gates
@@ -34,6 +35,8 @@ RUN_CONFIG=0
 RMW_CHOICE="auto"
 STALE_AFTER="${STALE_AFTER:-}"
 PYTHON="${PYTHON:-python3}"
+DOCKER=0
+REBUILD=0
 
 usage() {
     cat <<'EOF'
@@ -53,6 +56,10 @@ Options:
   --python <path>       interpreter for the unit stage (default python3, or $PYTHON)
   --stale-after <s>     hand stage: silence the left hand at <s> seconds to
                         exercise the per-side release. Must be 3.0 to 4.0
+  --docker              build and run the stages in a ROS 2 Humble container
+                        (tools/Dockerfile.test), network off; workspace in $HB_TEST_WS
+                        (default ~/.cache/humanoid_bridge/test_ws-<cksum of this clone's path>)
+  --rebuild             with --docker: rebuild the image first
   -h, --help            this text
 
 Discovery: CycloneDDS disables multicast on loopback, so a multi-process run on
@@ -75,6 +82,8 @@ while [ $# -gt 0 ]; do
         --rmw)   RMW_CHOICE="${2:?--rmw needs cyclonedds, fastrtps or auto}"; shift ;;
         --python) PYTHON="${2:?--python needs an interpreter path}"; shift ;;
         --stale-after) STALE_AFTER="${2:?--stale-after needs seconds}"; shift ;;
+        --docker)  DOCKER=1 ;;
+        --rebuild) REBUILD=1 ;;
         -h|--help) usage; exit 0 ;;
         *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
     esac
@@ -90,6 +99,47 @@ if [ -n "$STALE_AFTER" ] \
     echo "--stale-after must be between 3.0 and 4.0 seconds; got $STALE_AFTER" >&2
     echo "    earlier and the left hand never tracks; later and the driver has stopped" >&2
     exit 2
+fi
+
+# --- docker ----------------------------------------------------------------
+# Re-runs this script in the container on a workspace of its own, after an
+# incremental build of this clone (mounted read-only). --network none: no DDS
+# packet can leave the container, whatever the RMW settings.
+run_in_docker() {
+    local image="${HB_TEST_IMAGE:-humanoid-bridge-test:humble}"
+    local key ws inner=()
+    key="$(printf '%s' "$REPO" | cksum | cut -d' ' -f1)"
+    ws="${HB_TEST_WS:-$HOME/.cache/humanoid_bridge/test_ws-$key}"
+    command -v docker >/dev/null || { echo "--docker: no docker on PATH" >&2; exit 2; }
+    if [ "$REBUILD" = 1 ] || ! docker image inspect "$image" >/dev/null 2>&1; then
+        docker build -t "$image" -f "$HERE/Dockerfile.test" "$HERE"
+    fi
+    # Made here, as this user: docker would make a missing mount point as root.
+    mkdir -p "$ws/src/humanoid_bridge"
+    [ "$RUN_UNIT" = 1 ] && inner+=(--unit)
+    [ "$RUN_CPP" = 1 ] && inner+=(--cpp)
+    [ "$RUN_WIRE" = 1 ] && inner+=(--wire)
+    [ "$RUN_ESTOP" = 1 ] && inner+=(--estop)
+    [ "$RUN_GATES" = 1 ] && inner+=(--gates)
+    [ "$RUN_HANDS" = 1 ] && inner+=(--hands)
+    [ -n "$STALE_AFTER" ] && inner+=(--stale-after "$STALE_AFTER")
+    inner+=(--rmw "$RMW_CHOICE")
+    echo "docker: $image, workspace $ws"
+    # shellcheck disable=SC2016  # expanded in the container
+    exec docker run --rm --init --network none \
+        --user "$(id -u):$(id -g)" -e HOME=/tmp -e PYTEST_ADDOPTS="-p no:cacheprovider" \
+        -v "$ws:/ws" -v "$REPO:/ws/src/humanoid_bridge:ro" \
+        -w /ws/src/humanoid_bridge \
+        "$image" bash -c '
+            set -e
+            . /opt/ros/humble/setup.bash
+            tools/build.sh --workspace /ws -- --packages-up-to robot_bridge
+            . /ws/install/setup.bash
+            exec tools/test.sh "$@"' bash "${inner[@]}"
+}
+
+if [ "$DOCKER" = 1 ]; then
+    run_in_docker
 fi
 
 # --- DDS -------------------------------------------------------------------
