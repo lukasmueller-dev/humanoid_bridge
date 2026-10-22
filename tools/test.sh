@@ -8,7 +8,8 @@
 # every stage in tools/Dockerfile.test with the container network off.
 #
 #   unit   pure Python: clients, adapters, goal order, observation, camera
-#   cpp    gtests test_estop, test_gates: e-stop latch, stop frames, remote keys, target gates
+#   cpp    gtests test_estop, test_gates, test_crc: e-stop latch, stop frames, remote keys,
+#          target gates, the /lowcmd CRC against Unitree's SDK
 #   wire   the real G1_bridge against a fake robot, body path
 #   estop  the real G1_bridge's e-stop against a fake robot
 #   gates  a fresh G1_bridge's target gates (range, speed, arming seed) against a fake robot
@@ -46,7 +47,7 @@ Run the no-hardware test stages. With no stage flag, runs all of them.
 
 Options:
   --unit                pure Python tests only; needs no ROS
-  --cpp                 gtests test_estop and test_gates only; needs a built workspace
+  --cpp                 gtests test_estop, test_gates and test_crc only; needs a built workspace
   --wire                body-path integration test only
   --estop               e-stop integration test only
   --gates               target-gate integration test only
@@ -222,7 +223,7 @@ stage_cpp() {
         record cpp SKIP "robot_bridge not in the sourced workspace; tools/build.sh"
         return
     fi
-    for name in test_estop test_gates; do
+    for name in test_estop test_gates test_crc; do
         bin="${prefix%/install/robot_bridge}/build/robot_bridge/$name"
         if [ ! -x "$bin" ]; then
             record cpp SKIP "no $bin; build with BUILD_TESTING on (colcon's default)"
