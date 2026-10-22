@@ -1,6 +1,6 @@
 """Drives the e-stop of a running bridge against fake_g1.py and checks /lowcmd live.
 
-Exit 1 on failure. run_fake_estop_test.sh starts the fake and the bridge first.
+Exit 1 on failure. run_fake_estop_test.sh starts the fake, then this driver, then the bridge.
 """
 
 import argparse
@@ -44,6 +44,8 @@ class Driver:
         self.roll = node.create_publisher(Float32, "/fake_g1/roll", 10)
         self.remote = node.create_publisher(Bool, "/fake_g1/remote", 10)
         self.pause = node.create_publisher(Bool, "/fake_g1/pause", 10)
+        # Up before the bridge starts: the bridge waits until it is gone.
+        self.blocker = node.create_publisher(LowCmd, "/lowcmd", 10)
         latched = QoSProfile(
             depth=1,
             reliability=ReliabilityPolicy.RELIABLE,
@@ -151,6 +153,16 @@ class Driver:
     def run(self):
         kp, kd = self.params["kp"], self.params["kd"]
         damp_kp, damp_kd = [0.0] * NUM_MOTORS, [self.params["damp_kd"]] * NUM_MOTORS
+
+        # A call stored while the bridge waits would arm once it spins: no arming service yet.
+        up = self.client.estop_reset_client.wait_for_service(timeout_sec=30.0)
+        self.check("bridge up, waiting on our /lowcmd", up)
+        if not up:
+            return
+        start = self.client.start_control_client
+        self.check("no /start_control while the bridge waits", not start.wait_for_service(timeout_sec=1.0))
+        self.node.destroy_publisher(self.blocker)
+        self.check("/start_control once /lowcmd is free", start.wait_for_service(timeout_sec=10.0))
 
         self.check("fake_g1 inputs matched", self.wait_inputs())
         self.check_state("starts DISARMED", "DISARMED")

@@ -27,6 +27,8 @@ sairol_bridge::H1_2Bridge::H1_2Bridge(rclcpp::Node::SharedPtr node) : BridgeCore
     {
         rclcpp::sleep_for(std::chrono::milliseconds(100));
     }
+
+    createArmingServices_();
 }
 
 bool sairol_bridge::H1_2Bridge::checkExternalPublisher_(std::string topic_name)

@@ -30,6 +30,9 @@ sairol_bridge::G1Bridge::G1Bridge(rclcpp::Node::SharedPtr node) : BridgeCore(nod
         rclcpp::sleep_for(std::chrono::milliseconds(100));
     }
 
+    // Here, not last: the hand block below returns early without hand parameters.
+    createArmingServices_();
+
     hands_[HAND_LEFT].name = "left";
     hands_[HAND_RIGHT].name = "right";
 
