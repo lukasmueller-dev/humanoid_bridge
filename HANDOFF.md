@@ -1,4 +1,4 @@
-# Handoff — humanoid_bridge / mujoco-sim
+# Handoff — humanoid_bridge / feat-sim-closed-loop
 
 > The baton. Present tense only: where the work stands *now* and what the
 > next session should do. Overwrite it each session — never append. History
@@ -8,31 +8,35 @@
 > nothing off, and merged, a leftover baton strays onto the default branch.
 
 - **Repo:** humanoid_bridge
-- **Branch:** `mujoco-sim`
+- **Branch:** `feat-sim-closed-loop` (worktree dir still `mujoco-sim`: `git worktree move` it to `feat-sim-closed-loop` when no session runs in it)
 - **Worktree:** /home/lukas-mueller/git/worktrees/humanoid_bridge/mujoco-sim
 - **Last updated:** 2026-10-22 · local (turing)
 
 ## State
 
-Decision (Lukas, 2026-10-22): option B — own sim `robot_stacks/g1/g1_sim`, not GEAR's `base_sim`. Sim, camera and page done; rebased on `main` (`e60bbd6`, PR #7 + #8 merged).
+Task (renamed from `mujoco-sim`): `feat-sim-closed-loop` in three repos. Design settled in a grilling session 2026-10-22 (decisions in commit bodies; summary below).
 
-- `g1_sim`: rclpy node, mjlab `g1.xml`, gantry, remote header, d435 on the `g1_camera` wire (5556/5557) — `robot_stacks/g1/g1_sim/README.md`.
-- Page: g1_web_commander branch `mujoco-sim` (`5289e91`, pushed, worktree `~/git/worktrees/g1_web_commander/mujoco-sim`): `tools/g1-commander.sh --sim`, `config/g1_sim.yaml` (bring-up starts `g1_sim` + `G1_bridge`).
-- Passing in `g1-sim:humble`, workspace `~/.cache/g1_sim/ws`: bridge `tools/test.sh --sim --cpp --estop`; commander `tools/test.sh --ws /ws --sim --console`; `g1-commander.sh --sim --check`; unit 114 + 206.
+- **Goal:** one `try` of a checkpoint with G1_bridge in the loop, from terminal or commander page; never counted. SIMPLE is the robot (DDS), GEAR runs beside it (gear_controller, sim mode), the bridge in between.
+- **Works (turing, 2026-10-22):** `lab try psi0 --bench simple --suite g1-pick-smoke --ckpt g1-xmovepick --controller-path bridge` ran end to end, exit 0: bridge started, g1_sim.arm armed body + hands, rt/lowcmd streamed, GEAR engaged, episode ran 300 steps (0/1, timeout, base z 0.75 = standing), video written. Run files: humanoid-locoman-vla `runs/results/try/psi0__gear-wbc__try__bridge__*rf7a7c3*`.
+- **Repos and heads:** humanoid_bridge `feat-sim-closed-loop` (g1_sim, guards, g1_sim.arm); humanoid-locoman-vla `feat-sim-closed-loop` `93701a3` (WIP, worktree `~/git/worktrees/humanoid-locoman-vla/feat-sim-closed-loop`); g1_web_commander `feat-sim-closed-loop` `badd2b4` (WIP, worktree `~/git/worktrees/g1_web_commander/feat-sim-closed-loop`).
+- **humanoid-locoman-vla:** `lab/benches/bridge.py` (driver), `benches/simple/bridge/psi0_bridge.py` (agent), `lab/tryform.py` (`list --json <kind>`, `form try --code-path`, `--ckpt <dir> --ckpt-base`), `--live`, closedloop refuses bridge. Harness hashes unchanged vs main (interface `784a221c`, upstream `17e512ba`): keep bridge code outside `benches/simple/adapters/*.py` and `lab/benches/simple_*.py`.
+- **g1_web_commander:** `forms.py` + `form_from` process key + `/api/process/form|choices` + page rendering. Untested; no workspace entry yet.
+- **Measured:** SIMPLE env.step 2.4 ms (MuJoCo) vs 167 ms (Isaac render): bridge path allows sim_mode mujoco only.
 
 ## Next action
 
-Order (Lukas, 2026-10-22):
-1. Wait until the codebase-health fixes merge: commander `chore-codebase-health`, bridge `fix/*` (another session drives them; in progress, no PRs yet).
-2. Rebase `mujoco-sim` in both repos onto `origin/main`, rerun the sim stages (`tools/test.sh --sim` both repos), open the PRs, merge.
-3. Then `feat-ui-requests` (both repos, briefs pushed at `14ad933` / `8287476`) starts: bring-up layout, guarded real-bridge button, more UI requests.
-- Optional: GEAR on `lo` against `g1_sim` (`--interface lo`), then close the roadmap item "`--interface sim` does not reach the bridge".
+1. humanoid-locoman-vla: repair 17 failing + 2 erroring tests from the last WIP (test_run_setup try tests): `cmd_try` reads `args.live`/`args.ckpt_base` and `tryform.try_checkpoint` calls `Path(args.ckpt)` on a Mock: use `getattr(args, ..., default)` and guard `isinstance(ckpt, str)`. Then `WANDB_MODE=disabled .venv/bin/python -m unittest discover -s lab/test` (651 passed before).
+2. Tests: `lab/test/test_tryform.py` (form fields per code path, lists, try_checkpoint); commander `test_forms.py` (parse, argv building, refusals) + server endpoints.
+3. Commander workspace `workspaces/humanoid_locoman_vla/workspace.yaml`: processes `try_bridge` (`commands_robot: true`, `form_from: [${LOCOMAN_REPO}/bin/humlocoman-vla-lab, form, try, --code-path, bridge]`, stop grace ~60 s) and `try` (no bridge). Page e2e: commander needs host network + the lab's uv + docker; easiest on the lab PC (native ROS), on turing a commander container with `--network host`, `$HOME` at its path, docker socket.
+4. Docs: humanoid-locoman-vla `docs/bridge-try.md` (recipe + what breaks it), commander docs (`form_from`), README pointers.
+5. Done-when (Q26): page bridge try with `--live` + video + wandb `try` record (code path bridge); page plain try; terminal try; tests; Isaac measured (done).
+6. Then: ask Lukas whether the codebase-health fixes have merged; rebase all three branches; open PRs (humanoid-locoman-vla last); seed the real-robot branch (rehearsal + GEAR kd/hands repairs, roadmap items) with /handoff-brief telling it to rebase.
 
-**Done when:** a sim run drives the same client path as hardware (GEAR or the page → `/robot_cmd` → `G1_bridge` → `rt/lowcmd` → MuJoCo), and the commander page shows the sim camera through port 5557.
+**Dev env for a bridge try (turing):** `BRIDGE_CLONE=~/git/worktrees/humanoid_bridge/mujoco-sim BRIDGE_WS_HOST=~/.cache/g1_sim/bench_ws` (built with `docker/bench-g1.sh build`), `PYTHONPATH=<locoman worktree> ~/github/humanoid-locoman-vla/.venv/bin/python -u -m lab try ...`, `WANDB_MODE=offline` for dev runs.
 
 ## Blockers
 
-None.
+None. Codebase-health fixes (other session) must merge before the PRs.
 
 ## Gotchas (unpromoted)
 
@@ -44,3 +48,6 @@ None.
 - Agent sandbox: `docker`, `git fetch/push` and bridge git writes need the unsandboxed retry; the unsandboxed `$TMPDIR` is `/tmp`, so name the scratchpad path explicitly.
 - `pytest` at the repo root fails collection on `main`: upstream's `bridge/robot_bridge/examples/x2/joint_test.py` imports rclpy. Workaround `--ignore=bridge/robot_bridge/examples`; fix: `examples` in `norecursedirs`.
 - In a `--network none` container, `g1-commander.sh` needs `--host`: `ip route get` has no route.
+- Docker run artefacts: the unsandboxed `$TMPDIR` is `/tmp`; a root container in a mounted workspace leaves root-owned files (chown them back).
+- `lab try` from this sandbox: Python's docker children survive a killed session; `docker ps | grep lab-` and `docker rm -f` stragglers.
+- `scripts/test-stack.sh` (humanoid-locoman-vla) already rehearses the robot path on GEAR's own MuJoCo: the roadmap item "`--interface sim` does not reach the bridge" is solved by it; tell Lukas, close the item.
