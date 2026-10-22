@@ -140,6 +140,7 @@ run_in_docker() {
     [ "$RUN_ESTOP" = 1 ] && inner+=(--estop)
     [ "$RUN_GATES" = 1 ] && inner+=(--gates)
     [ "$RUN_HANDS" = 1 ] && inner+=(--hands)
+    [ "$RUN_CONFIG" = 1 ] && inner+=(--config)
     inner+=(--stale-after "$STALE_AFTER" --hot-after "$HOT_AFTER")
     inner+=(--rmw "$RMW_CHOICE")
     [ "$ALLOW_SKIP" = 1 ] && inner+=(--allow-skip)
