@@ -185,6 +185,19 @@ class Driver:
         )
         self.node.destroy_publisher(other)
         self.spin(1.0)
+
+        # A stalled /lowstate refuses arming and names the cause. 0.3 s: past state_loss
+        # (0.2 s), inside the remote timeout (0.5 s), which /lowstate also carries.
+        self.pause.publish(Bool(data=True))
+        self.spin(0.3)
+        reply = self.start(0.123)
+        self.check(
+            "start_control refused on a stalled /lowstate",
+            not reply.success and "state_loss" in reply.message,
+            reply.message,
+        )
+        self.pause.publish(Bool(data=False))
+        self.spin(0.5)
         self.check_state("still DISARMED", "DISARMED")
         self.check("refusals published nothing", self.count == count, f"{self.count - count} frames")
 
