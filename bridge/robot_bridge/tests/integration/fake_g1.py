@@ -3,7 +3,7 @@
 Test inputs: /fake_g1/keys (UInt16, remote key mask), /fake_g1/roll (Float32, rad),
 /fake_g1/remote (Bool, remote header on/off), /fake_g1/pause (Bool, stop /lowstate).
 Bad robot data, joint 0 / roll: /fake_g1/nan_q (Bool), /fake_g1/dq (Float32, rad/s),
-/fake_g1/nan_imu (Bool).
+/fake_g1/nan_imu (Bool). /fake_g1/freeze (Bool): stop tracking, q holds (a lagging robot).
 """
 
 import argparse
@@ -36,6 +36,8 @@ class FakeG1(Node):
         self.create_subscription(Bool, "/fake_g1/nan_q", self._on_nan_q, 10)
         self.create_subscription(Float32, "/fake_g1/dq", self._on_dq, 10)
         self.create_subscription(Bool, "/fake_g1/nan_imu", self._on_nan_imu, 10)
+        self.create_subscription(Bool, "/fake_g1/freeze", self._on_freeze, 10)
+        self.frozen = False
         self.paused = False
         self.nan_q = False
         self.dq0 = 0.0
@@ -83,6 +85,9 @@ class FakeG1(Node):
     def _on_nan_imu(self, msg):
         self.nan_imu = bool(msg.data)
 
+    def _on_freeze(self, msg):
+        self.frozen = bool(msg.data)
+
     def _on_remote(self, msg):
         header = (0x55, 0x51) if msg.data else (0, 0)  # remote off: the G1 sends all 40 bytes 0
         self.state.wireless_remote[0], self.state.wireless_remote[1] = header
@@ -91,7 +96,8 @@ class FakeG1(Node):
         self.paused = bool(msg.data)
 
     def _on_cmd(self, msg):
-        self.q = [msg.motor_cmd[i].q for i in range(NUM_JOINT)]  # perfect tracking
+        if not self.frozen:
+            self.q = [msg.motor_cmd[i].q for i in range(NUM_JOINT)]  # perfect tracking
         self.samples.append(
             {
                 "t": round(time.monotonic() - self.t0, 4),

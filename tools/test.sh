@@ -15,7 +15,8 @@
 #          target gates, the /lowcmd CRC against Unitree's SDK
 #   wire   the real G1_bridge against a fake robot, body path
 #   estop  the real G1_bridge's e-stop against a fake robot
-#   gates  a fresh G1_bridge's target gates (range, speed, arming seed) against a fake robot
+#   gates  a fresh G1_bridge's target gates (range, speed, torque window, arming seed)
+#          against a fake robot
 #   hands  the real G1_bridge against fake Dex3 hands, three runs: plain, the left hand's
 #          state stops (hands-stale), the left hand overheats (hands-hot)
 #   config the real G1_bridge refuses broken copies of G1_config.yaml

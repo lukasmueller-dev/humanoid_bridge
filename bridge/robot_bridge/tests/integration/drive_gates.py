@@ -1,4 +1,4 @@
-"""Drives gates 1 and 2 of a fresh bridge against fake_g1.py --start-q and checks /lowcmd live.
+"""Drives gates 1, 2 and 4 of a fresh bridge against fake_g1.py --start-q and checks /lowcmd live.
 
 Exit 1 on failure. run_fake_gates_test.sh starts the fake and the bridge first.
 """
@@ -9,6 +9,7 @@ import time
 
 import rclpy
 import yaml
+from std_msgs.msg import Bool
 from unitree_hg.msg import LowCmd
 
 from robot_bridge.cmd_client import RobotCmdClient
@@ -30,6 +31,7 @@ def load_params(path):
         "q_min": [float(params[n]["q_min"]) for n in names],
         "q_max": [float(params[n]["q_max"]) for n in names],
         "rate": [float(params[n].get("q_rate_limit", default)) for n in names],
+        "tau_limit": [float(params[n]["tau_limit"]) for n in names],
         "dt": float(params["control_dt"]),
     }
 
@@ -43,6 +45,7 @@ class Driver:
             node, num_dof=NUM_MOTORS, control_frequency=50.0, interpolation_order=0.0
         )
         node.create_subscription(LowCmd, "/lowcmd", self._on_cmd, 100)
+        self.freeze = node.create_publisher(Bool, "/fake_g1/freeze", 10)
         self.frames = []  # (t, q)
         self.failures = []
 
@@ -135,6 +138,39 @@ class Driver:
             f"max {highest:.4f}, q_max {q_max}",
         )
         self.check("R_ELBOW ends at q_max", bool(clamp) and abs(clamp[-1] - q_max) < 1e-3)
+
+        # Gate 4: the robot lags (q frozen at q_max), so a 1 rad step stops tau_limit/kp short.
+        end = time.monotonic() + 5.0
+        while self.freeze.get_subscription_count() == 0 and time.monotonic() < end:
+            self.spin(0.05)
+        self.freeze.publish(Bool(data=True))
+        self.spin(0.3)
+        window = p["tau_limit"][R_ELBOW] / p["kp"][R_ELBOW]
+        q[R_ELBOW] = q_max - 1.0
+        first = len(self.frames)
+        self.send(q)
+        self.spin(1.0)
+        lag = [f[R_ELBOW] for _, f in self.frames[first:]]
+        worst = max((abs(v - q_max) for v in lag), default=float("nan"))
+        self.check(
+            f"frozen R_ELBOW: |q - q_meas| <= tau_limit/kp {window:.3f}",
+            bool(lag) and worst <= window + 1e-4,
+            f"max {worst:.4f}",
+        )
+        self.check(
+            "frozen R_ELBOW: held at the window edge",
+            bool(lag) and abs(abs(lag[-1] - q_max) - window) < 1e-3,
+            f"ends {lag[-1] if lag else None}, target {q[R_ELBOW]:.4f}",
+        )
+        self.freeze.publish(Bool(data=False))
+        first = len(self.frames)
+        self.spin(1.0)
+        moved = [f[R_ELBOW] for _, f in self.frames[first:]]
+        self.check(
+            "unfrozen R_ELBOW: reaches the target",
+            bool(moved) and abs(moved[-1] - q[R_ELBOW]) < 1e-3,
+            f"ends {moved[-1] if moved else None}",
+        )
 
 
 def main():

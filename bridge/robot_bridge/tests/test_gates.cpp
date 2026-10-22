@@ -133,6 +133,17 @@ TEST(Window, FeedforwardCountsAgainstTheLimit)
     }
 }
 
+TEST(Window, KdBiasShiftsTheWindowByKdTimesDqError)
+{
+    // kp·(q - q_meas) + kd·(dq_cmd - dq_meas) <= 25 at tau 0: bias kd·(dq_meas - dq_cmd) = ±10 Nm.
+    EXPECT_FLOAT_EQ(torqueWindow(2.0f, 0.0f, 5.0f, 0.0f, 50.0f, 2.0f, 0.0f, 25.0f), 0.7f);
+    EXPECT_FLOAT_EQ(torqueWindow(-2.0f, 0.0f, 5.0f, 0.0f, 50.0f, 2.0f, 0.0f, 25.0f), -0.3f);
+    EXPECT_FLOAT_EQ(torqueWindow(2.0f, 0.0f, 0.0f, 5.0f, 50.0f, 2.0f, 0.0f, 25.0f), 0.3f);
+    EXPECT_FLOAT_EQ(torqueWindow(-2.0f, 0.0f, 0.0f, 5.0f, 50.0f, 2.0f, 0.0f, 25.0f), -0.7f);
+    // Equal speeds: no bias, whatever they are.
+    EXPECT_FLOAT_EQ(torqueWindow(2.0f, 0.0f, 5.0f, 5.0f, 50.0f, 2.0f, 0.0f, 25.0f), 0.5f);
+}
+
 TEST(Window, ZeroKpGivesTheMeasuredPose)
 {
     for (const float_t kd : {0.0f, 2.0f, 8.0f})
