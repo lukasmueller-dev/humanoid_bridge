@@ -17,6 +17,7 @@ from unitree_hg.msg import LowCmd, LowState
 
 NUM_JOINT = 29
 STATE_PERIOD = 0.002  # the bridge aborts on /lowstate older than 0.2 s
+MODE_MACHINE = 5  # G1 type; the bridge copies it into every /lowcmd
 
 
 class FakeG1(Node):
@@ -32,7 +33,7 @@ class FakeG1(Node):
         self.paused = False
 
         self.state = LowState()
-        self.state.mode_machine = 5
+        self.state.mode_machine = MODE_MACHINE
         self.state.imu_state.rpy = [0.0, 0.0, 0.0]  # level: over 1 rad aborts control
         self.state.imu_state.quaternion = [1.0, 0.0, 0.0, 0.0]
         self.state.wireless_remote[0] = 0x55  # header bytes as the real G1 sends them
@@ -72,6 +73,7 @@ class FakeG1(Node):
             {
                 "t": round(time.monotonic() - self.t0, 4),
                 "mode_pr": int(msg.mode_pr),
+                "mode_machine": int(msg.mode_machine),
                 "mode": [int(msg.motor_cmd[i].mode) for i in range(NUM_JOINT)],
                 "q": [round(msg.motor_cmd[i].q, 6) for i in range(NUM_JOINT)],
                 "kp": [round(msg.motor_cmd[i].kp, 3) for i in range(NUM_JOINT)],

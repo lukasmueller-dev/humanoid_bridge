@@ -60,7 +60,8 @@ if ! grep -q "Dex3 hand path ready" "$OUT/bridge.log"; then
     grep -i hand "$OUT/bridge.log" | tail -20; exit 1
 fi
 
-python3 "$HERE/drive_hand_cmd.py" --check-lowcmd-guard --check-tilt-guard --send-over-limit --send-nan
+python3 "$HERE/drive_hand_cmd.py" --check-lowcmd-guard --check-tilt-guard --send-over-limit --send-nan \
+    --probe-lowcmd --phases "$OUT/phases.json"
 
 sleep 1
 kill -TERM "$HAND_PID"; wait "$HAND_PID" 2>/dev/null || true; HAND_PID=""
@@ -68,22 +69,28 @@ kill -TERM "$FAKE_PID"; wait "$FAKE_PID" 2>/dev/null || true; FAKE_PID=""
 
 echo
 python3 "$HERE/check_hand_cmd.py" "$OUT/handcmd.json" \
-    --expect-clamped --expect-nan-dropped \
+    --expect-clamped --expect-nan-dropped "$OUT/phases.json" \
     ${STALE:+--expect-left-released}
 
 echo
 # Non-interference: this run never called start_control, so the hand path must
 # not have started body control. Wire handStarted_ to controlStarted_ and this
 # is what catches it. The body path's own checks live in run_fake_wire_test.sh.
+# The driver's probe frames (mode_pr 1) prove fake_g1 recorded /lowcmd at all.
 python3 - "$OUT/lowcmd.json" <<'EOF'
 import json, sys
 
 with open(sys.argv[1]) as handle:
     samples = json.load(handle)
 
-ok = not samples
-print("{:<34} {}  {}".format(
-    "hand path left the body idle", "PASS" if ok else "FAIL",
-    "{} /lowcmd samples, wanted 0".format(len(samples))))
+probe = [s for s in samples if s["mode_pr"] == 1]
+bridge = [s for s in samples if s["mode_pr"] != 1]
+ok = True
+for name, good, detail in (
+    ("fake_g1 recorded the probe /lowcmd", bool(probe), "{} probe frames".format(len(probe))),
+    ("hand path left the body idle", not bridge, "{} bridge frames, wanted 0".format(len(bridge))),
+):
+    print("{:<34} {}  {}".format(name, "PASS" if good else "FAIL", detail))
+    ok = ok and good
 sys.exit(0 if ok else 1)
 EOF

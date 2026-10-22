@@ -43,7 +43,7 @@ joint j lands on motor j     PASS  q[:3]=[0.01, 0.02, 0.03]
 kp from config               PASS
 kd from config               PASS
 bridge forced mode 1         PASS
-bridge forced PR mode        PASS
+bridge echoed mode_machine   PASS  5 wanted 5
 timeout latches hold         PASS  kp[0]=100.0 q[0]=0.0100
 ```
 
@@ -67,7 +67,8 @@ left hand never tracks, later and the driver has already stopped.
 
 `fake_g1.py` runs too, because the bridge blocks in its constructor until
 something publishes `/lowstate`. That doubles as the check that the hand path
-left the body idle.
+left the body idle; the driver's closing `/lowcmd` probe (`mode_pr` 1) proves
+fake_g1 records `/lowcmd` at all.
 
 ## Parts
 
@@ -81,7 +82,7 @@ left the body idle.
 | `run_fake_estop_test.sh` | orchestrates the e-stop run; then SIGINT to a second bridge in its `/lowcmd` wait: exit 0 within 5 s |
 | `run_fake_wire_test.sh` | orchestrates the three, cleans up |
 | `fake_dex3.py` | publishes `/dex3/*/state` at 100 Hz, records `/dex3/*/cmd`; `--stale-after`, `--hot-after`, both timed from the first left command |
-| `drive_hand_cmd.py` | `start_hand_control` refused with another `/lowcmd` publisher and on a tilt, then accepted, then both hands through the hand adapter, then a bad command |
+| `drive_hand_cmd.py` | `start_hand_control` refused with another `/lowcmd` publisher and on a tilt, then accepted, then both hands through the hand adapter, then an over-limit and a NaN command, then a `/lowcmd` probe; `--phases` writes the NaN phase's times |
 | `check_hand_cmd.py` | asserts the hand recording; pure offline, needs no ROS |
 | `run_fake_hand_test.sh` | orchestrates the hand run |
 | `run_config_test.sh`, `drive_config.py` | `G1_bridge` on broken copies of `G1_config.yaml` (`ready_q` short or out of range, `idx` out of order, inverted limits): each must fail its parameter load. No fake robot |

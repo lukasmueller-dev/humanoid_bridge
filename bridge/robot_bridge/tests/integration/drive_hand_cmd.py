@@ -5,6 +5,7 @@ guards must reject.
 """
 
 import argparse
+import json
 import time
 
 import numpy as np
@@ -14,6 +15,9 @@ import numpy as np
 # which must not need a sourced ROS workspace.
 NUM_HAND_JOINTS = 7
 CONTROL_HZ = 100.0
+OVER_LIMIT = (9.0, 1.0, 0.2)  # q, kp, kd of the over-limit command
+NAN_CMDS = 10  # 0.1 s: inside the last good command's watchdog (0.01 + 0.2 s)
+PROBE_MODE_PR = 1  # --probe-lowcmd frames; the bridge always sends PR (0)
 
 # The two hands are mirrored, so a legal angle on one is often illegal on the
 # other. These are the signs each motor's range actually allows, in DDS order:
@@ -58,6 +62,14 @@ def main():
         "--check-tilt-guard",
         action="store_true",
         help="first check that start_hand_control is refused while fake_g1 reports a tilt",
+    )
+    parser.add_argument(
+        "--probe-lowcmd",
+        action="store_true",
+        help=f"last, publish /lowcmd frames with mode_pr {PROBE_MODE_PR}: fake_g1 must record them",
+    )
+    parser.add_argument(
+        "--phases", help="write each phase's [start, end] in time.monotonic() to this JSON file"
     )
     args = parser.parse_args()
 
@@ -118,22 +130,25 @@ def main():
     if args.send_over_limit:
         # Well past every q_max; the bridge must clamp rather than drop.
         print("drive: sending an out-of-range q", flush=True)
+        q, kp, kd = OVER_LIMIT
         for _ in range(20):
             client.send_hand_cmd(
                 "right",
-                q=np.full(NUM_HAND_JOINTS, 9.0, dtype=np.float32),
-                kp=np.ones(NUM_HAND_JOINTS, dtype=np.float32),
-                kd=np.full(NUM_HAND_JOINTS, 0.2, dtype=np.float32),
+                q=np.full(NUM_HAND_JOINTS, q, dtype=np.float32),
+                kp=np.full(NUM_HAND_JOINTS, kp, dtype=np.float32),
+                kd=np.full(NUM_HAND_JOINTS, kd, dtype=np.float32),
                 duration=1.0 / CONTROL_HZ,
             )
             time.sleep(1.0 / CONTROL_HZ)
 
+    phases = {}
     if args.send_nan:
         # Must be dropped whole: the last good command stays in force.
         print("drive: sending a NaN command", flush=True)
         bad = np.array(targets["right"], dtype=np.float32)
         bad[3] = np.nan
-        for _ in range(20):
+        phases["nan"] = [time.monotonic()]
+        for _ in range(NAN_CMDS):
             client.send_hand_cmd(
                 "right",
                 q=bad,
@@ -142,7 +157,24 @@ def main():
                 duration=1.0 / CONTROL_HZ,
             )
             time.sleep(1.0 / CONTROL_HZ)
+        phases["nan"].append(time.monotonic())
 
+    if args.probe_lowcmd:
+        from unitree_hg.msg import LowCmd
+
+        probe = node.create_publisher(LowCmd, "/lowcmd", 10)
+        end = time.monotonic() + 5.0
+        while probe.get_subscription_count() == 0 and time.monotonic() < end:
+            time.sleep(0.05)
+        time.sleep(0.5)  # the graph shows the reader before the DDS match completes
+        print("drive: probing /lowcmd", flush=True)
+        for _ in range(10):
+            probe.publish(LowCmd(mode_pr=PROBE_MODE_PR))
+            time.sleep(0.01)
+
+    if args.phases:
+        with open(args.phases, "w") as handle:
+            json.dump(phases, handle)
     print("drive: done", flush=True)
     node.destroy_node()
     rclpy.shutdown()

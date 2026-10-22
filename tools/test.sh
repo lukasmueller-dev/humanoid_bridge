@@ -280,7 +280,8 @@ stage_cpp() {
             echo "$out" | tail -1
             record cpp PASS "$name: $(echo "$out" | tail -1)"
         else
-            echo "$out" | grep -E "FAILED|Failure|Expected|Which is|actual" | head -25
+            # || true: no match (a crash) or head closing early must not end the run before the summary.
+            echo "$out" | grep -E "FAILED|Failure|Expected|Which is|actual" | head -25 || true
             record cpp FAIL "$name: $(echo "$out" | tail -1)"
             FAILED=1
         fi

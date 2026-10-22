@@ -131,8 +131,9 @@ tools/test.sh --stale-after 3.5     # per-side release
 `drive_hand_cmd.py` checks that `start_hand_control` is refused while another
 node publishes `/lowcmd` and while the body is tilted, drives both hands through the adapter and then sends a
 deliberately bad command; `check_hand_cmd.py` asserts the mode bits, the
-left/right split, the ramp, the clamps, a NaN rejection, and that the body
-stayed idle. `STALE_AFTER` silences the left hand mid-stream to exercise the
+left/right split, the ramp, the clamps, that NaN commands leave the last good
+target in force, and that the body stayed idle (a `/lowcmd` probe proves the
+fake records). `STALE_AFTER` silences the left hand mid-stream to exercise the
 per-side release.
 
 ## What breaks it
