@@ -63,7 +63,7 @@ def variants(params):
 
 
 def start(params_file, log_file, until=None):
-    """Runs G1_bridge until it exits, `until` is logged, or TIMEOUT. Returns (exited, log)."""
+    """Runs G1_bridge until it exits, logs `until`, or TIMEOUT. Returns (exit code or None, log)."""
     with open(log_file, "w") as log:
         proc = subprocess.Popen(
             BRIDGE + ["--params-file", params_file],
@@ -77,13 +77,13 @@ def start(params_file, log_file, until=None):
             if until and until in handle.read():
                 break
         time.sleep(0.1)
-    exited = proc.poll() is not None
-    if not exited:
+    code = proc.poll()
+    if code is None:
         # The group: `ros2 run` is a launcher, and killing it alone orphans G1_bridge.
         os.killpg(proc.pid, signal.SIGKILL)
         proc.wait()
     with open(log_file) as handle:
-        return exited, handle.read()
+        return code, handle.read()
 
 
 def main():
@@ -117,9 +117,13 @@ def main():
         path = os.path.join(out, f"broken{i}.yaml")
         with open(path, "w") as handle:
             yaml.safe_dump(broken, handle)
-        exited, log = start(path, os.path.join(out, f"broken{i}.log"))
-        refused = exited and REFUSED in log and text in log
-        why = f"no '{text}' before exit" if exited else f"still running after {TIMEOUT:.0f} s"
+        code, log = start(path, os.path.join(out, f"broken{i}.log"))
+        # Exit 1, not a signal: `ros2 run` reports an abort as 250.
+        refused = code == 1 and REFUSED in log and text in log
+        if code is None:
+            why = f"still running after {TIMEOUT:.0f} s"
+        else:
+            why = f"exit {code}" + ("" if text in log else f", no '{text}'")
         check(f"{name}: refused", refused, "" if refused else f"{why}, log {out}/broken{i}.log")
 
     if failures:

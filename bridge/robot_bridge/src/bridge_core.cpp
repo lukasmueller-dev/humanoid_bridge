@@ -14,8 +14,7 @@ namespace sairol_bridge
         if (!loadParameters_())
         {
             RCLCPP_FATAL(nh->get_logger(), "Failed to load parameters.");
-            rclcpp::shutdown();
-            return;
+            throw ConfigError("Failed to load parameters.");
         }
 
         // distribute parameters
