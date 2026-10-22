@@ -3,9 +3,10 @@
 # covers.
 #
 # Needs: numpy and pytest for the unit stage; ROS 2 sourced plus a built
-# workspace for the other stages. Stages that cannot run are skipped
-# with the reason, not failed. --docker needs only docker: it builds and runs
-# every stage in tools/Dockerfile.test with the container network off.
+# workspace for the other stages. Stages that cannot run are skipped with the
+# reason. Exit: 0 every requested stage passed, 1 a stage failed, 2 a stage was
+# skipped (--allow-skip: a skip passes). --docker needs only docker: it builds
+# and runs every stage in tools/Dockerfile.test with the container network off.
 #
 #   unit   pure Python: clients, adapters, goal order, observation, camera, tools/tests
 #   cpp    gtests test_estop, test_gates, test_crc: e-stop latch, stop frames, remote keys,
@@ -38,12 +39,14 @@ STALE_AFTER="${STALE_AFTER:-}"
 PYTHON="${PYTHON:-python3}"
 DOCKER=0
 REBUILD=0
+ALLOW_SKIP=0
 
 usage() {
     cat <<'EOF'
 Usage: tools/test.sh [options]
 
 Run the no-hardware test stages. With no stage flag, runs all of them.
+Exit 0: every requested stage passed; 1: a stage failed; 2: a stage was skipped (it did not run).
 
 Options:
   --unit                pure Python tests only; needs no ROS
@@ -61,6 +64,7 @@ Options:
                         (tools/Dockerfile.test), network off; workspace in $HB_TEST_WS
                         (default ~/.cache/humanoid_bridge/test_ws-<cksum of this clone's path>)
   --rebuild             with --docker: rebuild the image first
+  --allow-skip          a skipped stage does not fail the run (exit 0, not 2)
   -h, --help            this text
 
 Discovery: CycloneDDS disables multicast on loopback, so a multi-process run on
@@ -85,6 +89,7 @@ while [ $# -gt 0 ]; do
         --stale-after) STALE_AFTER="${2:?--stale-after needs seconds}"; shift ;;
         --docker)  DOCKER=1 ;;
         --rebuild) REBUILD=1 ;;
+        --allow-skip) ALLOW_SKIP=1 ;;
         -h|--help) usage; exit 0 ;;
         *) echo "unknown option: $1" >&2; usage >&2; exit 2 ;;
     esac
@@ -125,6 +130,7 @@ run_in_docker() {
     [ "$RUN_HANDS" = 1 ] && inner+=(--hands)
     [ -n "$STALE_AFTER" ] && inner+=(--stale-after "$STALE_AFTER")
     inner+=(--rmw "$RMW_CHOICE")
+    [ "$ALLOW_SKIP" = 1 ] && inner+=(--allow-skip)
     echo "docker: $image, workspace $ws"
     # shellcheck disable=SC2016  # expanded in the container
     exec docker run --rm --init --network none \
@@ -166,8 +172,12 @@ export ROS_DOMAIN_ID="${ROS_DOMAIN_ID:-0}"
 # --- stages ----------------------------------------------------------------
 RESULTS=()
 FAILED=0
+SKIPPED=0
 
-record() { RESULTS+=("$(printf '%-8s %-6s %s' "$1" "$2" "$3")"); }
+record() {
+    RESULTS+=("$(printf '%-8s %-6s %s' "$1" "$2" "$3")")
+    if [ "$2" = SKIP ]; then SKIPPED=$((SKIPPED + 1)); fi
+}
 
 stage_unit() {
     local py
@@ -269,4 +279,11 @@ fi
 echo
 echo "--- summary ---"
 printf '%s\n' "${RESULTS[@]}"
-exit "$FAILED"
+if [ "$FAILED" = 1 ]; then
+    exit 1
+fi
+if [ "$SKIPPED" -gt 0 ] && [ "$ALLOW_SKIP" = 0 ]; then
+    echo "$SKIPPED requested stage(s) did not run: exit 2 (--allow-skip to pass anyway)"
+    exit 2
+fi
+exit 0

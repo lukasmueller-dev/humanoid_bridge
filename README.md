@@ -198,7 +198,8 @@ ros2 service call /stop_hand_control std_srvs/srv/Trigger {}
 
 ## 5. Verify
 
-No hardware. Stages that cannot run are skipped with the reason.
+No hardware. Stages that cannot run are skipped with the reason, and the run
+exits 2 (`--allow-skip`: 0). A failed stage exits 1.
 
 ```bash
 tools/test.sh --docker              # every stage in a ROS 2 Humble container; needs only docker
