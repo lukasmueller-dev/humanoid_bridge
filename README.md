@@ -38,6 +38,7 @@ Forked from [DFKI-SAIROL/humanoid_bridge](https://github.com/DFKI-SAIROL/humanoi
 | State age and command timeout on the ROS clock: a backward wall-clock step blinds them | upstream | fixed here: one steady clock, no PR yet |
 | Config keymap headers advertising keys the source comments out | upstream | fixed here, no PR yet |
 | `start_control` answers `success: true` on a wrong length, then moves to `ready_q_` | upstream | fixed here: empty = `ready_q_`, any other wrong length refused |
+| `start_control` drops `default_kp`/`default_kd` silently, arms with the config gains | upstream | fixed here: non-empty gains refused, no PR yet |
 | Arming services exist during the startup waits, so a call made then arms later | upstream | fixed here: created after the waits, no PR yet |
 | G1 `_default_pos` is 27 long while kp/kd are 29 | upstream | **open**, `fix/g1-default-pos-29` |
 | `finishControl_` only logs on G1, H1, H1_2, so an abort holds at full gains | upstream | G1: fixed here by the e-stop latch (`docs/estop.md`); H1, H1_2: open |
@@ -208,7 +209,8 @@ tests that need `bridge_interface` skip. `tools/test.sh` prints what it ran.
 - **Moving a package leaves colcon's cache pointing at the old path.**
   `tools/build.sh --clean <pkg>`.
 - **`start_control` with an empty `default_position` arms to `ready_q_`**, legs
-  included. Any length other than 29 is refused, and nothing moves.
+  included. Any length other than 29 is refused, and nothing moves. So are
+  non-empty `default_kp`/`default_kd`: arming uses the config gains.
 - **G1: no arming without the remote.** `estop.require_remote` refuses every
   arming service until the remote's header arrives: switch the remote on.
 - **The first `/robot_cmd` cuts the arming ramp short.** `controlStarted_` is
