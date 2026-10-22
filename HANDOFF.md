@@ -25,12 +25,10 @@ Task (renamed from `mujoco-sim`): `feat-sim-closed-loop` in three repos. Design 
 
 ## Next action
 
-1. humanoid-locoman-vla: repair 17 failing + 2 erroring tests from the last WIP (test_run_setup try tests): `cmd_try` reads `args.live`/`args.ckpt_base` and `tryform.try_checkpoint` calls `Path(args.ckpt)` on a Mock: use `getattr(args, ..., default)` and guard `isinstance(ckpt, str)`. Then `WANDB_MODE=disabled .venv/bin/python -m unittest discover -s lab/test` (651 passed before).
-2. Tests: `lab/test/test_tryform.py` (form fields per code path, lists, try_checkpoint); commander `test_forms.py` (parse, argv building, refusals) + server endpoints.
-3. Commander workspace `workspaces/humanoid_locoman_vla/workspace.yaml`: processes `try_bridge` (`commands_robot: true`, `form_from: [${LOCOMAN_REPO}/bin/humlocoman-vla-lab, form, try, --code-path, bridge]`, stop grace ~60 s) and `try` (no bridge). Page e2e: commander needs host network + the lab's uv + docker; easiest on the lab PC (native ROS), on turing a commander container with `--network host`, `$HOME` at its path, docker socket.
-4. Docs: humanoid-locoman-vla `docs/bridge-try.md` (recipe + what breaks it), commander docs (`form_from`), README pointers.
-5. Done-when (Q26): page bridge try with `--live` + video + wandb `try` record (code path bridge); page plain try; terminal try; tests; Isaac measured (done).
-6. Then: ask Lukas whether the codebase-health fixes have merged; rebase all three branches; open PRs (humanoid-locoman-vla last); seed the real-robot branch (rehearsal + GEAR kd/hands repairs, roadmap items) with /handoff-brief telling it to rebase.
+Done since the last baton: lab tests green (667, incl. `test_tryform.py`); commander form tests (222); workspace `try_bridge` and `try`; docs (`docs/bridge-try.md`, commander `form_from`); page form and lists verified through the commander's API on turing.
+
+1. Page bridge try end to end (in progress): commander container on `~/.cache/g1_sim/hostws` (src symlinks to the worktrees, host paths), driven by `$SCRATCH/drive_try.py` through the API. Then the same checkpoint and episode as a page plain `try` (done-when 2).
+2. Ask Lukas whether the codebase-health fixes have merged; rebase all three branches onto main; open PRs (humanoid-locoman-vla last); seed the real-robot branch (rehearsal + GEAR kd/hands repairs) with /handoff-brief telling it to rebase.
 
 **Dev env for a bridge try (turing):** `BRIDGE_CLONE=~/git/worktrees/humanoid_bridge/mujoco-sim BRIDGE_WS_HOST=~/.cache/g1_sim/bench_ws` (built with `docker/bench-g1.sh build`), `PYTHONPATH=<locoman worktree> ~/github/humanoid-locoman-vla/.venv/bin/python -u -m lab try ...`, `WANDB_MODE=offline` for dev runs.
 
@@ -51,3 +49,5 @@ None. Codebase-health fixes (other session) must merge before the PRs.
 - Docker run artefacts: the unsandboxed `$TMPDIR` is `/tmp`; a root container in a mounted workspace leaves root-owned files (chown them back).
 - `lab try` from this sandbox: Python's docker children survive a killed session; `docker ps | grep lab-` and `docker rm -f` stragglers.
 - `scripts/test-stack.sh` (humanoid-locoman-vla) already rehearses the robot path on GEAR's own MuJoCo: the roadmap item "`--interface sim` does not reach the bridge" is solved by it; tell Lukas, close the item.
+- Commander on turing runs in the `g1-sim` image: it needs `--network host`, `$HOME` and `/tmp` at their own paths, the docker socket (`--group-add` the socket's gid), host `/usr/bin/docker` and `~/.local/bin/uv` mounted, `UV_PROJECT_ENVIRONMENT` = main clone's `.venv`, and a workspace whose `src/` entries resolve to host paths (`~/.cache/g1_sim/hostws`): the lab hands paths to the host's docker.
+- The workspace's `defaults.env` sets `LAB_STORE=~/psi-home` (lab PC); on turing set `LAB_STORE=~/lab-store` in the environment, or the page's checkpoint and episode lists come back empty.
