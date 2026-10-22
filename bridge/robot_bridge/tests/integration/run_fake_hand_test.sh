@@ -18,6 +18,7 @@ source "$HERE/harness.sh"
 # ramp-and-hold and before the driver stops about 2.4 s later, or the left hand
 # never tracks and the run is not testing what it looks like it is testing.
 STALE=""; HOT=""
+if [ $# -gt 2 ]; then echo "usage: $0 [--stale-after <s> | --hot-after <s>]"; exit 1; fi
 case "${1:-}" in
     --stale-after) STALE="${2:?--stale-after needs seconds}" ;;
     --hot-after)   HOT="${2:?--hot-after needs seconds}" ;;
