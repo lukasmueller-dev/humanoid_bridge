@@ -47,8 +47,12 @@ def main():
         spin(0.05)  # a remote switch published before discovery matched is lost
     if up:
         with open(args.bridge_log) as handle:
-            logged = "No estop.require_remote in the config" in handle.read()
-        check("bridge logs the G1 default", logged)
+            log = handle.read()
+        check("bridge logs the G1 default", "No estop.require_remote in the config" in log)
+        check(
+            "e-stop line says arming needs the remote",
+            "arming needs the remote" in log and "does not need the remote" not in log,
+        )
         remote.publish(Bool(data=False))
         spin(1.0)
         reply = client.start_control(default_position=[args.start_q] * NUM_MOTORS, timeout_sec=30.0)

@@ -6,13 +6,6 @@ using namespace std::chrono_literals;
 
 sairol_bridge::G1Bridge::G1Bridge(rclcpp::Node::SharedPtr node) : BridgeCore(node)
 {
-    // The G1 reads its remote, so a config without the key still needs it to arm.
-    if (!nh->has_parameter("estop.require_remote"))
-    {
-        estopConfig_.require_remote = true;
-        RCLCPP_WARN(nh->get_logger(), "No estop.require_remote in the config: the G1 default is true, "
-                                      "arming needs the remote");
-    }
 
     lowCommandDesired_.motor_cmd.resize(numJoint_);
     lastCommand_.motor_cmd.resize(numJoint_);
