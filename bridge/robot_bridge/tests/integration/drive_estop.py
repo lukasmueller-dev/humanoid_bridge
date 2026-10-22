@@ -21,6 +21,7 @@ KEY_R1, KEY_L1, KEY_R2 = 1 << 0, 1 << 1, 1 << 4
 BRIDGE_HZ = 1000.0  # control_dt: 0.001
 RAMP_SECONDS = 2.5  # `duration` 2.0 plus margin
 GRACE = 0.05  # /lowcmd and /bridge_state are separate topics: order at a change is not kept
+HOLDING = "driver: holding /lowcmd"
 
 
 def load_params(path):
@@ -36,9 +37,10 @@ def load_params(path):
 
 
 class Driver:
-    def __init__(self, node, params):
+    def __init__(self, node, params, bridge_log):
         self.node = node
         self.params = params
+        self.bridge_log = bridge_log
         self.client = RobotCmdClient(node, num_dof=NUM_MOTORS, control_frequency=50.0)
         self.keys = node.create_publisher(UInt16, "/fake_g1/keys", 10)
         self.roll = node.create_publisher(Float32, "/fake_g1/roll", 10)
@@ -93,6 +95,15 @@ class Driver:
             if self.state == wanted:
                 return True
             rclpy.spin_once(self.node, timeout_sec=0.005)
+        return False
+
+    def wait_log(self, text, timeout):
+        end = time.monotonic() + timeout
+        while time.monotonic() < end:
+            with open(self.bridge_log) as handle:
+                if text in handle.read():
+                    return True
+            self.spin(0.1)
         return False
 
     def check(self, name, ok, detail=""):
@@ -159,6 +170,12 @@ class Driver:
         self.check("bridge up, waiting on our /lowcmd", up)
         if not up:
             return
+        seen = self.wait_log("Detected 1 publishers on /lowcmd", timeout=5.0)
+        self.check(
+            "bridge saw our /lowcmd publisher",
+            seen,
+            "" if seen else "not in the bridge log: discovery missed it, so the bridge never waited",
+        )
         start = self.client.start_control_client
         self.check("no /start_control while the bridge waits", not start.wait_for_service(timeout_sec=1.0))
         self.node.destroy_publisher(self.blocker)
@@ -344,11 +361,13 @@ class Driver:
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("params", help="the G1_config.yaml the bridge runs with")
+    parser.add_argument("bridge_log", help="the bridge's log, read for its /lowcmd check")
     args = parser.parse_args()
 
     rclpy.init()
     node = rclpy.create_node("estop_driver")
-    driver = Driver(node, load_params(args.params))
+    driver = Driver(node, load_params(args.params), args.bridge_log)
+    print(HOLDING, flush=True)  # run_fake_estop_test.sh starts the bridge on this line
     try:
         driver.run()
     finally:
