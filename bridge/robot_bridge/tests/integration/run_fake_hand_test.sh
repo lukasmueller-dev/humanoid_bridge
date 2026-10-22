@@ -69,8 +69,11 @@ if ! grep -q "Dex3 hand path ready" "$OUT/bridge.log"; then
     grep -i hand "$OUT/bridge.log" | tail -20; exit 1
 fi
 
+# The e-stop needs both hands live, so not in a run that releases the left one.
+ESTOP=()
+if [ -z "$GUARD" ]; then ESTOP=(--check-estop); fi
 python3 "$HERE/drive_hand_cmd.py" --check-lowcmd-guard --check-tilt-guard --send-over-limit --send-nan \
-    --probe-lowcmd --phases "$OUT/phases.json"
+    "${ESTOP[@]}" --probe-lowcmd --phases "$OUT/phases.json"
 
 sleep 1
 kill -TERM "$HAND_PID"; wait "$HAND_PID" 2>/dev/null || true; HAND_PID=""

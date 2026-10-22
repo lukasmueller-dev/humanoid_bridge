@@ -145,6 +145,7 @@ estop:
 | `tools/test.sh --cpp`: gtest `test_estop` | frames for both modes incl. parallel joints; latch refuses arming; reset refused while cause present; operator hold after damp; fault never turns damp into hold; both combos → damp; trigger from `DISARMED` stays silent; key parsing; remote header; silence after state loss; shutdown damps and is final |
 | `tools/test.sh --estop`: `drive_estop.py` against `fake_g1.py` | no `/start_control` while another node holds `/lowcmd` at start; both combos, both services, `/stop_control`, timeout, IMU escalation, every refusal and reset, live on `/lowcmd` and `/bridge_state`; arming refused without the remote; `state_loss` → silent after 1.2 s; then `drive_shutdown.py`: SIGINT while armed → damp for 1 s, then silent. Not covered: `state_invalid` |
 | `tools/test.sh --wire` | GEAR's stream ends in a `cmd_timeout` hold |
+| `tools/test.sh --hands`: `drive_hand_cmd.py --check-estop` | `/estop_damp` mid-stream: both hands get limp frames (kp, kd 0) while commands still arrive; `start_hand_control` refused while latched |
 | gantry | G0–G6 below |
 
 Gantry, robot hanging, operator on the remote:

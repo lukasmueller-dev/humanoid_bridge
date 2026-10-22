@@ -190,13 +190,14 @@ def main():
         )
 
     if args.expect_clamped:
-        last = last_live(recorded["right"])
+        # Not the last live frame: drive_hand_cmd --check-estop streams after the over-limit one.
+        live = [s for s in recorded["right"] if not is_limp(s)]
+        clamped = [hi for _, hi in Q_RANGE["right"]]
+        at_max = [s for s in live if close(s["q"], clamped)]
         check(
             "an out-of-range q was clamped, not dropped",
-            last is not None
-            and in_range("right", last["q"])
-            and any(abs(v) > 0.5 for v in last["q"]),
-            "q={}".format([round(v, 3) for v in last["q"]] if last else "no live frames"),
+            bool(at_max) and all(in_range("right", s["q"]) for s in live),
+            f"{len(at_max)} live frames at q_max={[round(v, 3) for v in clamped]}",
         )
 
     if args.expect_nan_dropped:

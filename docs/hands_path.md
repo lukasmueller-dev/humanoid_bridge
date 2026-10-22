@@ -135,8 +135,10 @@ node publishes `/lowcmd` and while the body is tilted, drives both hands through
 deliberately bad command; `check_hand_cmd.py` asserts the mode bits, the
 left/right split, the ramp, the clamps, that NaN commands leave the last good
 target in force, and that the body stayed idle (a `/lowcmd` probe proves the
-fake records). The stale and hot runs check that only the left hand releases;
-a hot hand keeps getting limp frames.
+fake records). The plain run then re-arms both hands and checks that
+`/estop_damp` mid-stream sends both limp frames and refuses `start_hand_control`.
+The stale and hot runs check that only the left hand releases; a hot hand keeps
+getting limp frames.
 
 ## What breaks it
 
