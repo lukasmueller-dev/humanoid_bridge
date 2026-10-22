@@ -87,9 +87,18 @@ namespace sairol_bridge
 
         cmdParams_ = std::vector<CmdParams>(numJoint_);
 
-        if (!nh->get_parameter("torque_control", torqueControl_))
+        // A required key: false and one error naming it when missing.
+        const auto require = [this](const char *key, auto &value)
         {
-            RCLCPP_ERROR(nh->get_logger(), "Failed to get 'torque_control' from parameters");
+            if (nh->get_parameter(key, value))
+            {
+                return true;
+            }
+            RCLCPP_ERROR(nh->get_logger(), "Failed to get '%s' from parameters", key);
+            return false;
+        };
+        if (!require("torque_control", torqueControl_))
+        {
             return false;
         }
         // Checks below return false, not assert: a Release build (NDEBUG) drops every assert.
@@ -98,64 +107,19 @@ namespace sairol_bridge
             RCLCPP_ERROR(nh->get_logger(), "Torque control is not supported yet, please set 'torque_control' to false");
             return false;
         }
-        if (!nh->get_parameter("duration", duration_))
+        if (!require("duration", duration_) ||
+            !require("control_dt", controlDt_) ||
+            !require("upper_limbs_kp_min", upper_limbs_kp_min_) ||
+            !require("upper_limbs_kp_max", upper_limbs_kp_max_) ||
+            !require("upper_limbs_kd_min", upper_limbs_kd_min_) ||
+            !require("upper_limbs_kd_max", upper_limbs_kd_max_) ||
+            !require("lower_limbs_kp_min", lower_limbs_kp_min_) ||
+            !require("lower_limbs_kp_max", lower_limbs_kp_max_) ||
+            !require("lower_limbs_kd_min", lower_limbs_kd_min_) ||
+            !require("lower_limbs_kd_max", lower_limbs_kd_max_) ||
+            !require("empty_joint_index", emptyJointIndex_) ||
+            !require("imu_rpy_threshold", imu_rpy_threshold_))
         {
-            RCLCPP_ERROR(nh->get_logger(), "Failed to get 'duration' from parameters");
-            return false;
-        }
-        if (!nh->get_parameter("control_dt", controlDt_))
-        {
-            RCLCPP_ERROR(nh->get_logger(), "Failed to get 'control_dt' from parameters");
-            return false;
-        }
-        if (!nh->get_parameter("upper_limbs_kp_min", upper_limbs_kp_min_))
-        {
-            RCLCPP_ERROR(nh->get_logger(), "Failed to get 'upper_limbs_kp_min' from parameters");
-            return false;
-        }
-        if (!nh->get_parameter("upper_limbs_kp_max", upper_limbs_kp_max_))
-        {
-            RCLCPP_ERROR(nh->get_logger(), "Failed to get 'upper_limbs_kp_max' from parameters");
-            return false;
-        }
-        if (!nh->get_parameter("upper_limbs_kd_min", upper_limbs_kd_min_))
-        {
-            RCLCPP_ERROR(nh->get_logger(), "Failed to get 'upper_limbs_kd_min' from parameters");
-            return false;
-        }
-        if (!nh->get_parameter("upper_limbs_kd_max", upper_limbs_kd_max_))
-        {
-            RCLCPP_ERROR(nh->get_logger(), "Failed to get 'upper_limbs_kd_max' from parameters");
-            return false;
-        }
-        if (!nh->get_parameter("lower_limbs_kp_min", lower_limbs_kp_min_))
-        {
-            RCLCPP_ERROR(nh->get_logger(), "Failed to get 'lower_limbs_kp_min' from parameters");
-            return false;
-        }
-        if (!nh->get_parameter("lower_limbs_kp_max", lower_limbs_kp_max_))
-        {
-            RCLCPP_ERROR(nh->get_logger(), "Failed to get 'lower_limbs_kp_max' from parameters");
-            return false;
-        }
-        if (!nh->get_parameter("lower_limbs_kd_min", lower_limbs_kd_min_))
-        {
-            RCLCPP_ERROR(nh->get_logger(), "Failed to get 'lower_limbs_kd_min' from parameters");
-            return false;
-        }
-        if (!nh->get_parameter("lower_limbs_kd_max", lower_limbs_kd_max_))
-        {
-            RCLCPP_ERROR(nh->get_logger(), "Failed to get 'lower_limbs_kd_max' from parameters");
-            return false;
-        }
-        if (!nh->get_parameter("empty_joint_index", emptyJointIndex_))
-        {
-            RCLCPP_ERROR(nh->get_logger(), "Failed to get 'empty_joint_index' from parameters");
-            return false;
-        }
-        if (!nh->get_parameter("imu_rpy_threshold", imu_rpy_threshold_))
-        {
-            RCLCPP_ERROR(nh->get_logger(), "Failed to get 'imu_rpy_threshold' from parameters");
             return false;
         }
 
