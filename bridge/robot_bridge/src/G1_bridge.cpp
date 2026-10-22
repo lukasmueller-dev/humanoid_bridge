@@ -15,6 +15,8 @@ sairol_bridge::G1Bridge::G1Bridge(rclcpp::Node::SharedPtr node) : BridgeCore(nod
     lowStateSubscriber_ = nh->create_subscription<unitree_hg::msg::LowState>(
         "/lowstate", 1, std::bind(&sairol_bridge::G1Bridge::lowStateHandler_, this, std::placeholders::_1));
 
+    // Let discovery settle: checked too early, an existing /lowcmd publisher is missed and nothing waits.
+    rclcpp::sleep_for(std::chrono::seconds(1));
     while (!checkExternalPublisher_("/lowcmd"))
     {
         rclcpp::sleep_for(std::chrono::milliseconds(1000));
