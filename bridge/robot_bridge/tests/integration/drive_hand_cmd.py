@@ -49,6 +49,11 @@ def main():
         action="store_true",
         help="finish with an out-of-range q, which the bridge must clamp",
     )
+    parser.add_argument(
+        "--check-lowcmd-guard",
+        action="store_true",
+        help="first check that start_hand_control is refused while another node publishes /lowcmd",
+    )
     args = parser.parse_args()
 
     import rclpy
@@ -61,6 +66,19 @@ def main():
     client = RobotCmdClient(node, num_dof=29, control_frequency=50.0)
     factory = make_factory(client)
     hands = {side: factory(is_left=(side == "left")) for side in ("left", "right")}
+
+    if args.check_lowcmd_guard:
+        from unitree_hg.msg import LowCmd
+
+        # A restarted robot's motion service on /lowcmd blocks hand arming too.
+        other = node.create_publisher(LowCmd, "/lowcmd", 10)
+        time.sleep(1.0)  # until the bridge's graph sees it
+        response = client.start_hand_control(timeout_sec=30.0)
+        print("drive: start_hand_control, other /lowcmd publisher ->", response, flush=True)
+        if response.success or "/lowcmd" not in response.message:
+            raise SystemExit("start_hand_control not refused with another /lowcmd publisher")
+        node.destroy_publisher(other)
+        time.sleep(1.0)
 
     print("drive: calling start_hand_control", flush=True)
     response = client.start_hand_control(timeout_sec=30.0)

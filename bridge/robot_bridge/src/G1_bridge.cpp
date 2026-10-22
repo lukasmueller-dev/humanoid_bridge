@@ -793,7 +793,7 @@ void sairol_bridge::G1Bridge::startHandControlServiceCB_(
         return;
     }
     std::string why;
-    if (!remoteAllowsArming_(why))
+    if (!remoteAllowsArming_(why) || !robotAllowsArming_(why))
     {
         response->success = false;
         response->message = why;

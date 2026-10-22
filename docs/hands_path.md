@@ -126,7 +126,8 @@ tools/test.sh --stale-after 3.5     # per-side release
 `start_hand_control`, so 3.0 to 4.0 lands mid-stream.
 
 `fake_dex3.py` publishes state at 100 Hz and records `/dex3/*/cmd`;
-`drive_hand_cmd.py` drives both hands through the adapter and then sends a
+`drive_hand_cmd.py` checks that `start_hand_control` is refused while another
+node publishes `/lowcmd`, drives both hands through the adapter and then sends a
 deliberately bad command; `check_hand_cmd.py` asserts the mode bits, the
 left/right split, the ramp, the clamps, a NaN rejection, and that the body
 stayed idle. `STALE_AFTER` silences the left hand mid-stream to exercise the
