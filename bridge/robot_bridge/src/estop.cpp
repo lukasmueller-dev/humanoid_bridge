@@ -26,7 +26,7 @@ namespace sairol_bridge::estop
     bool isOperator(Cause cause)
     {
         return cause == Cause::RemoteDamp || cause == Cause::RemoteHold ||
-               cause == Cause::ServiceDamp || cause == Cause::ServiceHold;
+               cause == Cause::ServiceDamp || cause == Cause::ServiceHold || cause == Cause::Shutdown;
     }
 
     bool latches(Cause cause)
@@ -69,6 +69,7 @@ namespace sairol_bridge::estop
         case Cause::RemoteHold: return "remote_hold";
         case Cause::ServiceDamp: return "service_damp";
         case Cause::ServiceHold: return "service_hold";
+        case Cause::Shutdown: return "shutdown";
         case Cause::Stop: return "stop";
         case Cause::Imu: return "imu";
         case Cause::StateLoss: return "state_loss";
@@ -197,7 +198,8 @@ namespace sairol_bridge::estop
     Transition SafetyLatch::trigger(Cause cause, bool was_tracking)
     {
         Transition result;
-        if (cause == Cause::None)
+        // Shutdown is final: the process is exiting, so nothing changes its mode or re-arms.
+        if (cause == Cause::None || cause_ == Cause::Shutdown)
         {
             return result;
         }
@@ -255,6 +257,11 @@ namespace sairol_bridge::estop
         if (state_ != State::Latched)
         {
             why = "not latched";
+            return false;
+        }
+        if (cause_ == Cause::Shutdown)
+        {
+            why = "shutting down";
             return false;
         }
         if (cause_present)
