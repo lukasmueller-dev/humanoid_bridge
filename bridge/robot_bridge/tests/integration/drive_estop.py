@@ -116,6 +116,19 @@ class Driver:
             rclpy.spin_once(self.node, timeout_sec=0.005)
         return False
 
+    def drain(self, quiet=0.1, timeout=2.0):
+        """Spin until no /lowcmd frame for `quiet` s; False if frames go on for `timeout` s."""
+        end = time.monotonic() + timeout
+        seen, last = self.count, time.monotonic()
+        while time.monotonic() < end:
+            rclpy.spin_once(self.node, timeout_sec=0.005)
+            now = time.monotonic()
+            if self.count != seen:
+                seen, last = self.count, now
+            elif now - last >= quiet:
+                return True
+        return False
+
     def wait_log(self, text, timeout):
         end = time.monotonic() + timeout
         while time.monotonic() < end:
@@ -450,9 +463,14 @@ class Driver:
         self.spin(0.3)
         self.check("frames go on right after the loss", self.count > count, f"{self.count - count}")
         self.check_state("silent 1.2 s after the loss", "LATCHED damp remote_damp silent")
+        # /bridge_state is taken first: frames sent before the latch can still be queued.
+        before = self.count
+        quiet = self.drain()
         count = self.count
         self.spin(0.5)
-        self.check("silent latch publishes nothing", self.count == count, f"{self.count - count}")
+        detail = f"{self.count - count} after {count - before} drained"
+        detail += "" if quiet else ", no 0.1 s gap in 2 s"
+        self.check("silent latch publishes nothing", quiet and self.count == count, detail)
         self.pause.publish(Bool(data=False))
         self.spin(0.5)
         self.check("estop_reset once /lowstate is back", self.client.estop_reset().success)
