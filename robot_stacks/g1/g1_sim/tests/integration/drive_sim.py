@@ -33,6 +33,8 @@ def load_params(path):
     return {
         "kp": [float(params[n]["kp"]) for n in names],
         "kd": [float(params[n]["kd"]) for n in names],
+        "q_min": [float(params[n]["q_min"]) for n in names],
+        "q_max": [float(params[n]["q_max"]) for n in names],
         "ready_q": [float(v) for v in params["ready_q"]],
     }
 
@@ -100,11 +102,20 @@ class Driver:
             return
         self.check("remote header", bytes(self.low.wireless_remote[:2]) == b"\x55\x51")
 
-        ready = self.params["ready_q"]
-        reply = self.client.start_control(default_position=ready, timeout_sec=30.0)
-        self.check("start_control", reply.success, reply.message)
+        # As the commander arms: to the measured pose, then Ready.
+        measured = [m.q for m in self.low.motor_state[:NUM_MOTORS]]
+        lo, hi = self.params["q_min"], self.params["q_max"]
+        past = [i for i in range(NUM_MOTORS) if not lo[i] <= measured[i] <= hi[i]]
+        print(f"note  measured joints past their range: {past}", flush=True)
+        reply = self.client.start_control(default_position=measured, timeout_sec=30.0)
+        self.check("start_control from the measured pose", reply.success, reply.message)
         self.spin(RAMP_SECONDS)
         self.check("bridge ARMED", self.state == "ARMED", str(self.state))
+
+        ready = self.params["ready_q"]
+        reply = self.client.ready_position_control()
+        self.check("ready_position_control", reply.success, reply.message)
+        self.spin(RAMP_SECONDS)
         q = [m.q for m in self.low.motor_state[:NUM_MOTORS]]
         worst = max(range(NUM_MOTORS), key=lambda i: abs(q[i] - ready[i]))
         err = abs(q[worst] - ready[worst])
