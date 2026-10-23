@@ -176,6 +176,28 @@ def test_run_loop_skips_ticks_without_fresh_state():
     assert sleeps == [DT, 2 * DT, 3 * DT, 4 * DT]
 
 
+def test_hold_resends_the_last_targets_with_hold_position():
+    ctl, _, _ = make()
+    assert ctl.hold() is False, "nothing to hold before the first tick"
+    target = ctl.tick(STATE)
+    assert ctl.hold() is True
+    last = ctl.client.cmds[-1]
+    np.testing.assert_allclose(last["q_target_pos"], target)
+    assert last["hold_position"] is True and ctl.client.cmds[-2]["hold_position"] is False
+
+
+def test_run_loop_stops_after_seconds():
+    ctl, _, _ = make()
+    t = [0.0]
+
+    def sleep(delay):
+        t[0] += delay
+
+    ac.run_loop(ctl, SimpleNamespace(fresh=lambda: STATE), SimpleNamespace(latest=lambda: None),
+                threading.Event(), clock=lambda: t[0], sleep=sleep, out=lambda _: None, seconds=0.1)
+    assert len(ctl.client.cmds) == 5
+
+
 def test_urdf_defaults_beside_the_amo_dir(tmp_path):
     args = ac.parse_args(["--amo-dir", str(tmp_path / "real" / "teleop")])
     assert args.urdf == tmp_path / "real" / "assets" / "g1" / "g1_body29_hand14.urdf"

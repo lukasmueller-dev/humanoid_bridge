@@ -79,6 +79,7 @@ class Controller:
         self._arm_from = None  # (measured arms, clock) at the first tick
         self._hand_q = None
         self._goal_at = None  # clock() of the last goal taken
+        self._last = None  # (targets, tau) of the last tick
         self._live = False
 
     def take_goal(self, message):
@@ -119,13 +120,25 @@ class Controller:
             self._arm_from = (np.asarray(q, dtype=np.float64)[ARMS].copy(), self.clock())
         target = self.amo.step(q, dq, quat, gyro, self.command())
         target[ARMS] = self._arm_q if self._arm_q is not None else self._start_arms()
-        self.client.send_cmd(q_target_pos=target, target_tau=self.gravity(target),
+        tau = self.gravity(target)
+        self.client.send_cmd(q_target_pos=target, target_tau=tau,
                              target_kp=KP_SENT, target_kd=KD_SENT, duration=DT, hold_position=False)
+        self._last = (target, tau)
         if self.hands and self._hand_q is not None:
             for i, side in enumerate(HAND_SIDES):
                 self.client.send_hand_cmd(side, q=self._hand_q[7 * i:7 * i + 7],
                                           kp=[HAND_KP] * 7, kd=[HAND_KD] * 7, duration=DT)
         return target
+
+    def hold(self):
+        """The last targets once more with hold_position: the bridge holds them, no cmd_timeout latch.
+        False before the first tick."""
+        if self._last is None:
+            return False
+        target, tau = self._last
+        self.client.send_cmd(q_target_pos=target, target_tau=tau,
+                             target_kp=KP_SENT, target_kd=KD_SENT, duration=DT, hold_position=True)
+        return True
 
 
 class LatestState:
@@ -169,17 +182,21 @@ def parse_args(argv=None):
     p.add_argument("--no-hands", dest="hands", action="store_false", help="send no /hand_cmd")
     p.add_argument("--lowstate-topic", default="/lowstate")
     p.add_argument("--state-wait", type=float, default=10.0, help="s to wait for the first /lowstate")
+    p.add_argument("--seconds", type=float, default=0.0,
+                   help="stop after this long, counted from the first tick, then hold; 0: until Ctrl-C")
     args = p.parse_args(argv)
     if args.urdf is None:
         args.urdf = args.amo_dir.expanduser().parent / "assets" / "g1" / "g1_body29_hand14.urdf"
     return args
 
 
-def run_loop(controller, state, goals, stop, clock=time.monotonic, sleep=time.sleep, out=print):
-    """Ticks every DT until `stop` is set; a late tick is not made up."""
+def run_loop(controller, state, goals, stop, clock=time.monotonic, sleep=time.sleep, out=print,
+             seconds=0.0):
+    """Ticks every DT until `stop` is set or `seconds` (0: no limit) ran out; a late tick is not made up."""
     next_at = clock()
+    ends_at = next_at + seconds if seconds else None
     stale = False
-    while not stop.is_set():
+    while not stop.is_set() and (ends_at is None or clock() < ends_at):
         message = goals.latest()
         if message is not None:
             controller.take_goal(message)
@@ -221,6 +238,7 @@ def main(argv=None):
     spinner.start()
     goals = goal_mod.GoalSubscriber(args.goal_host, args.goal_port)
     stop = threading.Event()
+    controller = None
     try:
         deadline = time.monotonic() + args.state_wait
         while state.fresh() is None:
@@ -232,11 +250,14 @@ def main(argv=None):
         controller = Controller(amo, gravity, client, hands=args.hands)
         print(f"{READY} (tau-ff {args.tau_ff}, hands {'on' if args.hands else 'off'}, "
               f"goals tcp://{args.goal_host}:{args.goal_port})", flush=True)
-        run_loop(controller, state, goals, stop)
+        run_loop(controller, state, goals, stop, seconds=args.seconds)
     except KeyboardInterrupt:
         pass
     finally:
         stop.set()
+        if controller is not None and controller.hold():
+            print("held the last targets (hold_position): the bridge stays ARMED; Stop on the page",
+                  flush=True)
         goals.close()
         node.destroy_node()
         rclpy.shutdown()
