@@ -2,9 +2,9 @@
 
 The port of psi0's `real/deploy/psi-inference_rtc.py` control tick, without its own rt/lowcmd:
 gains from `robot_body.py`, hands from `robot_hand_unitree.py`, at AMO's 50 Hz. Arming is the
-operator's step; the bridge drops /robot_cmd until then. Before the first goal the arms hold
-the pose measured at the first tick. No goal for GOAL_TIMEOUT: AMO stands, velocities 0, arms
-and hands at the last goal.
+operator's step; the bridge drops /robot_cmd until then. Before the first goal the arms ramp
+from the pose measured at the first tick to psi0's default arms (AMO balances best there).
+No goal for GOAL_TIMEOUT: AMO stands, velocities 0, arms and hands at the last goal.
 
 Runs in psi0's venv (CUDA torch, pinocchio) with the ROS workspace sourced:
 
@@ -26,13 +26,14 @@ import numpy as np
 
 from g1_stack.amo import goal as goal_mod
 from g1_stack.amo import policy as amo_policy
-from g1_stack.amo.policy import DT, NUM_MOTORS, STAND, Command
+from g1_stack.amo.policy import DEFAULT_DOF_POS, DT, NUM_MOTORS, STAND, Command
 from g1_stack.amo.torque import MODES
 
 NODE_NAME = "amo_bridge"
 READY = "AMO -> /robot_cmd"  # the lab waits for this line
 GOAL_TIMEOUT = 0.5  # s
 STATE_TIMEOUT = 0.1  # s: older /lowstate sends nothing; the bridge's cmd_timeout holds
+ARM_RAMP_S = 2.0  # measured arms -> default arms, before the first goal
 ARMS = slice(15, 29)
 
 # robot_body.py:191-212, as psi0 deployed them.
@@ -74,7 +75,8 @@ class Controller:
         self.clock = clock
         self.out = out
         self._command = STAND
-        self._arm_q = None  # the measured arms at the first tick, until a goal
+        self._arm_q = None  # the last goal's arms
+        self._arm_from = None  # (measured arms, clock) at the first tick
         self._hand_q = None
         self._goal_at = None  # clock() of the last goal taken
         self._live = False
@@ -105,13 +107,18 @@ class Controller:
         return Command(torso_roll=c.torso_roll, torso_pitch=c.torso_pitch, torso_yaw=c.torso_yaw,
                        torso_height=c.torso_height)
 
+    def _start_arms(self):
+        measured, at = self._arm_from
+        a = min(1.0, (self.clock() - at) / ARM_RAMP_S)
+        return (1 - a) * measured + a * DEFAULT_DOF_POS[ARMS]
+
     def tick(self, state):
         """`state`: (q29, dq29, quat wxyz, gyro). Returns the 29 targets sent."""
         q, dq, quat, gyro = state
-        if self._arm_q is None:
-            self._arm_q = np.asarray(q, dtype=np.float64)[ARMS].copy()
+        if self._arm_from is None:
+            self._arm_from = (np.asarray(q, dtype=np.float64)[ARMS].copy(), self.clock())
         target = self.amo.step(q, dq, quat, gyro, self.command())
-        target[ARMS] = self._arm_q
+        target[ARMS] = self._arm_q if self._arm_q is not None else self._start_arms()
         self.client.send_cmd(q_target_pos=target, target_tau=self.gravity(target),
                              target_kp=KP_SENT, target_kd=KD_SENT, duration=DT, hold_position=False)
         if self.hands and self._hand_q is not None:

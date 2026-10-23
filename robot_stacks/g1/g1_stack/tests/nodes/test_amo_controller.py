@@ -77,15 +77,19 @@ def test_sent_gains_are_the_tables_clipped_to_the_bridge_envelope():
     assert ac.KP_SENT[12:15].tolist() == [350.0] * 3 and ac.KD_SENT[12:15].tolist() == [10.0] * 3
 
 
-def test_before_any_goal_amo_stands_and_the_arms_hold_the_first_measured_pose():
-    ctl, _, _ = make()
+def test_before_any_goal_amo_stands_and_the_arms_ramp_from_measured_to_default():
+    ctl, clock, _ = make()
     q = DEFAULT_DOF_POS.copy()
     q[15:] = 0.7
     target = ctl.tick((q,) + STATE[1:])
     assert ctl.amo.commands == [STAND]
     np.testing.assert_allclose(target[15:], np.full(14, 0.7))
-    target = ctl.tick(STATE)  # the arms moved: the target stays the first measured pose
-    np.testing.assert_allclose(target[15:], np.full(14, 0.7))
+    clock.t += ac.ARM_RAMP_S / 2
+    target = ctl.tick(STATE)
+    np.testing.assert_allclose(target[15:], (np.full(14, 0.7) + DEFAULT_DOF_POS[15:]) / 2)
+    clock.t += ac.ARM_RAMP_S
+    target = ctl.tick(STATE)
+    np.testing.assert_allclose(target[15:], DEFAULT_DOF_POS[15:])
     sent = ctl.client.cmds[-1]
     np.testing.assert_allclose(sent["q_target_pos"], target)
     np.testing.assert_allclose(sent["target_tau"], np.full(29, 0.5))
