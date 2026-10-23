@@ -77,11 +77,15 @@ def test_sent_gains_are_the_tables_clipped_to_the_bridge_envelope():
     assert ac.KP_SENT[12:15].tolist() == [350.0] * 3 and ac.KD_SENT[12:15].tolist() == [10.0] * 3
 
 
-def test_before_any_goal_amo_stands_with_default_arms_and_no_hands():
+def test_before_any_goal_amo_stands_and_the_arms_hold_the_first_measured_pose():
     ctl, _, _ = make()
-    target = ctl.tick(STATE)
+    q = DEFAULT_DOF_POS.copy()
+    q[15:] = 0.7
+    target = ctl.tick((q,) + STATE[1:])
     assert ctl.amo.commands == [STAND]
-    np.testing.assert_allclose(target[15:], DEFAULT_DOF_POS[15:])
+    np.testing.assert_allclose(target[15:], np.full(14, 0.7))
+    target = ctl.tick(STATE)  # the arms moved: the target stays the first measured pose
+    np.testing.assert_allclose(target[15:], np.full(14, 0.7))
     sent = ctl.client.cmds[-1]
     np.testing.assert_allclose(sent["q_target_pos"], target)
     np.testing.assert_allclose(sent["target_tau"], np.full(29, 0.5))

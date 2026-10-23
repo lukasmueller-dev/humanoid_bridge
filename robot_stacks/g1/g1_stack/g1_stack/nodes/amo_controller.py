@@ -2,8 +2,9 @@
 
 The port of psi0's `real/deploy/psi-inference_rtc.py` control tick, without its own rt/lowcmd:
 gains from `robot_body.py`, hands from `robot_hand_unitree.py`, at AMO's 50 Hz. Arming is the
-operator's step; the bridge drops /robot_cmd until then. No goal for GOAL_TIMEOUT: AMO stands,
-velocities 0, arms and hands at the last goal (default arms before the first).
+operator's step; the bridge drops /robot_cmd until then. Before the first goal the arms hold
+the pose measured at the first tick. No goal for GOAL_TIMEOUT: AMO stands, velocities 0, arms
+and hands at the last goal.
 
 Runs in psi0's venv (CUDA torch, pinocchio) with the ROS workspace sourced:
 
@@ -25,7 +26,7 @@ import numpy as np
 
 from g1_stack.amo import goal as goal_mod
 from g1_stack.amo import policy as amo_policy
-from g1_stack.amo.policy import DEFAULT_DOF_POS, DT, NUM_MOTORS, STAND, Command
+from g1_stack.amo.policy import DT, NUM_MOTORS, STAND, Command
 from g1_stack.amo.torque import MODES
 
 NODE_NAME = "amo_bridge"
@@ -73,7 +74,7 @@ class Controller:
         self.clock = clock
         self.out = out
         self._command = STAND
-        self._arm_q = DEFAULT_DOF_POS[ARMS].copy()
+        self._arm_q = None  # the measured arms at the first tick, until a goal
         self._hand_q = None
         self._goal_at = None  # clock() of the last goal taken
         self._live = False
@@ -107,6 +108,8 @@ class Controller:
     def tick(self, state):
         """`state`: (q29, dq29, quat wxyz, gyro). Returns the 29 targets sent."""
         q, dq, quat, gyro = state
+        if self._arm_q is None:
+            self._arm_q = np.asarray(q, dtype=np.float64)[ARMS].copy()
         target = self.amo.step(q, dq, quat, gyro, self.command())
         target[ARMS] = self._arm_q
         self.client.send_cmd(q_target_pos=target, target_tau=self.gravity(target),
