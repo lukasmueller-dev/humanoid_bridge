@@ -50,10 +50,10 @@ class Clock:
 STATE = (DEFAULT_DOF_POS.copy(), np.zeros(29), np.array([1.0, 0, 0, 0]), np.zeros(3))
 
 
-def make(hands=True):
+def make(hands=True, walk=False):
     clock, lines = Clock(), []
     ctl = ac.Controller(FakeAmo(), lambda q: np.full(29, 0.5), FakeClient(), hands=hands,
-                        clock=clock, out=lines.append)
+                        walk=walk, clock=clock, out=lines.append)
     return ctl, clock, lines
 
 
@@ -99,7 +99,7 @@ def test_before_any_goal_amo_stands_and_the_arms_ramp_from_measured_to_default()
 
 
 def test_goal_drives_arms_hands_and_command():
-    ctl, _, lines = make()
+    ctl, _, lines = make(walk=True)
     ctl.take_goal(a_goal(torso_rpy=(0.1, 0.2, 0.3), torso_height=0.7, vx=0.6, target_yaw=0.4))
     target = ctl.tick(STATE)
     assert ctl.amo.commands[-1] == Command(0.1, 0.2, 0.3, 0.7, vx=0.6, target_yaw=0.4)
@@ -110,7 +110,21 @@ def test_goal_drives_arms_hands_and_command():
     np.testing.assert_allclose(kwargs["q"], np.full(7, 0.2))
     assert (kwargs["kp"], kwargs["kd"]) == ([1.5] * 7, [0.2] * 7)
     assert ctl.amo.yaw_resets == 1
-    assert lines == ["goal stream: live"]
+    assert lines == ["goal stream: live",
+                     "goal asks to walk: vx +0.60 vy +0.00 vyaw +0.000 target_yaw +0.40; applied"]
+
+
+def test_without_walk_amo_stays_in_place_and_logs_what_it_dropped():
+    ctl, _, lines = make()
+    ctl.take_goal(a_goal(torso_rpy=(0.1, 0.2, 0.3), torso_height=0.7, vyaw=0.15, target_yaw=-1.05))
+    ctl.tick(STATE)
+    assert ctl.amo.commands[-1] == Command(0.1, 0.2, 0.3, 0.7), "torso kept, walk and heading dropped"
+    ctl.take_goal(a_goal(vyaw=0.15))
+    ctl.take_goal(a_goal())
+    assert lines[1:] == [
+        "goal asks to walk: vx +0.00 vy +0.00 vyaw +0.150 target_yaw -1.05; dropped (no --walk)",
+        "goal asks to stand: vx +0.00 vy +0.00 vyaw +0.000 target_yaw +0.00; dropped (no --walk)"]
+    assert ctl.walk_goals == 2
 
 
 def test_no_hands_flag_sends_no_hand_cmd():
@@ -201,4 +215,4 @@ def test_run_loop_stops_after_seconds():
 def test_urdf_defaults_beside_the_amo_dir(tmp_path):
     args = ac.parse_args(["--amo-dir", str(tmp_path / "real" / "teleop")])
     assert args.urdf == tmp_path / "real" / "assets" / "g1" / "g1_body29_hand14.urdf"
-    assert (args.tau_ff, args.hands, args.goal_port) == ("arms", True, 6001)
+    assert (args.tau_ff, args.hands, args.goal_port, args.walk) == ("arms", True, 6001, False)

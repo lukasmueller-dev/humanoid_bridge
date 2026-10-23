@@ -5,6 +5,7 @@ gains from `robot_body.py`, hands from `robot_hand_unitree.py`, at AMO's 50 Hz. 
 operator's step; the bridge drops /robot_cmd until then. Before the first goal the arms ramp
 from the pose measured at the first tick to psi0's default arms (AMO balances best there).
 No goal for GOAL_TIMEOUT: AMO stands, velocities 0, arms and hands at the last goal.
+Without --walk the goal's vx, vy and vyaw are dropped: AMO stays in place and ignores the heading.
 
 Runs in psi0's venv (CUDA torch, pinocchio) with the ROS workspace sourced:
 
@@ -17,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import signal
 import sys
 import threading
 import time
@@ -26,7 +28,7 @@ import numpy as np
 
 from g1_stack.amo import goal as goal_mod
 from g1_stack.amo import policy as amo_policy
-from g1_stack.amo.policy import DEFAULT_DOF_POS, DT, NUM_MOTORS, STAND, Command
+from g1_stack.amo.policy import DEFAULT_DOF_POS, DT, IN_PLACE_SPEED, NUM_MOTORS, STAND, Command
 from g1_stack.amo.torque import MODES
 
 NODE_NAME = "amo_bridge"
@@ -67,11 +69,13 @@ def default_amo_dir():
 class Controller:
     """One `tick` per DT: AMO for legs and waist, the goal for arms and hands, then send."""
 
-    def __init__(self, amo, gravity, client, hands=True, clock=time.monotonic, out=print):
+    def __init__(self, amo, gravity, client, hands=True, walk=False, clock=time.monotonic,
+                 out=print):
         self.amo = amo
         self.gravity = gravity
         self.client = client
         self.hands = hands
+        self.walk = walk
         self.clock = clock
         self.out = out
         self._command = STAND
@@ -81,6 +85,8 @@ class Controller:
         self._goal_at = None  # clock() of the last goal taken
         self._last = None  # (targets, tau) of the last tick
         self._live = False
+        self._walking_asked = False  # the goal's own walk command left the in-place band
+        self.walk_goals = 0  # goals that asked to walk
 
     def take_goal(self, message):
         """A goal dict from the wire; a malformed one is reported and dropped."""
@@ -96,13 +102,21 @@ class Controller:
         self._command, self._arm_q, self._goal_at = command, arm_q, self.clock()
         if hand_q is not None:
             self._hand_q = hand_q
+        asked = max(abs(command.vx), abs(command.vy), abs(command.vyaw)) >= IN_PLACE_SPEED
+        self.walk_goals += asked
+        if asked != self._walking_asked:
+            self._walking_asked = asked
+            what = "walk" if asked else "stand"
+            done = "applied" if self.walk else "dropped (no --walk)"
+            self.out(f"goal asks to {what}: vx {command.vx:+.2f} vy {command.vy:+.2f} "
+                     f"vyaw {command.vyaw:+.3f} target_yaw {command.target_yaw:+.2f}; {done}")
 
     def command(self):
         """The command for this tick: the goal's, or standing still once it is stale."""
         if self._live and self.clock() - self._goal_at > GOAL_TIMEOUT:
             self._live = False
             self.out(f"goal stream: none for {GOAL_TIMEOUT} s; standing")
-        if self._live:
+        if self._live and self.walk:
             return self._command
         c = self._command
         return Command(torso_roll=c.torso_roll, torso_pitch=c.torso_pitch, torso_yaw=c.torso_yaw,
@@ -180,6 +194,8 @@ def parse_args(argv=None):
     p.add_argument("--goal-port", type=int, default=goal_mod.GOAL_PORT)
     p.add_argument("--device", default="cuda")
     p.add_argument("--no-hands", dest="hands", action="store_false", help="send no /hand_cmd")
+    p.add_argument("--walk", action="store_true",
+                   help="apply the goal's vx, vy, vyaw and heading; default: AMO stays in place")
     p.add_argument("--lowstate-topic", default="/lowstate")
     p.add_argument("--state-wait", type=float, default=10.0, help="s to wait for the first /lowstate")
     p.add_argument("--seconds", type=float, default=0.0,
@@ -228,7 +244,10 @@ def main(argv=None):
 
     amo = amo_policy.load(args.amo_dir, args.device)
     gravity = Gravity(args.urdf, args.tau_ff)
-    rclpy.init()
+    # rclpy's own SIGINT/SIGTERM handlers shut the context mid-tick; stop the loop instead, then hold.
+    from rclpy.signals import SignalHandlerOptions
+
+    rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
     node = rclpy.create_node(NODE_NAME)
     state = LatestState()
     node.create_subscription(LowState, args.lowstate_topic, state.on_lowstate, 10)
@@ -238,6 +257,8 @@ def main(argv=None):
     spinner.start()
     goals = goal_mod.GoalSubscriber(args.goal_host, args.goal_port)
     stop = threading.Event()
+    for signum in (signal.SIGINT, signal.SIGTERM):
+        signal.signal(signum, lambda *_: stop.set())
     controller = None
     try:
         deadline = time.monotonic() + args.state_wait
@@ -247,8 +268,9 @@ def main(argv=None):
                       file=sys.stderr)
                 return 2
             time.sleep(0.05)
-        controller = Controller(amo, gravity, client, hands=args.hands)
+        controller = Controller(amo, gravity, client, hands=args.hands, walk=args.walk)
         print(f"{READY} (tau-ff {args.tau_ff}, hands {'on' if args.hands else 'off'}, "
+              f"walk {'on' if args.walk else 'off'}, "
               f"goals tcp://{args.goal_host}:{args.goal_port})", flush=True)
         run_loop(controller, state, goals, stop, seconds=args.seconds)
     except KeyboardInterrupt:
@@ -258,6 +280,8 @@ def main(argv=None):
         if controller is not None and controller.hold():
             print("held the last targets (hold_position): the bridge stays ARMED; Stop on the page",
                   flush=True)
+        if controller is not None:
+            print(f"goals that asked to walk: {controller.walk_goals}", flush=True)
         goals.close()
         node.destroy_node()
         rclpy.shutdown()
