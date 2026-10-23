@@ -24,6 +24,8 @@ First item — `tools/g1-bringup.sh --foreground`, so the page can supervise the
 - With `--foreground`: a bridge already running → refuse (exit 1), not "only arm"; `--arm-*` → refuse.
 - The page calls it from commander `config/g1.yaml` with a stop confirm: motors go passive ~0.4 s after `/lowcmd` stops (`docs/estop.md`, G0).
 
+Second item — Ready clamps joint 14 (waist pitch): `joint 14 target -0.528 outside [-0.520, 0.520]: clamped` once per second during Ready on g1_sim (log 2026-10-22 19:37). Find whether `ready_q` or the ramp passes the limit; repair it (Lukas, 2026-10-23).
+
 ## Next action
 
 1. Rebase onto `origin/main` (this branch starts at `e60bbd6`).
