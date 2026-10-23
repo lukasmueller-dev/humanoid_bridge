@@ -11,12 +11,14 @@ import urllib.request
 
 import rclpy
 import yaml
+from rcl_interfaces.srv import GetParameters
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import String, UInt16
 from unitree_hg.msg import LowState
 
 from g1_camera import wire
 from g1_camera.client import CameraClient
+from g1_sim.model import DEFAULT_MJCF
 from robot_bridge.cmd_client import RobotCmdClient
 
 NUM_MOTORS = 29
@@ -94,8 +96,18 @@ class Driver:
             self.client.send_cmd(q_target_pos=target)
             self.spin(0.02)
 
+    def check_mjcf(self):
+        client = self.node.create_client(GetParameters, "/g1_sim/get_parameters")
+        client.wait_for_service(timeout_sec=5.0)
+        future = client.call_async(GetParameters.Request(names=["mjcf"]))
+        rclpy.spin_until_future_complete(self.node, future, timeout_sec=5.0)
+        got = future.result().values[0].string_value if future.result() else None
+        want = str(DEFAULT_MJCF.resolve())
+        self.check("parameter mjcf is the loaded file", got == want, f"{got}, want {want}")
+
     def run(self):
         self.spin(2.0)
+        self.check_mjcf()
         self.check("/lowstate from the sim", self.low is not None)
         self.check("bridge DISARMED", self.state == "DISARMED", str(self.state))
         if self.low is None:
