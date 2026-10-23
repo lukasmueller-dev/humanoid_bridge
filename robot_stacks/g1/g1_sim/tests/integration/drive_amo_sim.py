@@ -17,7 +17,7 @@ from g1_stack.amo.policy import DEFAULT_DOF_POS, quat_to_euler
 from robot_bridge.cmd_client import RobotCmdClient
 
 NUM_MOTORS = 29
-KEY_R1, KEY_L1 = 1 << 0, 1 << 1
+KEY_R1, KEY_L1, KEY_R2 = 1 << 0, 1 << 1, 1 << 4
 HOLD_SECONDS = 3.0  # in the gantry, AMO driving, before the drop
 STAND_SECONDS = 30.0
 MAX_TILT = 0.35  # rad, roll or pitch; the bridge latches at 1.0
@@ -105,11 +105,11 @@ class Driver:
 
         self.gantry.publish(Bool(data=True))
         self.spin(1.0)
-        self.keys.publish(UInt16(data=KEY_L1 | KEY_R1))  # remote_combo_damp
+        self.keys.publish(UInt16(data=KEY_R1 | KEY_R2))  # remote_combo_damp
         self.spin(0.5)
         self.keys.publish(UInt16(data=0))
         state = str(self.state)
-        self.check("remote L1+R1 latches damp", state.startswith("LATCHED damp"), state)
+        self.check("remote R1+R2 latches damp", state.startswith("LATCHED damp"), state)
         print(f"note  bridge states seen: {sorted(self.states)}", flush=True)
 
 
