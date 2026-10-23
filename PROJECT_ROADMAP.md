@@ -7,11 +7,6 @@ _Last updated: 2026-10-22 · turing_
 
 ## Items
 
-### Commander
-
-- [ ] g1_sim publishes its MJCF path as a ROS parameter, for the commander's model line (g1_web_commander `docs/run-card-design.md`).
-  **Done when:** `ros2 param get /g1_sim mjcf` prints the loaded file, for the default and for `--mjcf`.
-
 ### Handover
 
 - [ ] Delete `docs/handover-audit.md`: its plan (P0–P2) is done.
