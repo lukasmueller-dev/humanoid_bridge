@@ -1,4 +1,4 @@
-# Handoff — humanoid_bridge / feat-hands-ready-pos
+# Handoff — humanoid_bridge / feat-robot-link
 
 > The baton. Present tense only: where the work stands *now* and what the
 > next session should do. Overwrite it each session — never append. History
@@ -8,16 +8,16 @@
 > nothing off, and merged, a leftover baton strays onto the default branch.
 
 - **Repo:** humanoid_bridge (+ `g1_web_commander`, same branch name)
-- **Branch:** `feat-hands-ready-pos` — PR #35
-- **Worktree:** /home/lukas-mueller/git/worktrees/humanoid_bridge/feat-hands-ready-pos
+- **Branch:** `feat-robot-link`
+- **Worktree:** /home/lukas-mueller/git/worktrees/humanoid_bridge/feat-robot-link
 - **Last updated:** 2026-10-24 · local (turing)
 
 ## State
 
-- Done, pushed: Ready opens the Dex3 hands (2a54c86). Fake tests pass; checked by hand in the commander sim.
+- Ready opens the Dex3 hands: merged in #35 (965fc7b).
 - Designed (grilled 2026-10-24), not started: Feature 1 and Feature 2 below.
-- Commander branch `feat-hands-ready-pos` does not exist yet: `cd ~/github/g1_web_commander && vibe start feat-hands-ready-pos`.
-- Merge order: #35 first; the commander's sim config needs `g1-bringup.sh --sim`.
+- Commander branch `feat-robot-link` does not exist yet: `cd ~/github/g1_web_commander && vibe start feat-robot-link`.
+- Merge order: the bridge PR first; the commander's sim config needs `g1-bringup.sh --sim`.
 
 ## Feature 1 — Quit from the page (commander only)
 
