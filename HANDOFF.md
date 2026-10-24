@@ -15,7 +15,7 @@
 ## State
 
 - Ready opens the Dex3 hands: merged in #35 (965fc7b).
-- Feature 2, bridge repo half: done, not pushed, no PR yet. Spec: `docs/estop.md` § Robot link; sim side: `robot_stacks/g1/g1_sim/README.md`.
+- Feature 2, bridge repo half: done, PR #36 open. Spec: `docs/estop.md` § Robot link; sim side: `robot_stacks/g1/g1_sim/README.md`.
 - Gate: `tools/test.sh --docker` passes; `tools/test.sh --sim` (sim, sim-link) passes in the g1-sim image (rebuild it: it now has `unitree_sdk2py`).
 - Not started: Feature 1, the commander half of Feature 2.
 - Commander branch `feat-robot-link` does not exist yet: `cd ~/github/g1_web_commander && vibe start feat-robot-link`.
@@ -41,7 +41,7 @@ Commander:
 
 ## Next action
 
-Push (`vibe sync`) and open the bridge PR; then `vibe start feat-robot-link` in `g1_web_commander` for its half.
+Commander: Feature 1 (Quit) on `g1_web_commander` `feat-robot-link` (author starts it); its Feature 2 half after #36 merges. Delete this file before #36 merges.
 
 ## Blockers
 
