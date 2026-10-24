@@ -23,7 +23,7 @@
 #          both hands (hands-ready), Ready with the left hand silent (hands-ready-one)
 #   config the real G1_bridge refuses broken copies of G1_config.yaml
 #   sim    opt-in (--sim), host only: the real G1_bridge against g1_sim (MuJoCo): arm,
-#          hold, /robot_cmd, remote damp
+#          hold, /robot_cmd, remote damp; sim-link: link drop, reboot, g1-bringup.sh --sim release
 #
 # No stage touches hardware. Nothing here opens a real NIC: the DDS settings
 # below pin discovery to loopback, overriding any inherited CYCLONEDDS_URI.
@@ -357,6 +357,7 @@ if [ "$RUN_SIM" = 1 ]; then
         record sim SKIP "g1_sim not in the sourced workspace; tools/build.sh"
     else
         stage_integration sim "$REPO/robot_stacks/g1/g1_sim/tests/integration/run_sim_bridge_test.sh"
+        stage_integration sim-link "$REPO/robot_stacks/g1/g1_sim/tests/integration/run_sim_link_test.sh"
     fi
 fi
 

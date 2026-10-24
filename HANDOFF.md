@@ -15,8 +15,9 @@
 ## State
 
 - Ready opens the Dex3 hands: merged in #35 (965fc7b).
-- Feature 2, bridge core: done, `tools/test.sh --docker` passes: `/robot_link` in `BridgeCore`, `robot_restart` cause, `fake_g1 /fake_g1/reboot` + `/fake_g1/release`, `tools/test.sh --link`. Spec now in `docs/estop.md` § Robot link.
-- Not started: Feature 1, the `g1_sim` half of Feature 2, the commander half.
+- Feature 2, bridge repo half: done, not pushed, no PR yet. Spec: `docs/estop.md` § Robot link; sim side: `robot_stacks/g1/g1_sim/README.md`.
+- Gate: `tools/test.sh --docker` passes; `tools/test.sh --sim` (sim, sim-link) passes in the g1-sim image (rebuild it: it now has `unitree_sdk2py`).
+- Not started: Feature 1, the commander half of Feature 2.
 - Commander branch `feat-robot-link` does not exist yet: `cd ~/github/g1_web_commander && vibe start feat-robot-link`.
 - Merge order: the bridge PR first; the commander's sim config needs `g1-bringup.sh --sim`.
 
@@ -30,10 +31,6 @@
 
 ## Feature 2 — robot link: reboot and link loss
 
-Bridge (this repo), left:
-- `g1_sim`: `/g1_sim/link` (Float32 s, sim time runs on), `/g1_sim/reboot` (gap, sim reset, fake motion service on `/lowcmd`); fake motion switcher answers `CheckMode`/`ReleaseMode` on the `unitree_api` request/response topics and stops its `/lowcmd` on release.
-- g1-sim image: add `unitree_sdk2py`. `g1-bringup.sh --sim`: loopback DDS only, skips the g1_sim-on-NIC refusal, still releases.
-
 Commander:
 - `RESTARTED` (+ `other_lowcmd` as confirmation): banner + "Restart bring-up": always `G1_bridge` stop/start (normal confirms; start releases); camera only if `/health` fails or its ssh session ended. Refused while a `commands_robot` process runs, naming it.
 - `BACK … no_restart`: "link back after X s, no reboot: Reset is safe" + Reset.
@@ -44,7 +41,7 @@ Commander:
 
 ## Next action
 
-`g1_sim`: `/g1_sim/link` and `/g1_sim/reboot` plus the fake motion switcher, then the g1-sim image and `g1-bringup.sh --sim`.
+Push (`vibe sync`) and open the bridge PR; then `vibe start feat-robot-link` in `g1_web_commander` for its half.
 
 ## Blockers
 
@@ -52,5 +49,4 @@ None. Real-G1 tick reset at boot is unverified (roadmap).
 
 ## Gotchas (unpromoted)
 
-- `PROJECT_STATUS.md` 2026-10-19 line names the e-stop combos the wrong way round (config: `R1+R2` damp, `L1+R1` hold).
 - The sandbox shows `/dev/null` masks (`.bashrc`, `.claude/…`) as untracked files in the worktree: never `git add -A`.
