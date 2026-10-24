@@ -136,8 +136,8 @@ Sources: Unitree G1 developer docs (remote control page) and third-party guides;
 ```yaml
 estop:
   damp_kd: 8.0
-  remote_combo_damp: ["L1", "R1"]
-  remote_combo_hold: ["R1", "R2"]
+  remote_combo_damp: ["R1", "R2"]
+  remote_combo_hold: ["L1", "R1"]
   require_remote: true   # arming refused without the remote
   mode:              # damp | hold; operator e-stops are fixed
     stop: hold
