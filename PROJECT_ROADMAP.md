@@ -3,7 +3,7 @@
 > One per repo. Planned work only, one item per task. Finished items are
 > deleted; git history is the log.
 
-_Last updated: 2026-10-24 · turing_
+_Last updated: 2026-10-26 · teleop plan_
 
 ## Items
 
@@ -84,3 +84,10 @@ Decided and fake-tested on `g1-web-interface` (`docs/psi0_gates.md`).
 - [ ] Decide whether the service-call futures in `robot_client.py` should be awaited. Two are assigned and dropped (`init_control`, `stop_control`), currently ruff-suppressed as `F841`. **Done when:** the calls either await or explicitly document fire-and-forget, and the suppression is gone.
 - [ ] Split `robot_client.py` (~600 lines): per-robot `default_pos`/kp/kd tables and `KeyMap` out of the client body. **Done when:** the tables are data in their own module and the ruff `E501` suppression for its commented-out keymap blocks is gone.
 - [ ] `--interface sim` does not reach the bridge: MuJoCo listens on `rt/lowcmd`, which the bridge owns. **Done when:** a sim run drives the same client path as hardware, or the limitation is documented as permanent.
+
+### Teleop
+
+- [ ] `/g1_sim/sticks`: g1_sim takes `std_msgs/Float32MultiArray` `[lx, ly, rx, ry]` and writes it into
+  `wireless_remote` bytes 4-24 (layout of `robot_client.py` `RemoteController`); zero 0.2 s after the last
+  message. Plan: lukasmueller-dev/humanoid-locoman-vla#88. Merge only after its branch test.
+  **Done when:** a test publishes sticks, `RemoteController.set` on `/lowstate` reads them back, and they read zero 0.25 s after the last message.
