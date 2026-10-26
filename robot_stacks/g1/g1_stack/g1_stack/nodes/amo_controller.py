@@ -59,8 +59,10 @@ KD = np.array([
 # The bridge would clip them anyway, with a warning on every message.
 KP_SENT = np.minimum(KP, 350.0)
 KD_SENT = np.minimum(KD, 10.0)
-HAND_KP = 1.5  # robot_hand_unitree.py:58
-HAND_KD = 0.2
+# Upstream 1.5 / 0.2 (robot_hand_unitree.py:58): a finger then breaks free at 12+ rad/s and the bridge's Dex3
+# dq_limit releases the hand (real G1, 2026-10-26). Stiffer and damped, inside the bridge clamps (10, 2).
+HAND_KP = 4.0
+HAND_KD = 0.5
 HAND_SIDES = ("left", "right")
 
 

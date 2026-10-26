@@ -68,7 +68,7 @@ def test_gains_are_psi0_robot_body_tables():
     leg_d = [2, 2, 2, 4, 2, 1]
     arm_d = [7.5, 7.5, 7.5, 7.5, 6, 6, 6]
     assert ac.KD.tolist() == leg_d + leg_d + [15] * 3 + arm_d + arm_d
-    assert (ac.HAND_KP, ac.HAND_KD) == (1.5, 0.2)
+    assert (ac.HAND_KP, ac.HAND_KD) == (4.0, 0.5)
 
 
 def test_sent_gains_are_the_tables_clipped_to_the_bridge_envelope():
@@ -108,7 +108,7 @@ def test_goal_drives_arms_hands_and_command():
     assert [side for side, _ in ctl.client.hands] == ["left", "right"]
     side, kwargs = ctl.client.hands[0]
     np.testing.assert_allclose(kwargs["q"], np.full(7, 0.2))
-    assert (kwargs["kp"], kwargs["kd"]) == ([1.5] * 7, [0.2] * 7)
+    assert (kwargs["kp"], kwargs["kd"]) == ([ac.HAND_KP] * 7, [ac.HAND_KD] * 7)
     assert ctl.amo.yaw_resets == 1
     assert lines == ["goal stream: live",
                      "goal asks to walk: vx +0.60 vy +0.00 vyaw +0.000 target_yaw +0.40; applied"]
