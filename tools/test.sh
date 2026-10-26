@@ -22,7 +22,7 @@
 #          state stops (hands-stale), the left hand overheats (hands-hot), Ready opens
 #          both hands (hands-ready), Ready with the left hand silent (hands-ready-one)
 #   config the real G1_bridge refuses broken copies of G1_config.yaml
-#   sim    opt-in (--sim), host only: the real G1_bridge against g1_sim (MuJoCo): arm,
+#   sim    opt-in (--sim), host only: the real G1_bridge against g1_sim (MuJoCo): sticks, arm,
 #          hold, /robot_cmd, remote damp; sim-link: link drop, reboot, g1-bringup.sh --sim release
 #
 # No stage touches hardware. Nothing here opens a real NIC: the DDS settings

@@ -13,13 +13,14 @@ import rclpy
 import yaml
 from rcl_interfaces.srv import GetParameters
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
-from std_msgs.msg import String, UInt16
+from std_msgs.msg import Float32MultiArray, String, UInt16
 from unitree_hg.msg import HandState, LowState
 
 from g1_camera import wire
 from g1_camera.client import CameraClient
 from g1_sim.model import DEFAULT_MJCF
 from robot_bridge.cmd_client import RobotCmdClient
+from robot_bridge.robot_client import RemoteController
 
 NUM_MOTORS = 29
 KEY_R1, KEY_L1, KEY_R2 = 1 << 0, 1 << 1, 1 << 4
@@ -28,6 +29,8 @@ TOL = 0.05  # rad
 RAMP_SECONDS = 3.0  # `duration` 2.0 plus margin
 HAND_SIDES = ("left", "right")
 HAND_TOL = 0.1  # rad; finger PD at kp 1-2 against the MJCF
+STICKS = [0.5, -0.25, 0.75, -1.0]  # [lx, ly, rx, ry]; exact in float32
+STICKS_ZERO_AFTER = 0.25  # s; g1_sim zeroes them 0.2 s after the last message
 
 
 def load_params(path):
@@ -51,6 +54,7 @@ class Driver:
         self.client = RobotCmdClient(node, num_dof=NUM_MOTORS, control_frequency=50.0)
         self.client.set_default_cmd(params["ready_q"], params["kp"], params["kd"])
         self.keys = node.create_publisher(UInt16, "/g1_sim/keys", 10)
+        self.sticks = node.create_publisher(Float32MultiArray, "/g1_sim/sticks", 10)
         latched = QoSProfile(
             depth=1,
             reliability=ReliabilityPolicy.RELIABLE,
@@ -117,6 +121,23 @@ class Driver:
             err = max(abs(a - b) for a, b in zip(q, want, strict=True))
             self.check(f"{side} hand open at hand_ready_q", err < HAND_TOL, f"max error {err:.3f} rad")
 
+    def read_sticks(self):
+        remote = RemoteController()
+        remote.set(bytes(self.low.wireless_remote))
+        return [remote.lx, remote.ly, remote.rx, remote.ry]
+
+    def check_sticks(self):
+        """/g1_sim/sticks reach RemoteController.set on /lowstate, and zero after the hold."""
+        for _ in range(25):  # 0.5 s at 50 Hz, as a gamepad streams
+            self.sticks.publish(Float32MultiArray(data=STICKS))
+            last = time.monotonic()
+            self.spin(0.02)
+        got = self.read_sticks()
+        self.check("/g1_sim/sticks on /lowstate", got == STICKS, f"{got}")
+        self.spin(last + STICKS_ZERO_AFTER - time.monotonic())
+        got = self.read_sticks()
+        self.check(f"sticks zero {STICKS_ZERO_AFTER} s after the last", got == [0.0] * 4, f"{got}")
+
     def check_mjcf(self):
         client = self.node.create_client(GetParameters, "/g1_sim/get_parameters")
         client.wait_for_service(timeout_sec=5.0)
@@ -134,6 +155,7 @@ class Driver:
         if self.low is None:
             return
         self.check("remote header", bytes(self.low.wireless_remote[:2]) == b"\x55\x51")
+        self.check_sticks()
 
         # As the commander arms: to the measured pose, then Ready.
         measured = [m.q for m in self.low.motor_state[:NUM_MOTORS]]

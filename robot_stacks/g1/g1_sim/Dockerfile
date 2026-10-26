@@ -6,6 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3-numpy \
         python3-pip \
         python3-pytest \
+        python3-scipy \
         python3-yaml \
         ros-humble-rmw-cyclonedds-cpp \
         ros-humble-rosidl-generator-dds-idl \

@@ -14,6 +14,7 @@ MuJoCo G1 in place of the robot: publishes `/lowstate` at 500 Hz, reads `/lowcmd
 | Gantry | spring on the pelvis, feet 5 cm up; on at start |
 | Guard | refuses to start unless DDS stays on loopback (`CYCLONEDDS_URI` names only `lo`, or `ROS_LOCALHOST_ONLY=1`) |
 | Inputs | `/g1_sim/gantry` (Bool), `/g1_sim/remote` (Bool), `/g1_sim/keys` (UInt16), `/g1_sim/reset` (Empty) |
+| Sticks | `/g1_sim/sticks` (`Float32MultiArray` `[lx, ly, rx, ry]`, clipped to ±1) → `wireless_remote` bytes 4-24 as `RemoteController.set` reads them; zero 0.2 s after the last message |
 | Link drop | `/g1_sim/link` (Float32 s): no state out, no command in; sim time and `tick` run on |
 | Reboot | `/g1_sim/reboot` (Float32 s): as a link drop, then a reset, `tick` from 0, motion service `ai` on `/lowcmd` (mode-0 frames, 100 Hz) |
 | Motion switcher | `CheckMode`, `SelectMode`, `ReleaseMode` on `/api/motion_switcher/{request,response}` (`unitree_api`), as unitree_sdk2py calls them; release drops the `/lowcmd` publisher. No motion service at start |
@@ -50,7 +51,7 @@ ros2 topic pub -1 /g1_sim/gantry std_msgs/msg/Bool "{data: false}"   # drop it
 
 ```bash
 pytest robot_stacks/g1/g1_sim/tests/     # no ROS; skips without mujoco or g1.xml
-tools/test.sh --sim                      # bridge arms the sim, holds, /robot_cmd, camera, remote damp;
+tools/test.sh --sim                      # sticks, bridge arms the sim, holds, /robot_cmd, camera, remote damp;
                                          # sim-link: link drop, reboot, restart via g1-bringup.sh --sim
 G1_MJCF=~/.local/share/g1_web_commander/g1_description/g1_29dof_with_hand.xml tools/test.sh --sim   # plus: Ready opens both Dex3
 robot_stacks/g1/g1_sim/tests/integration/run_sim_amo_test.sh   # AMO stands the sim 30 s, gantry off; own netns, psi0 venv + mujoco
@@ -58,6 +59,7 @@ robot_stacks/g1/g1_sim/tests/integration/run_sim_amo_test.sh   # AMO stands the 
 
 ## What breaks it
 
+- **`No module named 'scipy'` in `tools/test.sh --sim`** → an image older than `python3-scipy`: rebuild `g1-sim:humble`.
 - **`no G1 model`** → run `fetch_assets.sh`, or set `G1_MJCF`.
 - **`camera off: ...`** → no GL: `MUJOCO_GL=egl` (Mesa, no GPU needed) or `osmesa`; the image sets `egl`.
 - **Camera ports in use** → a second sim, or a real/fake camera server on 5556/5557: `--camera-port`, `--preview-port`.

@@ -1,7 +1,8 @@
 """MuJoCo G1 on /lowstate at 500 Hz in real time; reads /lowcmd, passive 0.4 s after the last one.
 
 Inputs: /g1_sim/gantry (Bool, hold the pelvis), /g1_sim/remote (Bool, remote header on/off),
-/g1_sim/keys (UInt16, remote key mask), /g1_sim/reset (Empty, back on the gantry),
+/g1_sim/keys (UInt16, remote key mask), /g1_sim/sticks (Float32MultiArray [lx, ly, rx, ry],
+remote sticks, zero 0.2 s after the last), /g1_sim/reset (Empty, back on the gantry),
 /g1_sim/link (Float32 s: no state out, no command in; sim time runs on),
 /g1_sim/reboot (Float32 s: as link, then a reset, tick from 0, and a motion service on /lowcmd).
 The motion service sends passive /lowcmd until released: unitree_sdk2py's MotionSwitcherClient
@@ -22,7 +23,7 @@ import rclpy
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.utilities import remove_ros_args
-from std_msgs.msg import Bool, Empty, Float32, UInt16
+from std_msgs.msg import Bool, Empty, Float32, Float32MultiArray, UInt16
 from unitree_api.msg import Request, Response
 from unitree_hg.msg import HandCmd, HandState, LowCmd, LowState, MotorState
 
@@ -40,6 +41,7 @@ from g1_sim.model import (
     G1Sim,
     HandCommand,
 )
+from g1_sim.sticks import END as STICKS_END, FIRST as STICKS_FIRST, Sticks
 
 MODE_MACHINE = 5  # as fake_g1; the bridge logs "G1 type:" once it is non-zero
 LAG_WARN_S = 0.05  # the bridge damps on /lowstate older than 0.2 s
@@ -65,11 +67,13 @@ class G1SimNode(Node):
         self.motion = MotionSwitcher()
         self.motion_publisher = None  # guarded by self.lock: the physics thread publishes
         self.motion_due = 0.0
+        self.sticks = Sticks()  # guarded by self.lock
         self.publisher = self.create_publisher(LowState, "/lowstate", 10)
         self.create_subscription(LowCmd, "/lowcmd", self._on_cmd, 10)
         self.create_subscription(Bool, "/g1_sim/gantry", self._on_gantry, 10)
         self.create_subscription(Bool, "/g1_sim/remote", self._on_remote, 10)
         self.create_subscription(UInt16, "/g1_sim/keys", self._on_keys, 10)
+        self.create_subscription(Float32MultiArray, "/g1_sim/sticks", self._on_sticks, 10)
         self.create_subscription(Empty, "/g1_sim/reset", self._on_reset, 10)
         self.create_subscription(Float32, "/g1_sim/link", self._on_link, 10)
         self.create_subscription(Float32, "/g1_sim/reboot", self._on_reboot, 10)
@@ -137,6 +141,12 @@ class G1SimNode(Node):
         self.state.wireless_remote[2] = msg.data & 0xFF  # key mask, little-endian
         self.state.wireless_remote[3] = msg.data >> 8
 
+    def _on_sticks(self, msg):
+        with self.lock:
+            refused = self.sticks.set(msg.data, time.monotonic())
+        if refused:
+            self.get_logger().warn(f"/g1_sim/sticks ignored: {refused}", throttle_duration_sec=1.0)
+
     def _on_reset(self, _msg):
         with self.lock:
             self.reset_pending = True
@@ -184,7 +194,8 @@ class G1SimNode(Node):
         self.boot_pending = False
         self.motion.mode = BOOT_MODE
 
-    def _publish(self, s):
+    def _publish(self, s, sticks):
+        self.state.wireless_remote[STICKS_FIRST:STICKS_END] = np.frombuffer(sticks, dtype=np.uint8)
         for i in range(NUM_JOINT):
             ms = self.state.motor_state[i]
             ms.q, ms.dq = float(s["q"][i]), float(s["dq"][i])
@@ -213,6 +224,7 @@ class G1SimNode(Node):
                     self.sim.gantry = True
                     self.reset_pending = False
                     self.hand_due = 0.0  # the sim clock starts again
+                sticks = self.sticks.bytes(now)
                 cmd = self.cmd if now - self.cmd_time <= PASSIVE_AFTER_S else passive
                 self.sim.step(cmd, self.hand_cmds)
                 state = self.sim.state()
@@ -224,7 +236,7 @@ class G1SimNode(Node):
                     self.motion_due = now + MOTION_PERIOD_S
                     self.motion_publisher.publish(motion_frame)
             if not silent:
-                self._publish(state)
+                self._publish(state, sticks)
                 self._publish_hands(hands)
             due += dt
             lag = time.monotonic() - due
