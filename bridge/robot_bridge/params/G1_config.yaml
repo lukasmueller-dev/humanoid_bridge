@@ -423,6 +423,8 @@ robot_bridge:
     # unitree_dex3_{left,right}.urdf: q_min/q_max from <limit lower/upper>,
     # dq_limit from velocity, tau_limit from effort. The two hands are mirrored,
     # so the ranges differ per side; one shared table would be wrong.
+    # dq_limit 20, not the URDF's 6.857/12: a Dex3 reports 12.8 rad/s spikes as any finger starts
+    # to move, and the guard released the hand (real G1, 2026-10-26). A step close still trips it (44).
     num_hand_joint: 7
     hand_control_dt: 0.01
     hand_state_timeout: 0.2
@@ -443,7 +445,7 @@ robot_bridge:
       idx: 0
       q_min: -1.04719755
       q_max: 1.04719755
-      dq_limit: 6.857
+      dq_limit: 20.0
       tau_limit: 2.45
       kp: 2.0
       kd: 0.5
@@ -453,7 +455,7 @@ robot_bridge:
       idx: 1
       q_min: -0.72431163
       q_max: 0.92
-      dq_limit: 12.0
+      dq_limit: 20.0
       tau_limit: 1.4
       kp: 1.0
       kd: 0.2
@@ -463,7 +465,7 @@ robot_bridge:
       idx: 2
       q_min: 0.0
       q_max: 1.74532925
-      dq_limit: 12.0
+      dq_limit: 20.0
       tau_limit: 1.4
       kp: 1.0
       kd: 0.2
@@ -473,7 +475,7 @@ robot_bridge:
       idx: 3
       q_min: -1.57079632
       q_max: 0.0
-      dq_limit: 12.0
+      dq_limit: 20.0
       tau_limit: 1.4
       kp: 1.0
       kd: 0.2
@@ -483,7 +485,7 @@ robot_bridge:
       idx: 4
       q_min: -1.74532925
       q_max: 0.0
-      dq_limit: 12.0
+      dq_limit: 20.0
       tau_limit: 1.4
       kp: 1.0
       kd: 0.2
@@ -493,7 +495,7 @@ robot_bridge:
       idx: 5
       q_min: -1.57079632
       q_max: 0.0
-      dq_limit: 12.0
+      dq_limit: 20.0
       tau_limit: 1.4
       kp: 1.0
       kd: 0.2
@@ -503,7 +505,7 @@ robot_bridge:
       idx: 6
       q_min: -1.74532925
       q_max: 0.0
-      dq_limit: 12.0
+      dq_limit: 20.0
       tau_limit: 1.4
       kp: 1.0
       kd: 0.2
@@ -514,7 +516,7 @@ robot_bridge:
       idx: 0
       q_min: -1.04719755
       q_max: 1.04719755
-      dq_limit: 6.857
+      dq_limit: 20.0
       tau_limit: 2.45
       kp: 2.0
       kd: 0.5
@@ -524,7 +526,7 @@ robot_bridge:
       idx: 1
       q_min: -0.92
       q_max: 0.72431163
-      dq_limit: 12.0
+      dq_limit: 20.0
       tau_limit: 1.4
       kp: 1.0
       kd: 0.2
@@ -534,7 +536,7 @@ robot_bridge:
       idx: 2
       q_min: -1.74532925
       q_max: 0.0
-      dq_limit: 12.0
+      dq_limit: 20.0
       tau_limit: 1.4
       kp: 1.0
       kd: 0.2
@@ -544,7 +546,7 @@ robot_bridge:
       idx: 3
       q_min: 0.0
       q_max: 1.57079632
-      dq_limit: 12.0
+      dq_limit: 20.0
       tau_limit: 1.4
       kp: 1.0
       kd: 0.2
@@ -554,7 +556,7 @@ robot_bridge:
       idx: 4
       q_min: 0.0
       q_max: 1.74532925
-      dq_limit: 12.0
+      dq_limit: 20.0
       tau_limit: 1.4
       kp: 1.0
       kd: 0.2
@@ -564,7 +566,7 @@ robot_bridge:
       idx: 5
       q_min: 0.0
       q_max: 1.57079632
-      dq_limit: 12.0
+      dq_limit: 20.0
       tau_limit: 1.4
       kp: 1.0
       kd: 0.2
@@ -574,7 +576,7 @@ robot_bridge:
       idx: 6
       q_min: 0.0
       q_max: 1.74532925
-      dq_limit: 12.0
+      dq_limit: 20.0
       tau_limit: 1.4
       kp: 1.0
       kd: 0.2

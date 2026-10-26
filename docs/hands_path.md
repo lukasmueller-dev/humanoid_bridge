@@ -52,7 +52,7 @@ Per-joint config blocks carry that; one shared table cannot.
 
 Limits come from the Dex3-1 URDFs, `psi0/real/assets/unitree_hand/
 unitree_dex3_{left,right}.urdf`: `q_min`/`q_max` from `<limit lower/upper>`,
-`dq_limit` from `velocity` (6.857 on `thumb_0`, 12 elsewhere), `tau_limit` from
+`dq_limit` 20 on all 14 (the URDF `velocity`, 6.857 / 12, tripped on the Dex3's start-of-motion dq spikes), `tau_limit` from
 `effort` (2.45 on `thumb_0`, 1.4 elsewhere).
 
 ```yaml
