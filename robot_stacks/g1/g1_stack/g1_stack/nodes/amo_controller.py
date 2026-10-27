@@ -256,9 +256,11 @@ def main(argv=None):
     amo = amo_policy.load(args.amo_dir, args.device)
     gravity = Gravity(args.urdf, args.tau_ff)
     # rclpy's own SIGINT/SIGTERM handlers shut the context mid-tick; stop the loop instead, then hold.
-    from rclpy.signals import SignalHandlerOptions
-
-    rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
+    try:
+        from rclpy.signals import SignalHandlerOptions
+        rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
+    except ImportError:  # Foxy: no option; the handlers below replace rclpy's
+        rclpy.init()
     node = rclpy.create_node(NODE_NAME)
     state = LatestState()
     node.create_subscription(LowState, args.lowstate_topic, state.on_lowstate, 10)
