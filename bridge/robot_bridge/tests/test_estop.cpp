@@ -3,6 +3,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cstring>
 #include <limits>
 
 using namespace sairol_bridge;
@@ -394,11 +395,70 @@ TEST(Remote, HeaderMeansConnected)
     EXPECT_FALSE(remoteHeader(off, sizeof(off)));     // measured: all 40 bytes 0 with the remote off
 }
 
+TEST(Remote, KeyNamesInBitOrder)
+{
+    EXPECT_TRUE(keyNames(0).empty());
+    EXPECT_EQ(keyNames(KEY_R2 | KEY_R1 | KEY_LEFT), (std::vector<std::string>{"R1", "R2", "LEFT"}));
+    EXPECT_EQ(parseCombo(keyNames(KEY_L1 | KEY_A)), KEY_L1 | KEY_A);   // the config reads them back
+}
+
+TEST(Remote, SticksAtTheirOffsets)
+{
+    uint8_t raw[40] = {0x55, 0x51};
+    const float lx = 0.25f, rx = -0.5f, ry = 0.75f, l2 = 1.0f, ly = -0.125f;
+    std::memcpy(raw + 4, &lx, 4);
+    std::memcpy(raw + 8, &rx, 4);
+    std::memcpy(raw + 12, &ry, 4);
+    std::memcpy(raw + 16, &l2, 4);   // L2's analog value: not a stick
+    std::memcpy(raw + 20, &ly, 4);
+    const Sticks sticks = remoteSticks(raw, sizeof(raw));
+    EXPECT_EQ(sticks.lx, lx);
+    EXPECT_EQ(sticks.ly, ly);
+    EXPECT_EQ(sticks.rx, rx);
+    EXPECT_EQ(sticks.ry, ry);
+    EXPECT_EQ(remoteSticks(raw, 23).lx, 0.0f);
+    EXPECT_EQ(remoteSticks(nullptr, 40).ry, 0.0f);
+}
+
+TEST(Remote, T1PadOnItsOwnBits)
+{
+    T1Pad pad;
+    EXPECT_EQ(t1KeyMask(pad), 0);
+    pad.rb = pad.rt = true;
+    EXPECT_EQ(t1KeyMask(pad), T1_RB | T1_RT);
+    EXPECT_EQ(keyNames(t1KeyMask(pad), t1Keys()), (std::vector<std::string>{"RB", "RT"}));
+}
+
+TEST(Remote, T1CombosLatchLikeTheG1s)
+{
+    Config config;
+    config.combo_damp = parseCombo({"RB", "RT"}, t1Keys());
+    config.combo_hold = parseCombo({"LB", "RB"}, t1Keys());
+    EXPECT_EQ(config.combo_damp, T1_RB | T1_RT);
+    EXPECT_EQ(remoteCause(T1_RB | T1_RT, config), Cause::RemoteDamp);
+    EXPECT_EQ(remoteCause(T1_LB | T1_RB, config), Cause::RemoteHold);
+    EXPECT_EQ(remoteCause(T1_LB | T1_RB | T1_RT, config), Cause::RemoteDamp);
+    EXPECT_EQ(remoteCause(T1_LT | T1_START, config), Cause::None) << "the ncbf deploy's start keys";
+    EXPECT_EQ(parseCombo({"R1"}, t1Keys()), 0) << "a Unitree name is not on the T1 gamepad";
+    EXPECT_EQ(keyTable("t1"), &t1Keys());
+    EXPECT_EQ(keyTable("go2"), nullptr);
+}
+
 TEST(Remote, ShortOrNullIsNotConnected)
 {
     const uint8_t on[2] = {0x55, 0x51};
     EXPECT_FALSE(remoteHeader(on, 1));
     EXPECT_FALSE(remoteHeader(nullptr, 40));
+}
+
+TEST(Link, WithoutTicksABackSaysNoTick)
+{
+    LinkWatch link(false);
+    link.onState(0.0, 0);
+    link.poll(0.5);   // lost after STATE_LOSS_S
+    link.onState(5.0, 0);
+    EXPECT_EQ(link.describe(), "BACK 5.0 no_tick");
+    EXPECT_FALSE(link.restarted());
 }
 
 // --- silence after state loss ------------------------------------------------

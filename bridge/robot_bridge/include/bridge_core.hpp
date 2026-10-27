@@ -6,6 +6,7 @@
 #include "bridge_interface/msg/low_cmd.hpp"
 #include "bridge_interface/msg/low_state.hpp"
 #include "bridge_interface/msg/imu_state.hpp"
+#include "bridge_interface/msg/robot_state.hpp"
 #include "bridge_interface/srv/set_default_position.hpp"
 #include "std_srvs/srv/trigger.hpp"
 #include "std_msgs/msg/string.hpp"
@@ -119,6 +120,9 @@ namespace sairol_bridge
         std::string describeState_();
         // mutex_ held for every state change, so two threads cannot publish out of order.
         void publishBridgeState_(const std::string &state);
+        // /robot_state from currentState_ and imu_, mutex_ held; the robot's state handler fills
+        // remote and publishes it on robotStatePublisher_ after unlocking.
+        bridge_interface::msg::RobotState robotState_(uint32_t tick);
 
 
         rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr stopControlService_;
@@ -131,10 +135,12 @@ namespace sairol_bridge
         rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr estopResetService_;
         rclcpp::Publisher<std_msgs::msg::String>::SharedPtr bridgeStatePublisher_;
         rclcpp::Publisher<std_msgs::msg::String>::SharedPtr robotLinkPublisher_;   // null: no link watch
+        rclcpp::Publisher<bridge_interface::msg::RobotState>::SharedPtr robotStatePublisher_;
         rclcpp::TimerBase::SharedPtr linkTimer_;
         estop::LinkWatch link_;   // executor thread only
 
         std::vector<Joint> joints_;
+        std::vector<std::string> jointNames_;   // joints_' names, for /robot_state
         std::vector<CmdParams> cmdParams_;
         std::vector<double> ready_q_;
         float_t cmdInterpOrder_{0.0};
@@ -172,6 +178,7 @@ namespace sairol_bridge
         // E-stop. latch_ and holdQ_ are guarded by mutex_; the atomics mirror
         // latch_ for readers that must not lock.
         estop::Config estopConfig_;
+        const estop::KeyTable *keyTable_{&estop::unitreeKeys()};   // estop.remote_keys
         estop::SafetyLatch latch_;
         std::vector<float_t> holdQ_;
         std::atomic<bool> latched_{false};

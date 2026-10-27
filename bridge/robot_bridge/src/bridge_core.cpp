@@ -49,7 +49,29 @@ namespace sairol_bridge
             "/bridge_state", rclcpp::QoS(1).reliable().transient_local());
         publishBridgeState_(describeState_());
 
+        robotStatePublisher_ = nh->create_publisher<bridge_interface::msg::RobotState>("/robot_state", 1);
+
         last_state_time_ = steadyClock_.now();
+    }
+
+    bridge_interface::msg::RobotState BridgeCore::robotState_(uint32_t tick)
+    {
+        bridge_interface::msg::RobotState state;
+        state.stamp = nh->now();
+        state.tick = tick;
+        state.joint_names = jointNames_;
+        const size_t n = std::min(jointNames_.size(), currentState_.motor_state.size());
+        state.q.resize(n);
+        state.dq.resize(n);
+        state.tau_est.resize(n);
+        for (size_t i = 0; i < n; ++i)
+        {
+            state.q[i] = currentState_.motor_state[i].q;
+            state.dq[i] = currentState_.motor_state[i].dq;
+            state.tau_est[i] = currentState_.motor_state[i].tau_est;
+        }
+        state.imu = imu_;
+        return state;
     }
 
     void BridgeCore::createArmingServices_()
@@ -125,7 +147,7 @@ namespace sairol_bridge
         {
             return true;
         }
-        why = "robot restarted: restart G1_bridge to release /lowcmd";
+        why = "robot restarted: restart the bridge to release /lowcmd";
         return false;
     }
 
@@ -210,6 +232,7 @@ namespace sairol_bridge
         if (nh->get_parameter("joint_names", joint_names))
         {
             joints_.clear();
+            jointNames_.clear();
             bool ret = true;
             int own_rate_limits = 0;
             for (const auto &name : joint_names)
@@ -250,6 +273,7 @@ namespace sairol_bridge
                     return false;
                 }
                 joints_.push_back(joint_info);
+                jointNames_.push_back(name);
             }
             if (!ret)
             {
@@ -322,6 +346,17 @@ namespace sairol_bridge
             return false;
         }
 
+        // The remote's key names: estop.remote_keys, unitree unless the robot says otherwise.
+        std::string remote_keys = "unitree";
+        nh->get_parameter("estop.remote_keys", remote_keys);
+        const estop::KeyTable *table = estop::keyTable(remote_keys);
+        if (table == nullptr)
+        {
+            RCLCPP_ERROR(nh->get_logger(), "estop.remote_keys must be unitree or t1, got '%s'", remote_keys.c_str());
+            return false;
+        }
+        keyTable_ = table;
+
         const std::pair<const char *, uint16_t *> combos[] = {
             {"estop.remote_combo_damp", &estopConfig_.combo_damp},
             {"estop.remote_combo_hold", &estopConfig_.combo_hold},
@@ -333,7 +368,7 @@ namespace sairol_bridge
             {
                 continue;
             }
-            *combo = estop::parseCombo(keys);
+            *combo = estop::parseCombo(keys, *table);
             if (*combo == 0)
             {
                 RCLCPP_ERROR(nh->get_logger(), "%s: empty, or a key name that is not on the remote", key);
