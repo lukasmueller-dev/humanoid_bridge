@@ -17,7 +17,7 @@ trap cleanup EXIT
 
 require_ros
 
-python3 "$HERE/fake_t1.py" --start-q 0.05 > "$OUT/fake.log" 2>&1 &
+python3 "$HERE/fake_t1.py" --start-q 0.05 --no-pad > "$OUT/fake.log" 2>&1 &
 FAKE_PID=$!; disown "$FAKE_PID"
 sleep 2
 
