@@ -87,7 +87,7 @@ Decided and fake-tested on `g1-web-interface` (`docs/psi0_gates.md`).
 
 ### Teleop
 
-- [ ] `/g1_sim/sticks`: g1_sim takes `std_msgs/Float32MultiArray` `[lx, ly, rx, ry]` and writes it into
-  `wireless_remote` bytes 4-24 (layout of `robot_client.py` `RemoteController`); zero 0.2 s after the last
+- [ ] `/robot_sim/sticks`: robot_sim takes `std_msgs/Float32MultiArray` `[lx, ly, rx, ry]` and the G1 writes it into
+  `wireless_remote` bytes 4-24 (layout of `estop.cpp` `remoteSticks`); zero 0.2 s after the last
   message. Plan: lukasmueller-dev/humanoid-locoman-vla#88. Merge only after its branch test.
-  **Done when:** a test publishes sticks, `RemoteController.set` on `/lowstate` reads them back, and they read zero 0.25 s after the last message.
+  **Done when:** a test publishes sticks, `/robot_state`'s remote reads them back, and they read zero 0.25 s after the last message.
