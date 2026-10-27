@@ -111,6 +111,8 @@ SPEC = RobotSpec(
 class Wire:
     """unitree_hg: LowState at the physics rate, LowCmd in, Dex3 at 100 Hz, the motion service."""
 
+    STICKS = True  # tick writes node.sticks into wireless_remote
+
     def __init__(self, node, sim, lock):
         from unitree_hg.msg import HandCmd, HandState, LowCmd, LowState, MotorState
 
@@ -167,7 +169,8 @@ class Wire:
         self.motion.boot()
 
     def tick(self, now):
-        """Lock held, link up: the motion service's frame when due."""
+        """Lock held, link up: the sticks, and the motion service's frame when due."""
+        unitree.set_sticks(self.state.wireless_remote, self.node.sticks.read(now))
         self.motion.send(now)
 
     def publish(self, s):

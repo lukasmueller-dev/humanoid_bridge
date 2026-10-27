@@ -13,7 +13,8 @@ import rclpy
 import yaml
 from rcl_interfaces.srv import GetParameters
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
-from std_msgs.msg import String
+from bridge_interface.msg import RobotState
+from std_msgs.msg import Float32MultiArray, String
 from unitree_hg.msg import HandState, LowState
 
 from g1_camera import wire
@@ -27,6 +28,8 @@ TOL = 0.05  # rad
 RAMP_SECONDS = 3.0  # `duration` 2.0 plus margin
 HAND_SIDES = ("left", "right")
 HAND_TOL = 0.1  # rad; finger PD at kp 1-2 against the MJCF
+STICKS = [0.5, -0.25, 0.75, -1.0]  # [lx, ly, rx, ry]; exact in float32
+STICKS_ZERO_AFTER = 0.25  # s; robot_sim zeroes them 0.2 s after the last message
 
 
 def load_params(path):
@@ -50,6 +53,7 @@ class Driver:
         self.client = RobotCmdClient(node, num_dof=NUM_MOTORS, control_frequency=50.0)
         self.client.set_default_cmd(params["ready_q"], params["kp"], params["kd"])
         self.buttons = node.create_publisher(String, "/robot_sim/buttons", 10)
+        self.sticks = node.create_publisher(Float32MultiArray, "/robot_sim/sticks", 10)
         latched = QoSProfile(
             depth=1,
             reliability=ReliabilityPolicy.RELIABLE,
@@ -57,6 +61,7 @@ class Driver:
         )
         node.create_subscription(String, "/bridge_state", self._on_state, latched)
         node.create_subscription(LowState, "/lowstate", self._on_lowstate, 10)
+        node.create_subscription(RobotState, "/robot_state", self._on_robot_state, 10)
         self.hands = {}  # side -> latest HandState; empty without a Dex3 model
         for side in HAND_SIDES:
             node.create_subscription(
@@ -64,6 +69,7 @@ class Driver:
             )
         self.state = None
         self.low = None
+        self.remote = None  # /robot_state remote, as the bridge decoded it
         self.failures = []
 
     def _on_state(self, msg):
@@ -71,6 +77,9 @@ class Driver:
 
     def _on_lowstate(self, msg):
         self.low = msg
+
+    def _on_robot_state(self, msg):
+        self.remote = msg.remote
 
     def spin(self, seconds):
         end = time.monotonic() + seconds
@@ -116,6 +125,22 @@ class Driver:
             err = max(abs(a - b) for a, b in zip(q, want, strict=True))
             self.check(f"{side} hand open at hand_ready_q", err < HAND_TOL, f"max error {err:.3f} rad")
 
+    def read_sticks(self):
+        r = self.remote
+        return None if r is None else [r.lx, r.ly, r.rx, r.ry]
+
+    def check_sticks(self):
+        """/robot_sim/sticks reach the bridge's /robot_state remote, and zero after the hold."""
+        for _ in range(25):  # 0.5 s at 50 Hz, as a gamepad streams
+            self.sticks.publish(Float32MultiArray(data=STICKS))
+            last = time.monotonic()
+            self.spin(0.02)
+        got = self.read_sticks()
+        self.check("/robot_sim/sticks on /robot_state", got == STICKS, f"{got}")
+        self.spin(last + STICKS_ZERO_AFTER - time.monotonic())
+        got = self.read_sticks()
+        self.check(f"sticks zero {STICKS_ZERO_AFTER} s after the last", got == [0.0] * 4, f"{got}")
+
     def check_mjcf(self):
         client = self.node.create_client(GetParameters, "/robot_sim/get_parameters")
         client.wait_for_service(timeout_sec=5.0)
@@ -133,6 +158,7 @@ class Driver:
         if self.low is None:
             return
         self.check("remote header", bytes(self.low.wireless_remote[:2]) == b"\x55\x51")
+        self.check_sticks()
 
         # As the commander arms: to the measured pose, then Ready.
         measured = [m.q for m in self.low.motor_state[:NUM_MOTORS]]
