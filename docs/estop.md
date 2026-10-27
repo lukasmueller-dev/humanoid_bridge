@@ -154,7 +154,7 @@ estop:
 - `G1Bridge`: implements `publishStopCommand_`; remote parsing in `lowStateHandler_`, which now copies state under `mutex_`; `finishControl_` stays a log line.
 - `include/joint.hpp`: `Joint` moved out of `bridge_core.hpp` so the pure code needs no ROS.
 - `RobotCmdClient`: `estop_damp()`, `estop_hold()`, `estop_reset()`.
-- T1 (2026-10-25): as the G1: stop frames, gates, `/robot_link`, the gamepad on `/remote_controller_state` (`estop.remote_keys: t1`, damp RB+RT, hold LB+RB); custom mode on arming, damping mode at shutdown (`booster_mode.hpp`). A gamepad message within `REMOTE_TIMEOUT_S` counts as connected.
+- T1 (2026-10-25): as the G1: stop frames, gates, `/robot_link`, the gamepad on `/remote_controller_state` (`estop.remote_keys: t1`, damp RB+RT, hold LB+RB); custom mode on arming, damping mode at shutdown (`booster_mode.hpp`). Measured 2026-10-27: the T1 gamepad sends one latched message per button event and none while idle, so any message since the bridge started (the latched one included) counts as connected. A gamepad that switches off later is not detected.
 - Go2 (2026-10-25): as the G1 (Unitree remote, R1+R2 damp, L1+R1 hold): stop frames, gates, `/robot_link` with `tick`, other `/lowcmd` sender; the frame per `go2_frame.hpp` (slots 12-19 stopped). A damped Go2 sinks to the floor.
 - H1, H1_2: same latch and services, no stop frame (silent as before). Their own remote and IMU stop paths skip the latch, so `/bridge_state` and the latch are valid on the G1 and T1 only (author, 2026-10-19).
 - Out of scope: the gate audit (task 2), H1/H1_2 stop frames.

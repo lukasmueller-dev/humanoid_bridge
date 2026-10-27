@@ -729,13 +729,18 @@ namespace sairol_bridge
         {
             return true;
         }
-        const double age = steadyClock_.now().seconds() - lastRemoteHeader_.load();
-        if (age <= estop::REMOTE_TIMEOUT_S)
+        if (remotePresent_())
         {
             return true;
         }
         why = "remote not connected: switch the remote on (estop.require_remote)";
         return false;
+    }
+
+    bool BridgeCore::remotePresent_()
+    {
+        const double last = lastRemoteHeader_.load();
+        return remoteOnEventsOnly_ ? last > 0.0 : steadyClock_.now().seconds() - last <= estop::REMOTE_TIMEOUT_S;
     }
 
     bool BridgeCore::armControl_(bridge_interface::msg::RobotCmd default_cmd, std::string &why)

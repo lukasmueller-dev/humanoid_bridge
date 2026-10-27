@@ -24,6 +24,7 @@ sairol_bridge::T1Bridge::T1Bridge(rclcpp::Node::SharedPtr node) : BridgeCore(nod
     lastCommand_.motor_cmd.resize(numJoint_);
     currentState_.motor_state.resize(numJoint_);
     cmdParams_.resize(numJoint_);
+    remoteOnEventsOnly_ = true;   // /remote_controller_state: one message per button event, none while idle
 
     client_ = nh->create_client<booster_interface::srv::RpcService>("booster_rpc_service");
     // rclcpp::ok(): after Ctrl-C the graph calls throw. main() then skips spin.
@@ -38,8 +39,10 @@ sairol_bridge::T1Bridge::T1Bridge(rclcpp::Node::SharedPtr node) : BridgeCore(nod
 
     lowStateSubscriber_ = nh->create_subscription<booster_interface::msg::LowState>(
         "/low_state", 1, std::bind(&T1Bridge::lowStateHandler_, this, std::placeholders::_1));
+    // Transient local, as the robot's publisher: a bridge that starts later still gets the last event.
     remoteSubscriber_ = nh->create_subscription<booster_interface::msg::RemoteControllerState>(
-        "/remote_controller_state", 10, std::bind(&T1Bridge::remoteHandler_, this, std::placeholders::_1));
+        "/remote_controller_state", rclcpp::QoS(10).transient_local(),
+        std::bind(&T1Bridge::remoteHandler_, this, std::placeholders::_1));
 
     lowCommandPublisher_ = nh->create_publisher<booster_interface::msg::LowCmd>("/joint_ctrl", 1);
 
@@ -112,7 +115,7 @@ void sairol_bridge::T1Bridge::lowStateHandler_(booster_interface::msg::LowState:
     }
     noteLink_(0);
 
-    const bool connected = steadyClock_.now().seconds() - lastRemoteHeader_ <= estop::REMOTE_TIMEOUT_S;
+    const bool connected = remotePresent_();
     const uint16_t keys = remoteKeys_;
     state.remote.connected = connected;
     state.remote.pressed = connected ? estop::keyNames(keys, *keyTable_) : std::vector<std::string>{};
@@ -121,7 +124,7 @@ void sairol_bridge::T1Bridge::lowStateHandler_(booster_interface::msg::LowState:
 
 void sairol_bridge::T1Bridge::remoteHandler_(booster_interface::msg::RemoteControllerState::SharedPtr msg)
 {
-    // Every message counts as the remote being there (hardware check: does the T1 send only on events?).
+    // Every message counts as the remote being there; the T1 sends only on events.
     lastRemoteHeader_ = steadyClock_.now().seconds();
     estop::T1Pad pad;
     pad.a = msg->a, pad.b = msg->b, pad.x = msg->x, pad.y = msg->y;

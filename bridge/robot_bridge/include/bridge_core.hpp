@@ -96,8 +96,10 @@ namespace sairol_bridge
         // The only way the arming services start control: refused while latched, on a
         // checkState_ fault, and without the remote when estop.require_remote.
         bool armControl_(bridge_interface::msg::RobotCmd default_cmd, std::string &why);
-        // False only when estop.require_remote and no remote header for REMOTE_TIMEOUT_S.
+        // False only when estop.require_remote and the remote is not present.
         bool remoteAllowsArming_(std::string &why);
+        // A remote header within REMOTE_TIMEOUT_S; with remoteOnEventsOnly_, any message so far.
+        bool remotePresent_();
         // Robot-specific arming refusals. Default: none.
         virtual bool robotAllowsArming_(std::string &why) { (void)why; return true; }
         // Every arming service and Ready/Zero while ARMED: remote, robot link, robot-specific.
@@ -185,6 +187,7 @@ namespace sairol_bridge
         std::atomic<bool> stopPublishing_{false};
         std::atomic<uint16_t> remoteKeys_{0};
         std::atomic<double> lastRemoteHeader_{-1e9};   // steadyClock_ seconds; set by the robot's state handler
+        bool remoteOnEventsOnly_{false};   // the remote sends on events, not on a clock (T1); set in the constructor
         estop::Cause lastFault_{estop::Cause::None};   // control thread only
         bool invalidFrame_{false};   // control thread only: publishLowCommand_ sent nothing, a field not finite
 

@@ -86,15 +86,15 @@ class Driver:
         self.check("the first 23 of 25 motors", len(s.q) == NUM_JOINT)
         q_ok = all(abs(a - b) < 1e-5 for a, b in zip(s.imu.quaternion, quat(RPY)))
         self.check("quaternion from rpy", q_ok, str([round(v, 4) for v in s.imu.quaternion]))
-        self.check("gamepad connected", self.wait(lambda: self.state.remote.connected, 2.0))
         self.check("DISARMED", self.wait(lambda: self.bridge == "DISARMED", 3.0), str(self.bridge))
+        self.check("no gamepad message yet: not connected", not self.state.remote.connected)
 
-        self.remote.publish(Bool(data=False))
-        self.wait(lambda: not self.state.remote.connected, 2.0)
         reply = self.client.start_control(default_position=list(self.state.q))
         self.check("no gamepad: arming refused", not reply.success, reply.message)
-        self.remote.publish(Bool(data=True))
-        self.wait(lambda: self.state.remote.connected, 2.0)
+        self.remote.publish(Bool(data=True))  # one event, then the pad is idle
+        self.check("gamepad connected", self.wait(lambda: self.state.remote.connected, 2.0))
+        time.sleep(1.5)  # three REMOTE_TIMEOUT_S with no message
+        self.check("an idle gamepad stays connected", self.state.remote.connected)
 
         reply = self.client.start_control(default_position=list(self.state.q))
         self.check("start_control at the measured pose", reply.success, reply.message)
