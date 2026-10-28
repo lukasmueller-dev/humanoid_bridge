@@ -156,9 +156,7 @@ class RobotClient:
             from unitree_hg.msg import LowState
 
             state_topic_name = "/lowstate"
-            # joy_topic_name = '/wirelesscontroller'
             low_state_handler = self._low_state_handler_unitree
-            # joy_handler = self._joy_handler_unitree
 
             self._load_default_tables()
 
@@ -174,9 +172,7 @@ class RobotClient:
             from unitree_go.msg import WirelessController as JoyMsg
 
             state_topic_name = "/lowstate"
-            # joy_topic_name = '/wirelesscontroller'
             low_state_handler = self._low_state_handler_unitree
-            # joy_handler = self._joy_handler_unitree
 
             self._load_default_tables()
 
@@ -192,9 +188,7 @@ class RobotClient:
             from unitree_hg.msg import LowState
 
             state_topic_name = "/lowstate"
-            # joy_topic_name = '/wirelesscontroller'
             low_state_handler = self._low_state_handler_unitree
-            # joy_handler = self._joy_handler_unitree
 
             self._load_default_tables()
 
@@ -256,7 +250,6 @@ class RobotClient:
             self.low_state_subscription = self.node.create_subscription(
                 LowState, state_topic_name, low_state_handler, 1
             )
-        # self.joystick_subscription = self.node.create_subscription(JoyMsg, joy_topic_name, joy_handler, 1)
         self.low_cmd_publisher = self.node.create_publisher(RobotCmd, "/robot_cmd", 1)
 
         self.start_control_client = self.node.create_client(SetDefaultPosition, "/start_control")
@@ -598,41 +591,6 @@ class RobotClient:
             # Set key only for unknown key combinations
             self.joy_key = joy_msg
 
-    # def _joy_handler_unitree(self, joy_msg):
-    #     key = joy_msg.keys
-    #     time_now = time.time()
-
-    #     if (key & (WirelessKey_H1_G1.KEY_L2 | WirelessKey_H1_G1.KEY_START)) == (WirelessKey_H1_G1.KEY_L2 | WirelessKey_H1_G1.KEY_START):
-    #         self.node.get_logger().info("Starting control...")
-    #         if not self.control_started:
-    #             future = self.init_control()
-    #             self.control_start_time = time_now + self._default_duration
-    #         return
-    #     elif (key & (WirelessKey_H1_G1.KEY_L2 | WirelessKey_H1_G1.KEY_UP | WirelessKey_H1_G1.KEY_LEFT)) == (WirelessKey_H1_G1.KEY_L2 | WirelessKey_H1_G1.KEY_UP | WirelessKey_H1_G1.KEY_LEFT):
-    #         self.node.get_logger().info("Stopping control...")
-    #         future = self.stop_control()
-    #         self.control_start_time = None
-    #         return
-    #     elif key & WirelessKey_H1_G1.KEY_L1:
-    #         self.node.get_logger().info("Ready position control...")
-    #         if not self.control_started:
-    #             self.goto_default_position()
-    #             self.control_start_time = None
-    #         else:
-    #             self.node.get_logger().warn("Control already started, please stop the control first by pressing BACK.")
-    #         return
-    #     elif key & WirelessKey_H1_G1.KEY_R1:
-    #         self.node.get_logger().info("Zero position control...")
-    #         if not self.control_started:
-    #             self.goto_zero_position()
-    #             self.control_start_time = None
-    #         else:
-    #             self.node.get_logger().warn("Control already started, please stop the control first by pressing BACK.")
-    #         return
-    #     else:
-    #         # Set key only for unknown key combinations
-    #         self.joy_key = joy_msg
-
     def send_cmd(
         self, q_target_pos=None, q_target_vel=None, target_tau=None, target_kp=None, target_kd=None
     ):
@@ -679,7 +637,8 @@ class RobotClient:
         if len(positions) != self.num_dof:
             # The bridge refuses a wrong length; an empty list arms to its ready_q.
             self.node.get_logger().warn(
-                f"default_pos has {len(positions)} values, not {self.num_dof}: arming to the bridge's ready_q"
+                f"default_pos has {len(positions)} values, not {self.num_dof}: "
+                "arming to the bridge's ready_q"
             )
             positions = []
         request = SetDefaultPosition.Request()
@@ -798,7 +757,8 @@ class RobotClient:
 
     def goto_default_position(self):
         """
-        Send robot to default position by calling the ready_position_control service; on a G1, Dex3 hands open too.
+        Send robot to default position by calling the ready_position_control service.
+        On a G1, Dex3 hands open too.
         """
         if self.robot_type == "X2" and not self.ready_position_client.service_is_ready():
             raise RuntimeError("ready_position_client service is unavailable.")
