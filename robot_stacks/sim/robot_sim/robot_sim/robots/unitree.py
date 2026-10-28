@@ -1,4 +1,6 @@
-"""What the G1 and the Go2 share in sim: the remote's bytes, the motion switcher's ROS side."""
+"""What the G1 and Go2 share in sim: the remote's bytes, the motion switcher, the Wire base."""
+
+import numpy as np
 
 from robot_sim.motion import BOOT_MODE, MotionSwitcher
 
@@ -86,3 +88,35 @@ class MotionService:
         if self.publisher is not None and now >= self.due:
             self.due = now + self.PERIOD_S
             self.publisher.publish(self.frame)
+
+
+class Wire:
+    """Base of the G1 and Go2 Wire: the subclass sets `state`, `publisher` and `motion`."""
+
+    def set_remote(self, connected):
+        set_remote(self.state.wireless_remote, connected)
+
+    def press(self, names):
+        """Hold these buttons (names as the bridge YAML's combos); [] releases."""
+        set_keys(self.state.wireless_remote, key_mask(names))
+
+    def boot(self):
+        """End of a reboot, lock held."""
+        self.motion.boot()
+
+    def tick(self, now):
+        """Lock held, link up: the motion service's frame when due."""
+        self.motion.send(now)
+
+    def publish(self, s):
+        for i in range(len(s["q"])):
+            ms = self.state.motor_state[i]
+            ms.q, ms.dq = float(s["q"][i]), float(s["dq"][i])
+            ms.ddq, ms.tau_est = float(s["ddq"][i]), float(s["tau_est"][i])
+        imu = self.state.imu_state
+        imu.quaternion = s["quaternion"].astype(np.float32).tolist()
+        imu.rpy = s["rpy"].astype(np.float32).tolist()
+        imu.gyroscope = s["gyroscope"].astype(np.float32).tolist()
+        imu.accelerometer = s["accelerometer"].astype(np.float32).tolist()
+        self.state.tick = int(s["time"] * 1000)
+        self.publisher.publish(self.state)
