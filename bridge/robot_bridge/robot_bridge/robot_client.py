@@ -304,6 +304,8 @@ class RobotClient:
                     0.0,
                     0.0,
                     0.0,
+                    0.0,
+                    0.0,
                 ]
             )
 
@@ -714,6 +716,12 @@ class RobotClient:
                 self._imu_state_handler_x2,
                 qos_profile_sensor_data,
             )
+
+        for name in ("_default_pos", "_default_kp", "_default_kd"):
+            if len(getattr(self, name)) != num_dof:
+                raise ValueError(
+                    f"{self.robot_type} {name[1:]} has length {len(getattr(self, name))}, not {num_dof}"
+                )
 
         if self.robot_type != "X2":
             self.low_state_subscription = self.node.create_subscription(
