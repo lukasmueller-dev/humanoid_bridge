@@ -1,6 +1,6 @@
 # Fake wire tests
 
-Runs the real `G1_bridge` against a fake robot on one machine. No hardware.
+Runs the real `G1_bridge`, `T1_bridge` or `Go2_bridge` against a fake robot on one machine. No hardware.
 
 Covers the whole path: adapter to client to `/robot_cmd` to bridge to `/lowcmd`.
 It does **not** cover the Foxy/Python 3.8 Jetson, the cable, or real motors.
@@ -12,7 +12,7 @@ source /opt/ros/humble/setup.bash && tools/build.sh
 source <workspace>/install/setup.bash
 ```
 
-No ROS on the host: `tools/test.sh --docker [--wire|--estop|--gates|--hands|--config]`
+No ROS on the host: `tools/test.sh --docker [--wire|--estop|--link|--state|--t1|--go2|--gates|--hands|--config]`
 builds and runs them in a container.
 
 `robot_bridge`'s `package.xml` depends on `booster_interface` unconditionally,
@@ -47,11 +47,14 @@ bridge echoed mode_machine   PASS  5 wanted 5
 timeout latches hold         PASS  kp[0]=100.0 q[0]=0.0100
 ```
 
-E-stop, target gates, broken configs; each driver ends `all checks passed`:
+E-stop, `/robot_state`, T1, Go2, target gates, broken configs; each driver ends `all checks passed`:
 
 ```bash
 tools/test.sh --estop      # docs/estop.md
 tools/test.sh --link       # docs/estop.md, Robot link
+tools/test.sh --state      # /robot_state and /hand_state
+tools/test.sh --t1         # T1_bridge against fake_t1.py
+tools/test.sh --go2        # Go2_bridge against fake_go2.py
 tools/test.sh --gates      # docs/psi0_gates.md
 tools/test.sh --config
 ```
@@ -84,6 +87,9 @@ fake_g1 records `/lowcmd` at all.
 | `drive_estop.py` | starts before the bridge (handshake: `driver: holding /lowcmd`) and holds `/lowcmd` until the bridge log shows it was seen and no `/start_control` exists; then drives every e-stop path and checks `/lowcmd` and `/bridge_state` live; `fake_g1.py` takes `/fake_g1/keys`, `/fake_g1/roll`, and bad joint-0 data `/fake_g1/nan_q`, `/fake_g1/dq`, `/fake_g1/nan_imu`; `drive_gates.py` uses `/fake_g1/freeze` (q stops tracking) |
 | `drive_link.py` | `armed`: `/fake_g1/pause` while disarmed and armed (`LOST`, `BACK … no_restart`, cleared by arming and reset), then `/fake_g1/reboot` while armed (`RESTARTED`, `robot_restart`, reset/arm/Ready refused, also after `/fake_g1/release`); `disarmed`: reboot on a fresh bridge, nothing latches, arming refused |
 | `run_fake_link_test.sh` | `drive_link.py armed`, SIGINT, then `drive_link.py disarmed` on a fresh bridge: a restart is final for a bridge |
+| `run_fake_robot_state_test.sh`, `drive_robot_state.py` | `/robot_state` and `/hand_state` of a `G1_bridge` against `fake_g1.py` and `fake_dex3.py`: every field once, names and order from `G1_config.yaml` |
+| `fake_t1.py`, `run_fake_t1_test.sh`, `drive_t1.py` | `T1_bridge` against a fake T1: `/robot_state`, custom mode on arming, the gamepad e-stop, a `/low_state` longer than the config, damping mode on SIGINT |
+| `fake_go2.py`, `run_fake_go2_test.sh`, `drive_go2.py` | `Go2_bridge` against a fake Go2: `/robot_state`, arming from lying, the frame on the wire (header, level flag, stopped slots, CRC), Ready's stand-up ramp, the remote e-stop |
 | `drive_shutdown.py` | runs last in the e-stop run: arms, SIGINTs the bridge's process group, checks damp frames for 1 s, then silence |
 | `run_fake_estop_test.sh` | orchestrates the e-stop run; then SIGINT to a second bridge in its `/lowcmd` wait: exit 0 within 5 s |
 | `run_fake_wire_test.sh` | orchestrates the three, cleans up |

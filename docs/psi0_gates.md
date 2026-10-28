@@ -25,11 +25,11 @@ Joint limits checked against the official `g1_29dof_with_hand.urdf`.
 | GEAR gains | kp 150/200/40 legs, 250 waist, 100/40/20 arms; kd <= 5 |
 | psi0's own G1 gains | kp 200 strong, 100 others, 30 wrists; kd <= 7.5 |
 
-No current check blocks psi0. Missing: gates 1, 2, 4. Too loose: gates 5, 6, 7, 9.
+Before the build no check blocked psi0. Missing: gates 1, 2, 4. Too loose: gates 5, 6, 7, 9.
 
 ## Gates
 
-| # | Gate | Today | Decision (2026-10-20) |
+| # | Gate | Before | Decision (2026-10-20) |
 |---|---|---|---|
 | 1 | Target q in joint range | none on the body path | clamp to `[q_min, q_max]`; warn max 1/s. Gate 4 runs after it and can move q past a limit (see 4) |
 | 2 | Target q speed | none: a step goes out as a step | rate limit per tick: `q_rate_limit` arms 3.0 rad/s, `q_rate_limit_default` 6.0; leg value revisited after the MuJoCo rehearsal |

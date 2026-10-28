@@ -246,6 +246,11 @@ class RobotClient:
                 qos_profile_sensor_data,
             )
 
+        for name in ("_default_pos", "_default_kp", "_default_kd"):
+            length = len(getattr(self, name))
+            if length != num_dof:
+                raise ValueError(f"{self.robot_type} {name[1:]} has length {length}, not {num_dof}")
+
         if self.robot_type != "X2":
             self.low_state_subscription = self.node.create_subscription(
                 LowState, state_topic_name, low_state_handler, 1

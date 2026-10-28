@@ -1,6 +1,6 @@
 # robot_sim
 
-MuJoCo robot in place of the real one, on the robot's own topics, so its bridge runs unchanged. `--robot g1` (default; T1 and Go2 follow): publishes `/lowstate` at 500 Hz, reads `/lowcmd`; only its fake motion service publishes `/lowcmd`, after a reboot.
+MuJoCo robot in place of the real one, on the robot's own topics, so its bridge runs unchanged. `--robot g1|t1|go2` (default g1; the table has each robot's topics). On the G1 and Go2 it publishes `/lowstate` at 500 Hz and reads `/lowcmd`; only its fake motion service publishes `/lowcmd`, after a reboot.
 
 | Robot | Module | Native side |
 |---|---|---|

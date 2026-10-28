@@ -46,7 +46,7 @@ Closes roadmap `feat/g1-finish-control-release`.
 
 ## Robot link — `/robot_link`
 
-`std_msgs/String`, transient-local, on change. G1 and T1. Tracks state gaps and `LowState.tick` (T1: no tick, so no RESTARTED), armed or not.
+`std_msgs/String`, transient-local, on change. G1, T1 and Go2. Tracks state gaps and `LowState.tick` (T1: no tick, so no RESTARTED), armed or not.
 
 | Value | When | Cleared by |
 |---|---|---|
@@ -72,7 +72,7 @@ Built by a new `publishStopCommand_()`. It does not reuse `publishLowCommand_`: 
 | `dq`, `tau` | 0 | 0 |
 | `kp` | 0 | joint `kp` from config |
 | `kd` | `estop.damp_kd` | joint `kd` from config |
-| parallel joints (ankles) | same as above | same tau conversion as `publishLowCommand_:281` |
+| parallel joints (ankles) | same as above | same tau conversion as `publishLowCommand_` |
 | rate | `control_dt` (0.001 s) | `control_dt` |
 
 - `damp` is not fully limp: no position spring, but each joint resists speed, so arms sink slowly. `kd=0` would let them drop.
@@ -156,7 +156,7 @@ estop:
 - `RobotCmdClient`: `estop_damp()`, `estop_hold()`, `estop_reset()`.
 - T1 (2026-10-25): as the G1: stop frames, gates, `/robot_link`, the gamepad on `/remote_controller_state` (`estop.remote_keys: t1`, damp RB+RT, hold LB+RB); custom mode on arming, damping mode at shutdown (`booster_mode.hpp`). Measured 2026-10-27: the T1 gamepad sends one latched message per button event and none while idle, so any message since the bridge started (the latched one included) counts as connected. A gamepad that switches off later is not detected.
 - Go2 (2026-10-25): as the G1 (Unitree remote, R1+R2 damp, L1+R1 hold): stop frames, gates, `/robot_link` with `tick`, other `/lowcmd` sender; the frame per `go2_frame.hpp` (slots 12-19 stopped). A damped Go2 sinks to the floor.
-- H1, H1_2: same latch and services, no stop frame (silent as before). Their own remote and IMU stop paths skip the latch, so `/bridge_state` and the latch are valid on the G1 and T1 only (author, 2026-10-19).
+- H1, H1_2: same latch and services, no stop frame (silent as before). Their own remote and IMU stop paths skip the latch, so `/bridge_state` and the latch are valid on the G1, T1 and Go2 only (author, 2026-10-19).
 - Out of scope: the gate audit (task 2), H1/H1_2 stop frames.
 
 ## Tests

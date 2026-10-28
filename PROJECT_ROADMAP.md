@@ -3,7 +3,7 @@
 > One per repo. Planned work only, one item per task. Finished items are
 > deleted; git history is the log.
 
-_Last updated: 2026-10-24 · turing_
+_Last updated: 2026-10-28 · codebase-health job_
 
 ## Items
 
@@ -44,7 +44,7 @@ Decided and fake-tested on `g1-web-interface` (`docs/psi0_gates.md`).
 
 ### GEAR on the robot
 
-- [ ] GEAR's robot mode sends waist pitch (motor 14) kd 5 − 10 = −5 (`decoupled_wbc` `configs.py:64-66`, in the pinned SIMPLE image); `adapters/gear_wbc.py` forwards it and the bridge clips it to 0 (`bridge_core.cpp:697-703`). **Done when:** the intended robot kd is known and `/robot_cmd` carries it for motor 14, checked with `ros2 topic echo /robot_cmd`.
+- [ ] GEAR's robot mode sends waist pitch (motor 14) kd 5 − 10 = −5 (`decoupled_wbc` `configs.py:64-66`, in the pinned SIMPLE image); `adapters/gear_wbc.py` forwards it and the bridge clips it to 0 (`BridgeCore::checkMotorCmd_`). **Done when:** the intended robot kd is known and `/robot_cmd` carries it for motor 14, checked with `ros2 topic echo /robot_cmd`.
 - [ ] GEAR waits forever for Dex3 state on a G1 without hands: `with_hands` defaults to True (`configs.py:108`); neither `g1_stack/nodes/gear_controller.py` nor the commander workspace passes `--no-with-hands`, and robot-mode `calibrate_hands` blocks with no timeout. **Done when:** a hand-less G1 run reaches "GEAR -> /robot_cmd at 50 Hz".
 
 - [ ] Dex3 finger gains: GEAR's hand sender (`decoupled_wbc` `command_sender.py:130-133`, forwarded by `adapters/gear_hands.py`) sends kp 2/1, kd 0.5/0.2; SIMPLE trains and evaluates with kp 5/2.5, kd 1 (`G1Sonic.apply_action`). A bridge try of psi0 `g1-xmovepick` (g1-pick-smoke ep 0) failed the grasp with GEAR's gains and succeeded in-process. **Done when:** the gains the real Dex3 needs are measured on the robot and the sim or the sender matches them.
@@ -70,7 +70,6 @@ Decided and fake-tested on `g1-web-interface` (`docs/psi0_gates.md`).
 
 ### Upstream fixes — one branch each
 
-- [ ] `fix/g1-default-pos-29`: G1 `_default_pos` is 27 long while kp/kd are 29 (`robot_tables.py`). **Done when:** all three are 29 and a length check fails loudly.
 - [ ] `fix/config-keymaps`: the keymap headers in `params/*.yaml` are corrected here: each key names its handler, `robot_client.py` or the bridge. Still to send upstream. **Done when:** the PR is open.
 - [ ] `feat/g1-finish-control-release`: e-stop latch built on `g1-web-interface` (`docs/estop.md`), fake-tested only. **Done when:** gantry tests G0–G6 in `docs/estop.md` pass and the branch is merged.
 
@@ -78,3 +77,5 @@ Decided and fake-tested on `g1-web-interface` (`docs/psi0_gates.md`).
 
 - [ ] Decide whether the service-call futures in `robot_client.py` should be awaited. Two are assigned and dropped (`init_control`, `stop_control`), currently ruff-suppressed as `F841`. **Done when:** the calls either await or explicitly document fire-and-forget, and the suppression is gone.
 - [ ] `--interface sim` does not reach the bridge: MuJoCo listens on `rt/lowcmd`, which the bridge owns. **Done when:** a sim run drives the same client path as hardware, or the limitation is documented as permanent.
+- [ ] Dedup the test-driver helpers: 14 `drive_*.py` define their own `check(name, ok, detail)`, and several repeat `spin`/`wait` and the `main()` boilerplate. Move them to one shared module per integration directory (`bridge/robot_bridge/tests/integration/`, `robot_stacks/sim/robot_sim/tests/integration/`). **Done when:** `grep -l 'def check(' bridge/robot_bridge/tests/integration/drive_*.py robot_stacks/sim/robot_sim/tests/integration/drive_*.py` prints nothing and `tools/test.sh --docker` passes.
+- [ ] Dedup `robot_sim/robots/g1.py` and `go2.py`: `set_remote`, `press`, `boot`, `tick` and `publish` are 32 identical lines. Move them to `robots/unitree.py`. **Done when:** `uvx --from pylint pylint --disable=all --enable=duplicate-code --min-similarity-lines=12 --ignore-imports=y --ignore-docstrings=y --ignore-comments=y robot_stacks/sim/robot_sim/robot_sim/robots/*.py` prints no `R0801` and `pytest robot_stacks/sim/robot_sim/tests` passes.
