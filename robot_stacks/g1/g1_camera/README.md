@@ -54,7 +54,7 @@ rgb = client.read_rgb()  # (height, width, 3) uint8, RGB
 ## 4. Verify
 
 ```bash
-pytest robot_stacks/g1/g1_camera/tests/    # 22 tests, no camera, on 127.0.0.1
+pytest robot_stacks/g1/g1_camera/tests/    # no camera, on 127.0.0.1
 fake_camera_server                          # stand-in on the wire
 ```
 
