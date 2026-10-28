@@ -3,7 +3,7 @@
 > One per repo. Planned work only, one item per task. Finished items are
 > deleted; git history is the log.
 
-_Last updated: 2026-10-28 · turing_
+_Last updated: 2026-10-24 · turing_
 
 ## Items
 
@@ -32,8 +32,6 @@ left needs hardware:
 - [ ] Left-hand state gaps: `/dex3/left/state` drops out for up to 1 s on the G1
   (commander, 2026-10-23); the bridge releases the hand after 0.2 s.
   **Done when:** the cause is known and the left hand state has no gap over 0.2 s.
-- [ ] Review the Dex3 `dq_limit` fix (20 rad/s on all 14 hand joints) alone: commit `f2e549a` sits inside sim sticks PR #43.
-  **Done when:** a PR holds only `f2e549a` on top of `main`, and the unit stage of `tools/test.sh` passes.
 - [ ] Decide whether the bridge should republish hand state as a
   `bridge_interface` message, so `g1_stack` can drop its raw-DDS hand reader.
   Blocked on whether the Jetson ever needs hand state.
