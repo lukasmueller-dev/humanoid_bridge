@@ -7,11 +7,6 @@ _Last updated: 2026-10-24 · turing_
 
 ## Items
 
-### Handover
-
-- [ ] Delete `docs/handover-audit.md`: its plan (P0–P2) is done.
-  **Done when:** the file is gone and `PROJECT_STATUS.md` no longer points at it.
-
 ### Hand path
 
 Built, compiled and verified against the fakes (`tools/test.sh`, all stages
