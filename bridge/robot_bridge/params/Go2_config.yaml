@@ -19,7 +19,7 @@ robot_bridge:
 
     # docs/estop.md. Operator e-stops have a fixed mode; these set the rest.
     estop:
-      damp_kd: 2.0                      # float: a damped Go2 sinks to the floor
+      damp_kd: 4.0                      # float: a damped Go2 sinks; 4.0 sinks slower than 2.0 (gantry, 2026-10-29)
       remote_combo_damp: ["R1", "R2"]
       remote_combo_hold: ["L1", "R1"]
       require_remote: true
