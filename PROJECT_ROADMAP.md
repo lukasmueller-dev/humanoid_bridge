@@ -75,8 +75,6 @@ Decided and fake-tested on `g1-web-interface` (`docs/psi0_gates.md`).
 
 ### Cleanups
 
-- [ ] Raise the Go2 e-stop `damp_kd` from 2.0 to 4.0: a gantry test on the real Go2 showed the sink after an e-stop is gentler (operator, 2026-10-29).
-  **Done when:** `grep -n "damp_kd: 4.0" bridge/robot_bridge/params/Go2_config.yaml` finds the line with the reason, `docs/estop.md` names kd 4.0 for the Go2, and `tools/test.sh --unit --allow-skip` passes.
 - [ ] Decide whether the service-call futures in `robot_client.py` should be awaited. Two are assigned and dropped (`init_control`, `stop_control`), currently ruff-suppressed as `F841`. **Done when:** the calls either await or explicitly document fire-and-forget, and the suppression is gone.
 - [ ] `--interface sim` does not reach the bridge: MuJoCo listens on `rt/lowcmd`, which the bridge owns. **Done when:** a sim run drives the same client path as hardware, or the limitation is documented as permanent.
 - [ ] Dedup the test-driver helpers: 14 `drive_*.py` define their own `check(name, ok, detail)`, and several repeat `spin`/`wait` and the `main()` boilerplate. Move them to one shared module per integration directory (`bridge/robot_bridge/tests/integration/`, `robot_stacks/sim/robot_sim/tests/integration/`). **Done when:** `grep -l 'def check(' bridge/robot_bridge/tests/integration/drive_*.py robot_stacks/sim/robot_sim/tests/integration/drive_*.py` prints nothing and `tools/test.sh --docker` passes.
