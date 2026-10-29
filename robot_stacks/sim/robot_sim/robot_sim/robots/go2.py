@@ -9,8 +9,6 @@ import os
 import pathlib
 import struct
 
-import numpy as np
-
 from robot_sim.physics import RobotSpec
 from robot_sim.robots import unitree
 
@@ -98,7 +96,7 @@ SPEC = RobotSpec(
 )
 
 
-class Wire:
+class Wire(unitree.Wire):
     """unitree_go: LowState at the physics rate, LowCmd (CRC checked), sport, motion switcher."""
 
     def __init__(self, node, sim, lock):
@@ -146,34 +144,6 @@ class Wire:
     def filter(self, cmd):
         """Lock held: the Go2 follows /lowcmd in every mode."""
         return cmd
-
-    def set_remote(self, connected):
-        unitree.set_remote(self.state.wireless_remote, connected)
-
-    def press(self, names):
-        """Hold these buttons (names as the bridge YAML's combos); [] releases."""
-        unitree.set_keys(self.state.wireless_remote, unitree.key_mask(names))
-
-    def boot(self):
-        """End of a reboot, lock held: the sport service holds /lowcmd again."""
-        self.motion.boot()
-
-    def tick(self, now):
-        """Lock held, link up: the sport service's frame when due."""
-        self.motion.send(now)
-
-    def publish(self, s):
-        for i in range(NUM_JOINT):
-            ms = self.state.motor_state[i]
-            ms.q, ms.dq = float(s["q"][i]), float(s["dq"][i])
-            ms.ddq, ms.tau_est = float(s["ddq"][i]), float(s["tau_est"][i])
-        imu = self.state.imu_state
-        imu.quaternion = s["quaternion"].astype(np.float32).tolist()
-        imu.rpy = s["rpy"].astype(np.float32).tolist()
-        imu.gyroscope = s["gyroscope"].astype(np.float32).tolist()
-        imu.accelerometer = s["accelerometer"].astype(np.float32).tolist()
-        self.state.tick = int(s["time"] * 1000)
-        self.publisher.publish(self.state)
 
     def publish_hands(self, states):
         pass  # no hands
