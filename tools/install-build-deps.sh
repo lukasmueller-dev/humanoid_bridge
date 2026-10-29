@@ -68,7 +68,7 @@ APT=(python3-colcon-common-extensions python3-pip
 
 # Keep in step with docker/bench-g1.Dockerfile in humanoid-locoman-vla, so a
 # bare host and the bench container agree on what is importable.
-PIP=(numpy pyzmq msgpack msgpack-numpy opencv-python-headless pytest ruff)
+PIP=(numpy scipy pyzmq msgpack msgpack-numpy opencv-python-headless pytest ruff)
 
 SUDO=""
 if [ "$(id -u)" != 0 ]; then
