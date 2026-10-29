@@ -349,7 +349,7 @@ class RobotClient:
             if self.remote_controller.is_exact_combo(buttons, [KeyMap.L2, KeyMap.start]):
                 self.node.get_logger().info("Starting control...")
                 if not self.control_started:
-                    future = self.init_control()
+                    self.init_control()
                     self.control_start_time = time_now + self._default_duration
                 return
             elif self.remote_controller.is_exact_combo(
@@ -562,7 +562,7 @@ class RobotClient:
         ):  # start: LT + RT + START
             self.node.get_logger().info("Starting control...")
             if not self.control_started:
-                future = self.init_control()
+                self.init_control()
                 self.control_start_time = time_now + self._default_duration
             return
         elif joy_msg.lb and self.key_count == 1:  # ready position: LB
@@ -587,7 +587,7 @@ class RobotClient:
             return
         elif joy_msg.back and self.key_count == 1:  # stop: BACK
             self.node.get_logger().info("Stopping control...")
-            future = self.stop_control()
+            self.stop_control()
             self.control_start_time = None
             return
         elif joy_msg.lt and joy_msg.back and self.key_count == 2:  # emergency stop: LT + BACK
@@ -627,6 +627,10 @@ class RobotClient:
     def init_control(self, default_pos=None):
         """
         Start the control loop by calling the init_control service.
+
+        X2 returns the pending future; its done-callback handles the response.
+        The Unitree and Booster joystick handlers drop the result (fire-and-forget):
+        awaiting inside a subscription callback blocks the executor that delivers the response.
         """
         if default_pos is None:
             default_pos = self._default_pos
@@ -657,6 +661,10 @@ class RobotClient:
     def stop_control(self):
         """
         Stop the control loop by calling the stop_control service.
+
+        X2 returns the pending future; its done-callback handles the response.
+        The Unitree and Booster joystick handlers drop the result (fire-and-forget):
+        awaiting inside a subscription callback blocks the executor that delivers the response.
         """
         if self.robot_type == "X2" and not self.stop_control_client.service_is_ready():
             raise RuntimeError("stop_control_client service is unavailable.")
