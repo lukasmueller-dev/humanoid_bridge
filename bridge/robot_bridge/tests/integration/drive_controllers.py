@@ -23,6 +23,7 @@ OFFSET = 0.05  # rad past the pose the fake holds: kp·OFFSET stays under tau_li
 TOLERANCE = 0.05  # Nm
 STREAM_SECONDS = 0.5  # gate 2 ramps OFFSET in 10 ms
 DQ = 0.5  # rad/s, joint 0's measured speed for example_controller (/fake_g1/dq)
+FEEDFORWARD = 1.0  # Nm on the parallel ankle at kp 0, under tau_limit
 
 
 def load_params(path):
@@ -75,13 +76,14 @@ class Driver:
         if not ok:
             self.failures.append(name)
 
-    def stream(self, q, controller, seconds=STREAM_SECONDS):
+    def stream(self, q, controller, seconds=STREAM_SECONDS, kp=None, tau=None):
         """/robot_cmd at 50 Hz for `seconds`, as a policy sends it; then the last frame."""
         end = time.monotonic() + seconds
         while time.monotonic() < end:
             self.client.send_cmd(
                 q_target_pos=q,
-                target_kp=self.params["kp"],
+                target_tau=tau,
+                target_kp=self.params["kp"] if kp is None else kp,
                 target_kd=self.params["kd"],
                 duration=0.02,
                 hold_position=True,
@@ -191,6 +193,25 @@ class Driver:
         self.dq.publish(Float32(data=0.0))
         reply = self.client.stop_control()
         self.check("stop_control after example_controller", reply.success, reply.message)
+
+        # motor_pd on a parallel joint at kp 0: no P part to move, the feedforward tau goes as is.
+        reply = self.client.start_control(default_position=[start_q] * NUM_MOTORS, timeout_sec=30.0)
+        self.check("start_control for motor_pd", reply.success, reply.message)
+        kp = list(self.params["kp"])
+        kp[L_ANKLE_PITCH] = 0.0
+        tau = [0.0] * NUM_MOTORS
+        tau[L_ANKLE_PITCH] = FEEDFORWARD
+        frame = self.stream([start_q] * NUM_MOTORS, "", kp=kp, tau=tau)
+        self.check(
+            f"motor_pd: parallel ankle at kp 0 sends tau {FEEDFORWARD}",
+            self.controller == "motor_pd"
+            and frame is not None
+            and frame[L_ANKLE_PITCH].kp == 0.0
+            and abs(frame[L_ANKLE_PITCH].tau - FEEDFORWARD) < TOLERANCE,
+            f"{self.controller}, {self.motor(frame, L_ANKLE_PITCH)}",
+        )
+        reply = self.client.stop_control()
+        self.check("stop_control after motor_pd", reply.success, reply.message)
 
 
 def main():

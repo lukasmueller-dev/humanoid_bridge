@@ -734,7 +734,7 @@ namespace sairol_bridge
             const bool parallel = receivedCmd_ && joint_info.if_parallel_joint;
 
             // Gate 2 and the next ramp start from the target, not the frame: bridge_pd's has kp 0 and q_meas.
-            // Gate 4 on it as on a motor_pd frame, which is the target: that path stays bit for bit.
+            // Gate 4 on it as on a motor_pd frame, which is the target: motor_pd's lastCommand_ stays bit for bit.
             last_cmd.q = gates::torqueWindow(target.q, motor.q, motor.dq, target.dq, target.kp, target.kd,
                                              parallel ? 0.0f : target.tau, joint_info.tau_limit);
             last_cmd.dq = target.dq;
@@ -747,7 +747,7 @@ namespace sairol_bridge
             cmd.q = gates::torqueWindow(cmd.q, motor.q, motor.dq, cmd.dq, cmd.kp, cmd.kd,
                                         parallel ? 0.0f : cmd.tau, joint_info.tau_limit);
 
-            // At kp 0 there is no P part to move: bridge_pd's tau holds the whole PD already.
+            // At kp 0 there is no P part to move: tau goes as is (bridge_pd's PD, motor_pd's feedforward).
             if (parallel && cmd.kp > 0.0f)
             {
                 cmd.tau = std::clamp((cmd.q - motor.q) * cmd.kp, -joint_info.tau_limit, joint_info.tau_limit);
