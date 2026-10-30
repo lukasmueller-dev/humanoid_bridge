@@ -1,0 +1,533 @@
+#include "T1_bridge.hpp"
+#include "gates.hpp"
+
+#include <cmath>
+
+using namespace std::chrono_literals;
+
+namespace
+{
+    // booster_interface/ImuState has rpy only: the quaternion (w, x, y, z) from ZYX rpy.
+    std::array<float, 4> quatFromRpy(const std::array<float, 3> &rpy)
+    {
+        const double cr = std::cos(rpy[0] / 2), sr = std::sin(rpy[0] / 2);
+        const double cp = std::cos(rpy[1] / 2), sp = std::sin(rpy[1] / 2);
+        const double cy = std::cos(rpy[2] / 2), sy = std::sin(rpy[2] / 2);
+        return {static_cast<float>(cr * cp * cy + sr * sp * sy), static_cast<float>(sr * cp * cy - cr * sp * sy),
+                static_cast<float>(cr * sp * cy + sr * cp * sy), static_cast<float>(cr * cp * sy - sr * sp * cy)};
+    }
+} // namespace
+
+sairol_bridge::T1Bridge::T1Bridge(rclcpp::Node::SharedPtr node) : BridgeCore(node)
+{
+    lowCommandDesired_.motor_cmd.resize(numJoint_);
+    lastCommand_.motor_cmd.resize(numJoint_);
+    currentState_.motor_state.resize(numJoint_);
+    cmdParams_.resize(numJoint_);
+    loadParallelAnkleParameters_();
+    remoteOnEventsOnly_ = true;   // /remote_controller_state: one message per button event, none while idle
+
+    client_ = nh->create_client<booster_interface::srv::RpcService>("booster_rpc_service");
+    // rclcpp::ok(): after Ctrl-C the graph calls throw. main() then skips spin.
+    while (rclcpp::ok() && !client_->wait_for_service(1s))
+    {
+        RCLCPP_INFO(nh->get_logger(), "Waiting for booster_rpc_service...");
+    }
+    if (!rclcpp::ok())
+    {
+        return;
+    }
+
+    lowStateSubscriber_ = nh->create_subscription<booster_interface::msg::LowState>(
+        "/low_state", 1, std::bind(&T1Bridge::lowStateHandler_, this, std::placeholders::_1));
+    // Transient local, as the robot's publisher: a bridge that starts later still gets the last event.
+    remoteSubscriber_ = nh->create_subscription<booster_interface::msg::RemoteControllerState>(
+        "/remote_controller_state", rclcpp::QoS(10).transient_local(),
+        std::bind(&T1Bridge::remoteHandler_, this, std::placeholders::_1));
+
+    lowCommandPublisher_ = nh->create_publisher<booster_interface::msg::LowCmd>("/joint_ctrl", 1);
+
+    RCLCPP_INFO(nh->get_logger(), "Waiting for publisher on topic /low_state...");
+    while (rclcpp::ok() && nh->count_publishers("/low_state") == 0)
+    {
+        rclcpp::sleep_for(100ms);
+    }
+    if (!rclcpp::ok())
+    {
+        return;
+    }
+    // Runs while the context is still valid, so update_() keeps publishing the damp frames.
+    nh->get_node_base_interface()->get_context()->add_pre_shutdown_callback([this] { dampBeforeShutdown_(); });
+
+    createArmingServices_();
+    // Arming checks /joint_ctrl once; this catches a sender that starts later.
+    jointCtrlWatchTimer_ = nh->create_wall_timer(1s, std::bind(&T1Bridge::watchJointCtrl_, this));
+    link_ = estop::LinkWatch(false);   // no tick on /low_state: a reboot cannot be told from a drop
+    startLinkWatch_();
+    RCLCPP_INFO(nh->get_logger(), "T1 bridge up: %d joints, DISARMED", numJoint_);
+}
+
+void sairol_bridge::T1Bridge::stop()
+{
+    if (controlThread_.joinable())
+    {
+        controlThread_.join();
+    }
+    if (rclcpp::ok())   // after a shutdown dampBeforeShutdown_ asked already
+    {
+        switchMode_(booster::RobotMode::Damping);
+    }
+    RCLCPP_INFO(nh->get_logger(), "T1 Bridge stopped.");
+}
+
+void sairol_bridge::T1Bridge::lowStateHandler_(booster_interface::msg::LowState::SharedPtr msg)
+{
+    std::unique_lock<std::mutex> lock(mutex_);
+    last_state_time_ = steadyClock_.now();
+
+    // motor_state_serial is an unbounded sequence; currentState_ holds numJoint_. Bound the copy.
+    const size_t count = msg->motor_state_serial.size();
+    const size_t copy_count = std::min(count, static_cast<size_t>(numJoint_));
+    if (count != static_cast<size_t>(numJoint_))
+    {
+        RCLCPP_WARN_ONCE(nh->get_logger(),
+                         "LowState carries %zu serial motor states, robot_bridge is configured for %d joints; "
+                         "the first %zu are used",
+                         count, numJoint_, copy_count);
+    }
+    for (size_t i = 0; i < copy_count; ++i)
+    {
+        currentState_.motor_state[i].q = msg->motor_state_serial[i].q;
+        currentState_.motor_state[i].dq = msg->motor_state_serial[i].dq;
+        currentState_.motor_state[i].ddq = msg->motor_state_serial[i].ddq;
+        currentState_.motor_state[i].tau_est = msg->motor_state_serial[i].tau_est;
+    }
+    if (parallelAnkle_)
+    {
+        parallelState_ = msg->motor_state_parallel;
+    }
+    imu_.rpy = msg->imu_state.rpy;
+    imu_.gyroscope = msg->imu_state.gyro;
+    imu_.accelerometer = msg->imu_state.acc;
+    imu_.quaternion = quatFromRpy(msg->imu_state.rpy);
+    auto state = robotState_(0);   // booster_interface/LowState has no tick
+    lock.unlock();
+
+    if (!stateLogged_)
+    {
+        stateLogged_ = true;
+        RCLCPP_INFO(nh->get_logger(), "T1 type: %zu serial motors", count);
+    }
+    noteLink_(0);
+
+    const bool connected = remotePresent_();
+    const uint16_t keys = remoteKeys_;
+    state.remote.connected = connected;
+    state.remote.pressed = connected ? estop::keyNames(keys, *keyTable_) : std::vector<std::string>{};
+    robotStatePublisher_->publish(state);
+}
+
+void sairol_bridge::T1Bridge::remoteHandler_(booster_interface::msg::RemoteControllerState::SharedPtr msg)
+{
+    // Every message counts as the remote being there; the T1 sends only on events.
+    lastRemoteHeader_ = steadyClock_.now().seconds();
+    estop::T1Pad pad;
+    pad.a = msg->a, pad.b = msg->b, pad.x = msg->x, pad.y = msg->y;
+    pad.lb = msg->lb, pad.rb = msg->rb, pad.lt = msg->lt, pad.rt = msg->rt;
+    pad.back = msg->back, pad.start = msg->start, pad.ls = msg->ls, pad.rs = msg->rs;
+    pad.up = msg->hat_u || msg->hat_lu || msg->hat_ru, pad.down = msg->hat_d || msg->hat_ld || msg->hat_rd;
+    pad.left = msg->hat_l || msg->hat_lu || msg->hat_ld, pad.right = msg->hat_r || msg->hat_ru || msg->hat_rd;
+    const uint16_t keys = estop::t1KeyMask(pad);
+    remoteKeys_ = keys;
+    const estop::Cause remote = estop::remoteOnset(estop::remoteCause(keys, estopConfig_), lastRemote_);
+    if (remote != estop::Cause::None)
+    {
+        enterStop_(remote);
+    }
+}
+
+bool sairol_bridge::T1Bridge::robotAllowsArming_(std::string &why)
+{
+    // This bridge's own publisher counts once.
+    const size_t publishers = nh->count_publishers("/joint_ctrl");
+    if (publishers > 1)
+    {
+        why = std::to_string(publishers - 1) + " other /joint_ctrl publisher(s): stop them first";
+        return false;
+    }
+    return true;
+}
+
+sairol_bridge::estop::Cause sairol_bridge::T1Bridge::robotFault_()
+{
+    return nh->count_publishers("/joint_ctrl") > 1 ? estop::Cause::OtherLowcmd : estop::Cause::None;
+}
+
+void sairol_bridge::T1Bridge::watchJointCtrl_()
+{
+    const bool sending = controlStarted_ || stopPublishing_;
+    const estop::Cause fault =
+        estop::faultOnset(sending ? robotFault_() : estop::Cause::None, lastJointCtrlFault_);
+    if (fault != estop::Cause::None)
+    {
+        RCLCPP_ERROR(nh->get_logger(), "Another node publishes /joint_ctrl while this bridge sends: two senders fight");
+        enterStop_(fault);
+    }
+}
+
+void sairol_bridge::T1Bridge::publishLowCommand_()
+{
+    rclcpp::Time current = steadyClock_.now();
+
+    float_t phase = 1.0f;
+    if (tFinal_ - tStart_ > 1e-6) {
+        phase = (current.seconds() - tStart_) / (tFinal_ - tStart_);
+    }
+    phase = std::clamp(phase, 0.0f, 1.0f);
+
+    booster_interface::msg::LowCmd booster_cmd;
+    booster_cmd.motor_cmd.resize(numJoint_);
+    booster_cmd.cmd_type = parallelAnkle_ ? booster_interface::msg::LowCmd::CMD_TYPE_PARALLEL
+                                          : booster_interface::msg::LowCmd::CMD_TYPE_SERIAL;
+
+    bool finite = true;
+    for (int i = 0; i < numJoint_; ++i)
+    {
+        auto &cmd = booster_cmd.motor_cmd[i];
+        auto &last_cmd = lastCommand_.motor_cmd[i];
+        auto &joint_info = joints_[i];
+
+        cmd.mode = 0;
+        cmd.weight = 1.0;
+
+        if (1e-6 < cmdInterpOrder_ && cmdInterpOrder_ < 1.0 - 1e-6)
+        {
+            cmd.q = last_cmd.q * cmdInterpOrder_ + cmdParams_[i].q_0 * (1 - cmdInterpOrder_);
+            cmd.dq = last_cmd.dq * cmdInterpOrder_ + cmdParams_[i].dq_0 * (1 - cmdInterpOrder_);
+        }
+        else
+        {
+            cmd.q = cmdParams_[i].q_0 + cmdParams_[i].q_1 * phase;
+            cmd.dq = cmdParams_[i].dq_0 + cmdParams_[i].dq_1 * phase;
+        }
+
+        // Gates 1 and 2 (docs/psi0_gates.md): the joint range, then the target speed.
+        if (cmd.q < joint_info.q_min || cmd.q > joint_info.q_max)
+        {
+            RCLCPP_WARN_THROTTLE(nh->get_logger(), steadyClock_, 1000,
+                                 "joint %d target %.3f outside [%.3f, %.3f]: clamped",
+                                 i, cmd.q, joint_info.q_min, joint_info.q_max);
+        }
+        cmd.q = gates::limitTarget(cmd.q, last_cmd.q, joint_info, controlDt_);
+
+        cmd.kp = cmdParams_[i].kp_0 + cmdParams_[i].kp_1 * phase;
+        cmd.kd = cmdParams_[i].kd_0 + cmdParams_[i].kd_1 * phase;
+        cmd.dq = std::clamp(cmd.dq, -joint_info.dq_limit, joint_info.dq_limit);
+
+        if (torqueControl_)
+        {
+            cmd.tau = cmd.kp * (cmd.q - currentState_.motor_state[i].q) +
+                      cmd.kd * (cmd.dq - currentState_.motor_state[i].dq) + cmdParams_[i].tau_0;
+            cmd.tau = std::clamp(cmd.tau, -joint_info.tau_limit, joint_info.tau_limit);
+            cmd.kp = 0.0;
+            cmd.kd = 0.0;
+        }
+        else
+        {
+            cmd.tau = cmdParams_[i].tau_0 + cmdParams_[i].tau_1 * phase;
+        }
+        // Gate 4: the torque window, feedforward included; at kp 0 the measured q, never inf or NaN.
+        const bool parallel = receivedCmd_ && joint_info.if_parallel_joint;
+        cmd.q = gates::torqueWindow(cmd.q, currentState_.motor_state[i].q, currentState_.motor_state[i].dq,
+                                    cmd.dq, cmd.kp, cmd.kd, parallel ? 0.0f : cmd.tau, joint_info.tau_limit);
+
+        last_cmd.q = cmd.q;
+        last_cmd.dq = cmd.dq;
+        last_cmd.kp = cmd.kp;
+        last_cmd.kd = cmd.kd;
+        last_cmd.tau = cmd.tau;
+
+        // With the bridge's ankle mapping the serial command in cmd becomes crank commands after this loop.
+        if (parallel && !parallelAnkle_)
+        {
+            cmd.tau = std::clamp((last_cmd.q - currentState_.motor_state[i].q) * cmd.kp,
+                                 -joint_info.tau_limit, joint_info.tau_limit);
+            cmd.q = currentState_.motor_state[i].q;
+            cmd.kp = 0.0;
+        }
+        finite = finite && gates::finiteCommand(cmd.q, cmd.dq, cmd.kp, cmd.kd, cmd.tau);
+    }
+    if (finite && parallelAnkle_)
+    {
+        std::array<AnkleMapping, 2> mapping;
+        if (!mapAnklesToCranks_(booster_cmd, mapping))
+        {
+            RCLCPP_ERROR(nh->get_logger(),
+                         "Parallel ankle mapping failed (left ok=%d err=%.3f, right ok=%d err=%.3f rad, limit %.3f)",
+                         mapping[0].ok, mapping[0].estimate_error, mapping[1].ok, mapping[1].estimate_error,
+                         parallelAnkleMaxEstimateError_);
+            finite = false;
+        }
+        for (int side = 0; side < 2 && finite; ++side)
+        {
+            for (int c = 0; c < 2; ++c)
+            {
+                const auto &motor_cmd = booster_cmd.motor_cmd[crankSlot_(side, c)];
+                finite = finite && gates::finiteCommand(motor_cmd.q, motor_cmd.dq, motor_cmd.kp, motor_cmd.kd, motor_cmd.tau);
+            }
+        }
+    }
+    if (!finite)
+    {
+        invalidFrame_ = true;   // update_() latches state_invalid once mutex_ is free
+        return;
+    }
+    lowCommandPublisher_->publish(booster_cmd);
+}
+
+// mutex_ held (update_). Bypasses publishLowCommand_: its q clamp divides by kp.
+void sairol_bridge::T1Bridge::publishStopCommand_()
+{
+    booster_interface::msg::LowCmd booster_cmd;
+    booster_cmd.motor_cmd.resize(numJoint_);
+    booster_cmd.cmd_type = booster_interface::msg::LowCmd::CMD_TYPE_SERIAL;
+
+    const estop::Mode mode = latch_.mode();
+    for (int i = 0; i < numJoint_; ++i)
+    {
+        const auto frame = estop::stopFrame(mode, joints_[i], currentState_.motor_state[i].q,
+                                            holdQ_[i], estopConfig_.damp_kd);
+        auto &cmd = booster_cmd.motor_cmd[i];
+        cmd.mode = 0;
+        cmd.weight = 1.0;
+        cmd.q = frame.q;
+        cmd.dq = frame.dq;
+        cmd.kp = frame.kp;
+        cmd.kd = frame.kd;
+        cmd.tau = frame.tau;
+
+        // A re-arm interpolates from lastCommand_.
+        auto &last_cmd = lastCommand_.motor_cmd[i];
+        last_cmd.q = frame.q;
+        last_cmd.dq = frame.dq;
+        last_cmd.kp = frame.kp;
+        last_cmd.kd = frame.kd;
+        last_cmd.tau = frame.tau;
+    }
+    lowCommandPublisher_->publish(booster_cmd);
+}
+
+bool sairol_bridge::T1Bridge::initControl_(bridge_interface::msg::RobotCmd default_cmd)
+{
+    {
+        // Gate 2 ramps from lastCommand_: all zeros at boot, which would pull every joint toward 0.
+        std::lock_guard<std::mutex> lock(mutex_);
+        for (int i = 0; i < numJoint_; ++i)
+        {
+            const float_t q = std::clamp(currentState_.motor_state[i].q, joints_[i].q_min, joints_[i].q_max);
+            lastCommand_.motor_cmd[i].q = q;
+            lastCommand_.motor_cmd[i].dq = 0.0;
+            lastCommand_.motor_cmd[i].tau = 0.0;
+            lowCommandDesired_.motor_cmd[i].q = q;
+            lowCommandDesired_.motor_cmd[i].dq = 0.0;
+            lowCommandDesired_.motor_cmd[i].tau = 0.0;
+            lowCommandDesired_.motor_cmd[i].kp = joints_[i].kp;
+            lowCommandDesired_.motor_cmd[i].kd = joints_[i].kd;
+        }
+        if (parallelAnkle_)
+        {
+            // The hold above must map to the cranks, else the first tracking frame latches state_invalid.
+            booster_interface::msg::LowCmd hold;
+            hold.motor_cmd.resize(numJoint_);
+            for (int i = 0; i < numJoint_; ++i)
+            {
+                hold.motor_cmd[i].q = currentState_.motor_state[i].q;
+                hold.motor_cmd[i].kp = joints_[i].kp;
+                hold.motor_cmd[i].kd = joints_[i].kd;
+            }
+            std::array<AnkleMapping, 2> mapping;
+            if (!mapAnklesToCranks_(hold, mapping))
+            {
+                RCLCPP_ERROR(nh->get_logger(),
+                             "Parallel ankle mapping failed at start (left ok=%d err=%.3f, right ok=%d err=%.3f rad). "
+                             "Check parallel_ankle_swap_cranks / parallel_ankle_crank_sign with "
+                             "scripts/real/t1_check_parallel_ankle_mapping.py. Not armed.",
+                             mapping[0].ok, mapping[0].estimate_error, mapping[1].ok, mapping[1].estimate_error);
+                return false;
+            }
+        }
+    }
+    calculateInterpolationParams_(0.0, 1, true);
+
+    // Custom mode follows /joint_ctrl: the hold above streams before the switch lands.
+    controlStarted_ = true;
+    receivedCmd_ = true;
+    if (!switchMode_(booster::RobotMode::Custom))
+    {
+        controlStarted_ = false;
+        RCLCPP_ERROR(nh->get_logger(), "booster_rpc_service is gone: not armed");
+        return false;
+    }
+    rclcpp::Rate rate(100);
+    rate.sleep();
+    RCLCPP_INFO(nh->get_logger(), "Control initialized successfully.");
+
+    if (default_cmd.motor_cmd.size() == static_cast<size_t>(numJoint_))
+    {
+        for (int i = 0; i < numJoint_; ++i)
+        {
+            lowCommandDesired_.motor_cmd[i].q = std::clamp(default_cmd.motor_cmd[i].q, joints_[i].q_min, joints_[i].q_max);
+            lowCommandDesired_.motor_cmd[i].kp = default_cmd.motor_cmd[i].kp;
+            lowCommandDesired_.motor_cmd[i].kd = default_cmd.motor_cmd[i].kd;
+        }
+    }
+    else
+    {
+        for (int i = 0; i < numJoint_; ++i)
+        {
+            lowCommandDesired_.motor_cmd[i].q = ready_q_[i];
+            lowCommandDesired_.motor_cmd[i].kp = joints_[i].kp;
+            lowCommandDesired_.motor_cmd[i].kd = joints_[i].kd;
+        }
+    }
+    calculateInterpolationParams_(duration_, 1, true);
+    return true;
+}
+
+void sairol_bridge::T1Bridge::loadParallelAnkleParameters_()
+{
+    // Optional parameters: absent from the YAML means the firmware mapping (CMD_TYPE_SERIAL) as before.
+    nh->get_parameter("parallel_ankle_mapping", parallelAnkle_);
+    nh->get_parameter("parallel_ankle_swap_cranks", parallelAnkleSwapCranks_);
+    nh->get_parameter("parallel_ankle_crank_sign", parallelAnkleCrankSign_);
+    nh->get_parameter("parallel_ankle_crank_tau_limit", parallelAnkleCrankTauLimit_);
+    nh->get_parameter("parallel_ankle_max_estimate_error", parallelAnkleMaxEstimateError_);
+    if (parallelAnkleCrankSign_.size() != 2)
+    {
+        throw std::invalid_argument("parallel_ankle_crank_sign must have two entries (crank a, crank b)");
+    }
+    for (int side = 0; side < 2; ++side)
+    {
+        for (int j = 0; j < 2; ++j)
+        {
+            if (!joints_[kAnkleSerialIdx[side][j]].if_parallel_joint)
+            {
+                throw std::invalid_argument("T1 ankle joints 15, 16, 21, 22 must have if_parallel_joint: true");
+            }
+        }
+    }
+    RCLCPP_INFO(nh->get_logger(),
+                "Parallel ankle mapping %s (swap_cranks=%d, crank_sign=[%.0f, %.0f], crank_tau_limit=%.1f, "
+                "max_estimate_error=%.3f).",
+                parallelAnkle_ ? "ENABLED: bridge maps ankle commands to the crank motors (CMD_TYPE_PARALLEL)"
+                               : "disabled: firmware maps ankle commands (CMD_TYPE_SERIAL)",
+                parallelAnkleSwapCranks_, parallelAnkleCrankSign_[0], parallelAnkleCrankSign_[1],
+                parallelAnkleCrankTauLimit_, parallelAnkleMaxEstimateError_);
+}
+
+int sairol_bridge::T1Bridge::crankSlot_(int side, int crank) const
+{
+    // Crank a sits in the pitch slot and crank b in the roll slot, unless swapped.
+    return kAnkleSerialIdx[side][parallelAnkleSwapCranks_ ? 1 - crank : crank];
+}
+
+bool sairol_bridge::T1Bridge::mapAnklesToCranks_(booster_interface::msg::LowCmd &cmd,
+                                                 std::array<AnkleMapping, 2> &mapping) const
+{
+    // On entry the four ankle entries of cmd hold the serial command (pitch / roll q, dq, kp, kd, tau); on success
+    // they hold the crank commands: hold the measured angle with kp = 0, damping kd, torque tau (motor convention).
+    namespace pa = t1_parallel_ankle;
+    bool all_ok = true;
+    for (int side = 0; side < 2; ++side)
+    {
+        auto &m = mapping[side];
+        const int ip = kAnkleSerialIdx[side][0], ir = kAnkleSerialIdx[side][1];
+        if (parallelState_.size() <= static_cast<size_t>(ir))
+        {
+            all_ok = false;
+            continue;
+        }
+        for (int c = 0; c < 2; ++c)
+        {
+            const auto &motor = parallelState_[crankSlot_(side, c)];
+            m.q_m[c] = parallelAnkleCrankSign_[c] * motor.q;
+            m.dq_m[c] = parallelAnkleCrankSign_[c] * motor.dq;
+        }
+        m.q_s_firmware = {currentState_.motor_state[ip].q, currentState_.motor_state[ir].q};
+
+        const auto &sp = cmd.motor_cmd[ip];
+        const auto &sr = cmd.motor_cmd[ir];
+        m.crank = pa::crankCommand(static_cast<pa::Side>(side), m.q_m, m.dq_m, m.q_s_firmware,
+                                   {sp.q, sr.q}, {sp.dq, sr.dq}, {sp.kp, sr.kp}, {sp.kd, sr.kd}, {sp.tau, sr.tau},
+                                   parallelAnkleCrankTauLimit_);
+        m.estimate_error = std::max(std::abs(m.crank.q_s[0] - m.q_s_firmware[0]),
+                                    std::abs(m.crank.q_s[1] - m.q_s_firmware[1]));
+        m.ok = m.crank.ok && m.estimate_error <= parallelAnkleMaxEstimateError_;
+        all_ok = all_ok && m.ok;
+    }
+    if (!all_ok) return false;
+
+    for (int side = 0; side < 2; ++side)
+    {
+        for (int c = 0; c < 2; ++c)
+        {
+            const int slot = crankSlot_(side, c);
+            auto &motor_cmd = cmd.motor_cmd[slot];
+            motor_cmd.q = parallelState_[slot].q;
+            motor_cmd.dq = 0.0;
+            motor_cmd.kp = 0.0;
+            motor_cmd.kd = mapping[side].crank.kd[c];
+            motor_cmd.tau = parallelAnkleCrankSign_[c] * mapping[side].crank.tau[c];
+        }
+    }
+    return true;
+}
+
+void sairol_bridge::T1Bridge::finishControl_()
+{
+    RCLCPP_INFO(nh->get_logger(), "finishControl_ called from T1Bridge");
+}
+
+bool sairol_bridge::T1Bridge::switchMode_(booster::RobotMode mode)
+{
+    if (!client_ || !client_->service_is_ready())
+    {
+        RCLCPP_ERROR(nh->get_logger(), "booster_rpc_service not ready: %s mode not requested", booster::name(mode));
+        return false;
+    }
+    auto req = std::make_shared<booster_interface::srv::RpcService::Request>();
+    req->msg.api_id = booster::API_CHANGE_MODE;
+    req->msg.body = booster::changeModeBody(mode);
+    const std::string mode_name = booster::name(mode);
+    client_->async_send_request(
+        req,
+        [this, mode_name](rclcpp::Client<booster_interface::srv::RpcService>::SharedFuture future)
+        {
+            try
+            {
+                const auto response = future.get();
+                RCLCPP_INFO(nh->get_logger(), "%s mode: status %ld %s", mode_name.c_str(),
+                            static_cast<long>(response->msg.status), response->msg.body.c_str());
+            }
+            catch (const std::exception &e)
+            {
+                RCLCPP_ERROR(nh->get_logger(), "%s mode: %s", mode_name.c_str(), e.what());
+            }
+        });
+    RCLCPP_INFO(nh->get_logger(), "requested %s mode", mode_name.c_str());
+    return true;
+}
+
+// Silence at once leaves the T1 in custom mode without targets: damp frames, then Booster's damping.
+// Here, while the context is valid: the request goes out before the executor stops.
+void sairol_bridge::T1Bridge::dampBeforeShutdown_()
+{
+    enterStop_(estop::Cause::Shutdown);   // also voids an arming in progress
+    if (stopPublishing_)
+    {
+        RCLCPP_WARN(nh->get_logger(), "Shutdown: damp frames for %.1f s, then damping mode",
+                    estop::SHUTDOWN_DAMP_S);
+        std::this_thread::sleep_for(std::chrono::duration<double>(estop::SHUTDOWN_DAMP_S));
+    }
+    switchMode_(booster::RobotMode::Damping);
+}

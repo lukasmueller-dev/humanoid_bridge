@@ -17,7 +17,7 @@ log/
 *.bak
 
 # Python package info
-robot_bridge_py.egg-info/
+*.egg-info/
 
 # IDE and editor files
 .vscode/
@@ -37,8 +37,32 @@ CMakeFiles/
 cmake_install.cmake
 Makefile
 
+# Python environments
+.venv*/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+
 # Other
 *.out
 *.log
 *.tmp
 *.~*
+
+# Added from the repo-scaffold baseline (common, Python, ROS 2 bags)
+Thumbs.db
+*.swo
+*~
+.env
+.env.*
+!.env.example
+*.py[cod]
+dist/
+venv/
+.mypy_cache/
+.tox/
+.coverage
+coverage.xml
+htmlcov/
+*.db3
+*.mcap

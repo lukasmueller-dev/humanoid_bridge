@@ -1,0 +1,139 @@
+# Fake wire tests
+
+Runs the real `G1_bridge`, `T1_bridge` or `Go2_bridge` against a fake robot on one machine. No hardware.
+
+Covers the whole path: adapter to client to `/robot_cmd` to bridge to `/lowcmd`.
+It does **not** cover the Foxy/Python 3.8 Jetson, the cable, or real motors.
+
+## Requirements
+
+```bash
+source /opt/ros/humble/setup.bash && tools/build.sh
+source <workspace>/install/setup.bash
+```
+
+No ROS on the host: `tools/test.sh --docker [--wire|--estop|--link|--state|--t1|--go2|--gates|--hands|--config]`
+builds and runs them in a container.
+
+`robot_bridge`'s `package.xml` depends on `booster_interface` unconditionally,
+so it builds even with T1 off.
+
+`tools/test.sh` runs every `run_*.sh` below; each pins DDS to loopback (`loopback_dds.sh`).
+
+## 1. Run
+
+```bash
+tools/test.sh --wire
+```
+
+Uses a synthetic identity config. To use GEAR's own:
+
+```bash
+GEAR_CONFIG=<path>/g1_29dof_gear_wbc.yaml ./bridge/robot_bridge/tests/integration/run_fake_wire_test.sh
+```
+
+## 2. Verify
+
+```
+received /lowcmd             PASS  4746 samples
+publishes at ~1 kHz          PASS  1000 Hz
+start_control honoured       PASS  q[0]=0.1230 wanted 0.123
+tracked GEAR's gains         PASS  2231 samples
+joint j lands on motor j     PASS  q[:3]=[0.01, 0.02, 0.03]
+kp from config               PASS
+kd from config               PASS
+bridge forced mode 1         PASS
+bridge echoed mode_machine   PASS  5 wanted 5
+timeout latches hold         PASS  kp[0]=100.0 q[0]=0.0100
+```
+
+E-stop, `/robot_state`, T1, Go2, target gates, broken configs; each driver ends `all checks passed`:
+
+```bash
+tools/test.sh --estop      # docs/estop.md
+tools/test.sh --link       # docs/estop.md, Robot link
+tools/test.sh --state      # /robot_state and /hand_state
+tools/test.sh --t1         # T1_bridge against fake_t1.py
+tools/test.sh --go2        # Go2_bridge against fake_go2.py
+tools/test.sh --gates      # docs/psi0_gates.md
+tools/test.sh --config
+```
+
+## 3. The G1 hand path
+
+```bash
+tools/test.sh --hands                                   # hands, hands-stale, hands-hot, hands-ready, hands-ready-one
+tools/test.sh --hands --stale-after 3.9 --hot-after 3.2
+```
+
+`hands-stale` silences the left hand's state mid-stream, `hands-hot` reports it
+over temperature (`run_fake_hand_test.sh --stale-after|--hot-after <s>`, default
+3.5): either must release the left hand alone. The clock starts at the first
+`/dex3/left/cmd`, which is `start_hand_control`, so it must land between 3.0 and
+4.0 s: earlier and the left hand never tracks, later and the driver has already stopped.
+
+`fake_g1.py` runs too, because the bridge blocks in its constructor until
+something publishes `/lowstate`. That doubles as the check that the hand path
+left the body idle; the driver's closing `/lowcmd` probe (`mode_pr` 1) proves
+fake_g1 records `/lowcmd` at all.
+
+## Parts
+
+| File | Role |
+|---|---|
+| `fake_g1.py` | publishes `/lowstate` at 500 Hz, records `/lowcmd`, tracks commands perfectly; `/fake_g1/pause` drops the link (tick moves on), `/fake_g1/reboot <s>` restarts the tick and holds `/lowcmd` like a motion service, `/fake_g1/release` drops it |
+| `drive_gear_wbc.py` | `start_control`, then 100 commands at 50 Hz through the adapter |
+| `check_lowcmd.py` | asserts the recording, exit 1 on failure |
+| `drive_estop.py` | starts before the bridge (handshake: `driver: holding /lowcmd`) and holds `/lowcmd` until the bridge log shows it was seen and no `/start_control` exists; then drives every e-stop path and checks `/lowcmd` and `/bridge_state` live; `fake_g1.py` takes `/fake_g1/keys`, `/fake_g1/roll`, and bad joint-0 data `/fake_g1/nan_q`, `/fake_g1/dq`, `/fake_g1/nan_imu`; `drive_gates.py` uses `/fake_g1/freeze` (q stops tracking) |
+| `drive_link.py` | `armed`: `/fake_g1/pause` while disarmed and armed (`LOST`, `BACK … no_restart`, cleared by arming and reset), then `/fake_g1/reboot` while armed (`RESTARTED`, `robot_restart`, reset/arm/Ready refused, also after `/fake_g1/release`); `disarmed`: reboot on a fresh bridge, nothing latches, arming refused |
+| `run_fake_link_test.sh` | `drive_link.py armed`, SIGINT, then `drive_link.py disarmed` on a fresh bridge: a restart is final for a bridge |
+| `run_fake_robot_state_test.sh`, `drive_robot_state.py` | `/robot_state` and `/hand_state` of a `G1_bridge` against `fake_g1.py` and `fake_dex3.py`: every field once, names and order from `G1_config.yaml` |
+| `fake_t1.py`, `run_fake_t1_test.sh`, `drive_t1.py` | `T1_bridge` against a fake T1: `/robot_state`, custom mode on arming, the gamepad e-stop, a `/low_state` longer than the config, damping mode on SIGINT |
+| `fake_go2.py`, `run_fake_go2_test.sh`, `drive_go2.py` | `Go2_bridge` against a fake Go2: `/robot_state`, arming from lying, the frame on the wire (header, level flag, stopped slots, CRC), Ready's stand-up ramp, the remote e-stop |
+| `drive_shutdown.py` | runs last in the e-stop run: arms, SIGINTs the bridge's process group, checks damp frames for 1 s, then silence |
+| `run_fake_estop_test.sh` | orchestrates the e-stop run; then SIGINT to a second bridge in its `/lowcmd` wait: exit 0 within 5 s |
+| `run_fake_wire_test.sh` | orchestrates the three, cleans up |
+| `drive_gates.py` | gates 1, 2 and 4 of a fresh bridge against `fake_g1.py --start-q` |
+| `run_fake_gates_test.sh` | orchestrates the gate run, then `drive_no_estop_block.py` on a second bridge |
+| `loopback_dds.sh` | sourced by every `run_*.sh`: discovery on loopback only |
+| `harness.sh` | sourced by every `run_fake_*_test.sh`: paths, bridge start, cleanup, failure output |
+| `fake_dex3.py` | publishes `/dex3/*/state` at 100 Hz, records `/dex3/*/cmd`; `--stale-after`, `--hot-after`, both timed from the first left command; `--silent <side>` never publishes that hand |
+| `drive_hand_cmd.py` | `start_hand_control` refused with another `/lowcmd` publisher and on a tilt, then accepted, then both hands through the hand adapter, then an over-limit and a NaN command, then (`--check-estop`) `/estop_damp` mid-stream with both hands live, then a `/lowcmd` probe; `--phases` writes the NaN phase's times |
+| `check_hand_cmd.py` | asserts the hand recording; pure offline, needs no ROS |
+| `run_fake_hand_test.sh` | orchestrates the hand run |
+| `drive_hand_ready.py` | `/ready_position_control` twice: hands unarmed, then held closed by a client; each live hand opens to `hand_ready_q` and holds at config kp, never slack; `--silent <side>`: that hand gets no frame |
+| `run_fake_hand_ready_test.sh` | orchestrates the Ready run; `--silent left` runs `fake_dex3.py --silent left` |
+| `run_config_test.sh`, `drive_config.py` | `G1_bridge` on broken copies of `G1_config.yaml` (`ready_q` short or out of range, `idx` out of order, inverted limits): each must fail its parameter load. No fake robot |
+| `drive_no_estop_block.py` | after `drive_gates.py`, on a second bridge whose config lacks `estop:`: arming refused without the remote, accepted with it |
+
+## What breaks it
+
+- `step ramps at <= v rad/s FAIL  max 2·v`: a lost `/lowcmd` frame, since speed
+  is the step between received frames over `control_dt`. Re-run; a steady 2·v is the bridge.
+- `the sourced robot_bridge is older than bridge/...` or `was built from <path>,
+  not this clone`: `tools/test.sh` refuses to test another build. Rebuild
+  (`tools/build.sh`) and source that workspace, or use `--docker`.
+- `Detected 1 publishers on /lowcmd`: an orphaned `G1_bridge` from an earlier
+  run. `pkill -9 -x G1_bridge`. The script starts the bridge with `setsid` and
+  kills the process group, because `ros2 run` is a launcher and killing it
+  alone orphans the child.
+- `start_control` refused in a fake run: `fake_g1.py` lost its remote header
+  (`/fake_g1/remote`), or another `/lowcmd` publisher is up.
+- A wire recording ends in hold frames: GEAR's stream stops, the command
+  timeout latches `hold` at the bridge's gains. `check_lowcmd.py` takes the last
+  frame with GEAR's kp as the last tracking frame.
+- Run with the robot cabled: `unshare -rn` gives a namespace with only `lo`
+  (`ip link set lo up multicast on; ip route add 224.0.0.0/4 dev lo` inside).
+- `bridge did not come up`: `/lowstate` was missing, or another node held
+  `/lowcmd`. The bridge log is printed on failure.
+- The fake publishes 35 motor states, the bridge is configured for 29, so a
+  one-time `LowState carries 35 motor states` warning is expected.
+- `hand path did not load`: the config has no `hand_*` keys. The bridge warns
+  and runs the body path anyway, which is why the script greps for
+  `Dex3 hand path ready` rather than trusting a clean start.
+- Every hand run ends with both hands limp: the watchdog fires once the driver
+  stops. `check_hand_cmd.py` asserts against the last *commanded* frame, and a
+  new check that reads `samples[-1]` will be reading the release.
+- CycloneDDS with no `CYCLONEDDS_URI`: multicast is off on loopback, the
+  bridge never sees the fake and prints `Waiting for publisher on /lowstate`.
+  `tools/test.sh` sets the URI itself; `--rmw fastrtps` is the other way out.

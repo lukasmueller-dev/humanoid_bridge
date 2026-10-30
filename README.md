@@ -1,198 +1,264 @@
+# humanoid_bridge
 
-markdown
-# 🤖 Humanoid_bridge Overview
+ROS 2 bridge between a control client and Unitree (G1, H1, H1_2), Booster (T1)
+or AgiBot (X2) humanoids. It takes commands on `/robot_cmd`, interpolates them, runs safety
+checks on command and state, and publishes motor commands at 1 kHz.
 
-`Humanoid_bridge` is a ROS 2 package for controlling Unitree and Booster robots (e.g., H1, G1, T1).
-It receives commands from the client node, decides whether to perform command interpolation, and, after completing command and state safety checks, sends real-time motor control commands to the robot.
-
----
-
-## Installation
-
-Prepare the library for T1 robot:
-```bash
-cd ~
-git clone https://github.com/DFKI-SAIROL/booster_robotics_sdk.git
-cd booster_robotics_sdk
-./install.sh
 ```
-Afer that you can follow the `README` of booster_robotics_sdk to build and prepare the python environment for T1.
-
-
-
-
-Prepare the library for G1 and H1 robot:
-```bash
-conda create -n {YOUR_ENV} python=3.10 # this is for ros2 humble, if on board using foxy, please use 3.8
-conda activate {YOUR_ENV}
-
-conda install pytorch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1 pytorch-cuda=12.1 -c pytorch -c nvidia # if you connect the robot with cable and deploy it on your PC with ros hummble.
-pip3 install --no-cache https://developer.download.nvidia.com/compute/redist/jp/v511/pytorch/torch-2.0.0a0+fe05266f.nv23.04-cp38-cp38-linux_aarch64.whl #if you deploy it on board with ros2 foxy in G1.
-pip install torch torchvision torchaudio #if you deploy it on board with ros2 foxy in H1.
-
-cd ~
-git clone https://github.com/unitreerobotics/unitree_sdk2_python.git
-cd unitree_sdk2_python
-export CYCLONEDDS_HOME=$HOME/cyclonedds/install # Just for on board
-pip3 install -e .
+bridge/           the bridge and its Python client, upstream-bound
+  bridge_interface/   messages and services
+  robot_bridge/       C++ bridge, robot_bridge/ Python client, adapters
+    examples/           reference clients per robot (not built or installed)
+robot_stacks/     per-robot deploy layers
+  g1/                 g1_stack, g1_camera
+  sim/                robot_sim: the MuJoCo sim of G1, T1 and Go2
+  t1/                 placeholder; the T1 stack has not been written
+scripts/          environment setup, sourced not run
+tools/            helpers, run not sourced
+thirdparty/       vendored unitree_ros2, booster_ros2_interface and aimdk_msgs (X2)
 ```
 
+`bridge/` depends on nothing under `robot_stacks/`. That one-way rule is what
+lets either layer be split out with `git subtree split --prefix=<layer>`.
 
+Built targets are `G1_bridge`, `H1_bridge`, `H1_2_bridge`, `Go2_bridge`, `T1_bridge`,
+`X2_bridge` (only with `-DBUILD_AGIBOT_X2=ON`) and `test_node` (only with `-DBUILD_TEST_NODE=ON`). Other sources under `src/` are upstream leftovers that no target
+builds.
 
+## Fork or upstream
 
+Forked from [DFKI-SAIROL/humanoid_bridge](https://github.com/DFKI-SAIROL/humanoid_bridge).
+`bridge/` is upstream-bound; `robot_stacks/` is this project's own.
 
+| Change | Side | State |
+|---|---|---|
+| `/lowstate` copy bounded to `numJoint_` (upstream writes 35 into a 29-vector) | upstream | fixed here, no PR yet |
+| `cmd_client.py` and `adapters/` (GEAR WBC, GEAR hands) | upstream | added here, no PR yet |
+| Dex3 hand path: `HandCmd`, the 100 Hz loop, per-side guards | upstream | added here, no PR yet |
+| `checkMotorCmd_` using `std::abs` (upstream's bare `abs` truncated \|v\| < 1 to 0) | upstream | fixed here, behaviour change on the body path |
+| `tStart_`, `tFinal_`, `tValid_` written after the mutex is released: a tick can pair new `cmdParams_` with the old phase | upstream | fixed here, no PR yet |
+| State age and command timeout on the ROS clock: a backward wall-clock step blinds them | upstream | fixed here: one steady clock, no PR yet |
+| Config keymap headers advertising keys the source comments out | upstream | fixed here, no PR yet |
+| Config limits checked only by `assert` (gone under NDEBUG); `ready_q` length and range, joint `idx` never checked | upstream | fixed here: the load fails, no PR yet |
+| `start_control` answers `success: true` on a wrong length, then moves to `ready_q_` | upstream | fixed here: empty = `ready_q_`, any other wrong length refused |
+| `start_control` drops `default_kp`/`default_kd` silently, arms with the config gains | upstream | fixed here: non-empty gains refused, no PR yet |
+| Arming services exist during the startup waits, so a call made then arms later | upstream | fixed here: created after the waits, no PR yet |
+| Ctrl-C during the startup waits aborts the bridge: the graph calls throw once rclcpp is shut down | upstream | fixed here for G1, H1, H1_2: clean exit, no PR yet; T1 open |
+| Any host can `ros2 param set /robot_bridge`: the bridge ignores it, live readers do not | upstream | G1: fixed here: every change refused, no PR yet |
+| G1 `_default_pos` is 27 long while kp/kd are 29 | upstream | **open**, `fix/g1-default-pos-29` |
+| `finishControl_` only logs on G1, H1, H1_2, so an abort holds at full gains | upstream | G1: fixed here by the e-stop latch (`docs/estop.md`); H1, H1_2: open |
+| G1 Ctrl-C while armed: `/lowcmd` silent at once, motors passive 0.4 s later | upstream | fixed here: damp frames for 1 s first, no PR yet |
+| G1 tracking frame carries a NaN `/lowstate` that lands after `checkState_` (kp-0 and parallel joints) | upstream | fixed here: not sent, latches `state_invalid`, no PR yet |
+| G1 target gates: range clamp, speed limit, kp-0 torque window (`docs/psi0_gates.md`) | upstream | added here, no PR yet |
+| G1 torque window ignores the feedforward `tau`: `tau = tau_limit` plus a full PD window commands 2× `tau_limit` | upstream | fixed here, no PR yet |
+| `start_control` keeps the last `/robot_cmd`'s dq and tau in its endless hold | upstream | G1: fixed here, no PR yet; H1, H1_2, T1, X2: open |
+| G1 arming needs the remote (`estop.require_remote`, true if unset) | upstream | added here, no PR yet |
+| G1 `initControl_` resets the `/lowstate` age, so arming on a stalled state tracks it for 0.2 s | upstream | fixed here: arming refused on a state fault, no PR yet |
+| G1 checks for another `/lowcmd` sender only at arming | upstream | fixed here: one that starts while sending latches `damp other_lowcmd`, no PR yet |
+| `test_node` (a 23-motor `/robot_cmd` at 500 Hz) built and installed by default | upstream | fixed here: only with `-DBUILD_TEST_NODE=ON`, no PR yet; an existing workspace keeps it until `tools/build.sh --clean robot_bridge` |
+| Two-layer split, `robot_bridge_py` -> `robot_bridge` rename | fork | this project's structure |
+| `robot_stacks/g1/` (`g1_stack`, `g1_camera`) | fork | whether it stays here is DFKI's call |
+| `tools/` | fork | build, test and bring-up helpers |
 
+Details and done-when per item: `PROJECT_ROADMAP.md`.
 
-Then create your own workspace in your home and enter its `src` folder, for example:
+## Requirements
+
+| | |
+|---|---|
+| OS, ROS | Ubuntu 22.04, ROS 2 Humble. Foxy + Python 3.8 on-board |
+| Python | 3.10 on the workstation, 3.8 on-board |
+| Not pulled by rosdep | `rosidl_generator_dds_idl`, `rmw_cyclonedds_cpp`, and the Python deps (`numpy`, `pyzmq`, `msgpack`, `msgpack-numpy`, OpenCV, `pytest`, `ruff`). `tools/install-build-deps.sh` installs the lot |
+| G1 / H1 | [unitree_sdk2_python](https://github.com/unitreerobotics/unitree_sdk2_python) |
+| T1 | nothing more: `include/booster_mode.hpp` stands in for the Booster SDK (`tools/check-booster-sdk.py <sdk clone>` checks it) |
+
+`rosidl_generator_dds_idl` is required by the vendored `unitree_*` packages and
+declared in none of their `package.xml`, so nothing installs it for you.
+
+CycloneDDS is not optional wherever GEAR is in the path: its simulator forces
+raw CycloneDDS, so every ROS 2 node has to match it.
+
+## 1. Build
+
+Clone into a colcon workspace's `src/`, then:
+
 ```bash
-mkdir -p ~/sairol_ws/src
-cd ~/sairol_ws/src
-```
-Clone this code repository:
-```bash
-git clone git@github.com:DFKI-SAIROL/humanoid_bridge.git
-```
-Build the package:
-```bash
-cd ..
+git config core.hooksPath .githooks   # once per clone: pre-push refuses direct pushes to main
 source /opt/ros/humble/setup.bash
-colcon build #if T1
-colcon build --cmake-args -DBUILD_BOOSTER_T1=OFF # if H1 or G1 
+tools/install-build-deps.sh     # first time on a fresh host
+tools/build.sh                  # G1, H1, H1_2, Go2, T1
+# AgiBot X2, into install_x2/ for scripts/setup_x2.sh:
+tools/build.sh -- --build-base build_x2 --install-base install_x2 \
+    --cmake-args -DBUILD_BOOSTER_T1=OFF -DBUILD_AGIBOT_X2=ON
 ```
 
+The Python client installs with the package, so there is no `pip install` step
+and every Python change needs a rebuild. `tools/build.sh --clean <pkg>` drops a
+stale package tree.
 
-## Operation guide 
-### Launch bridge interface
-Open a terminal for bridge interface, for T1:
+## 2. Launch the bridge
+
+`BRIDGE_IFACE` is the NIC CycloneDDS binds, default `enp4s0`. Set it to match
+your cabling; a wrong one fails silently.
+
 ```bash
-    cd ~/sairol_ws
-    source src/humanoid_bridge/setup_booster.sh 
+BRIDGE_IFACE=<nic> source scripts/setup_unitree.sh   # G1, H1, H1_2
+source scripts/setup_booster.sh                      # T1
+source scripts/setup_x2.sh                           # X2 (Fast DDS)
 ```
-For unitree G1 or H1. Modify the net port like enp$s0 here according to your net configuration before source it if you connect the robot with cable:
+
+On the G1, one script does the whole ordering: release `/lowcmd`, start the
+bridge, wait for it, arm.
+
 ```bash
-    cd ~/sairol_ws
-    source src/humanoid_bridge/setup_unitree.sh 
+tools/g1-bringup.sh --dry-run                        # print the plan, run nothing
+tools/g1-bringup.sh --iface enp4s0                   # release + bridge, no arming
+tools/g1-bringup.sh --arm-from-measured --robot-is-clear
+tools/g1-bringup.sh --stop                           # every robot bridge; SIGKILL if SIGINT hangs
+tools/robot-bringup.sh --robot t1                    # the T1: T1_bridge, no release; custom mode on arming
+tools/robot-bringup.sh --robot go2                   # the Go2: StandDown + release, Go2_bridge; Ready stands it up
 ```
-then launch the bridge interface:
+
+It sources ROS and `setup_unitree.sh` itself. The release runs on
+`$UNITREE_PYTHON` (default: the lab venv), which needs `unitree_sdk2py`.
+
+**Arming moves the robot**, so it needs an `--arm-*` flag and
+`--robot-is-clear`. `--arm-from-measured` arms to the pose the robot already
+holds, which is the smooth choice.
+
+By hand, or for the other robots:
+
 ```bash
-    ros2 run robot_bridge T1_bridge --ros-args --params-file src/humanoid_bridge/robot_bridge/params/T1_config.yaml #if booster T1
-    ros2 run robot_bridge G1_bridge --ros-args --params-file src/humanoid_bridge/robot_bridge/params/G1_config.yaml #if unitree G1
-    ros2 run robot_bridge H1_bridge --ros-args --params-file src/humanoid_bridge/robot_bridge/params/H1_config.yaml #if unitree H1
+ros2 run robot_bridge G1_bridge --ros-args \
+    --params-file bridge/robot_bridge/params/G1_config.yaml
 ```
-For G1 and H1, you need also to press `L2 + R2`, to change to the debug mode firstly.
 
-### Launch client node
-#### Environment prepare:
-Now the bridge interface is already launched, and initial mode is damping mode.
-Next you can launch your client node. Here we have provided an example for your reference. But here you need install some packages firstly in you environment for the first time:
-```bash 
-    cd ~/sairol_ws
-    conda activate {YOUR_ENV} # activate your environment relevant to T1 or G1, H1 
-    cd src/humanoid_bridge/robot_bridge
-    pip install -e .
-```
-If T1, you need more installation:
+Substitute `H1_bridge`, `H1_2_bridge` or `T1_bridge` and the matching config.
+The bridge starts in damping mode, and refuses to start while anything else
+publishes `/lowcmd`. `tools/g1-release-lowcmd.py --iface <nic>` frees it;
+`L2 + R2` on the controller does the same. On G1, H1 and H1_2,
+`/start_control`, `/ready_position_control` and `/zero_position_control` do not
+exist until then.
+
+## 3. Launch a client
+
 ```bash
-    cd example/T1
-    pip install -r requirements.txt
+source scripts/setup_unitree.sh
+EX=bridge/robot_bridge/examples/g1
+pip install -r $EX/requirements.txt      # first time
+python $EX/example.py
 ```
-If G1, you need more installation:
+
+The examples read the robot's own joystick. They are reference code: no
+CMakeLists builds or installs them.
+
+## 4. Operate
+
+Between start and policy inference, lower the robot until its feet touch the
+ground.
+
+Keys by handler. Client: `robot_bridge/robot_client.py`, which every example
+uses; it calls the service. Service only: no code handles a key.
+
+| | Start control | Stop control | Ready position | Zero position |
+|---|---|---|---|---|
+| G1 | `L2 + Start` (client) | service only (holds) | service only | service only |
+| H1 | `L2 + Start` (client) | service only | service only | service only |
+| H1_2 | `L2 + Start` (client) | `L2 + Up + Left` (bridge, `/wirelesscontroller`) | service only | service only |
+| T1 | `LT + RT + Start` (client) | `Back` (client) | `LB` (client, not while in control) | `RB` (client, not while in control) |
+
+- `L2 + Up + Left` (G1, H1, H1_2) and `LT + Back` (T1): the client stops its own commands; no service call.
+- `H1_bridge` has a key handler, but its subscription is commented out. `T1_bridge` subscribes to the gamepad for its e-stop (`docs/estop.md`).
+- `R2 + A` (G1, H1) and `LT + A` (T1): the example starts its policy once control is on. Firmware combos: `docs/estop.md`.
+
+G1 e-stop, latched until `/estop_reset` (`docs/estop.md`): `R1 + R2` damp
+(one hand), `L1 + R1` hold. Do not use `L2 + Up`: it is the firmware's lock-stand combo.
+
+The bridge has no UI. The G1 web page (e-stop, arm, processes, jog, camera) is
+[`SiweiJu/g1_web_commander`](https://github.com/SiweiJu/g1_web_commander), built in the same workspace.
+
 ```bash
-    cd example/G1
-    pip install -r requirements.txt
+ros2 service call /start_control bridge_interface/srv/SetDefaultPosition \
+    "{default_position: [...]}"                 # your own initial pose
+ros2 service call /stop_control std_srvs/srv/Trigger {}
+ros2 service call /ready_position_control std_srvs/srv/Trigger {}
+ros2 service call /zero_position_control std_srvs/srv/Trigger {}
+ros2 service call /estop_damp std_srvs/srv/Trigger {}        # G1: latched, kp 0
+ros2 service call /estop_hold std_srvs/srv/Trigger {}        # G1: latched, holds the pose
+ros2 service call /estop_reset std_srvs/srv/Trigger {}       # refused while the cause lasts
+ros2 topic echo /bridge_state                                # G1, T1, Go2
+ros2 topic echo /robot_link                                  # G1, T1, Go2: OK, LOST, BACK, RESTARTED (docs/estop.md)
+ros2 topic echo /robot_state                                 # G1, T1, Go2: bridge_interface/RobotState, names + q/dq/tau, IMU, remote by name
+ros2 topic echo /hand_state/left                             # G1 Dex3: bridge_interface/HandState
 ```
-If H1, you need more installation:
+
+### G1 Dex3 hands
+
+A separate path with its own enable, so hands can run with the body idle.
+`docs/hands_path.md` has the whole picture.
+
 ```bash
-    cd example/H1
-    pip install -r requirements.txt
+ros2 service call /start_hand_control std_srvs/srv/Trigger {}
+ros2 topic pub /hand_cmd/left bridge_interface/msg/HandCmd ...   # 7 motors, DDS order
+ros2 service call /stop_hand_control std_srvs/srv/Trigger {}
 ```
-#### Client node:
-Then open a new terminal for client node:
+
+## 5. Verify
+
+No hardware. Stages that cannot run are skipped with the reason, and the run
+exits 2 (`--allow-skip`: 0). A failed stage exits 1. Every stage but unit fails
+on a sourced `robot_bridge` built from another clone or before the newest file
+under `bridge/`: rebuild and source again.
+
 ```bash
-    cd ~/sairol_ws
-
-    source src/humanoid_bridge/setup_booster.sh #if booster T1
-    source src/humanoid_bridge/setup_unitree.sh #if unitree G1 or H1
-    
-    python src/humanoid_bridge/robot_bridge/example/T1/T1_example.py #if booster T1
-    python src/humanoid_bridge/robot_bridge/example/G1/G1_example.py #if unitree G1
-    python src/humanoid_bridge/robot_bridge/example/H1/H1_example.py #if unitree H1
+tools/test.sh --docker              # every stage in a ROS 2 Humble container; needs only docker
+tools/test.sh                       # the same on a sourced workspace
+tools/test.sh --unit                # needs no ROS
+tools/test.sh --hands --stale-after 3.9   # move the left hand's stale release (3.0 to 4.0)
 ```
 
-With this example you can use remote controller to select the mode and:
+`--docker` builds `tools/Dockerfile.test` once (`--rebuild` again), then this
+clone into `~/.cache/humanoid_bridge/test_ws-<cksum>`, network off.
 
-#### T1 operation instruction:
- use `left joystick` to control the robot movement and press down either `joystick` to stop the movement. Tilt the `right joystick` to left/right to control the robot yaw rotation. You can see the current velocity in terminal output. 
-In case of emergency, use `LT + Back` to switch the mode forcefully to damping mode. 
+The unit count depends on the environment: without a sourced workspace the
+tests that need `bridge_interface` skip. `tools/test.sh` prints what it ran.
 
-Step1: Press `LT + RT + Start` to send the `start service` request for starting the control, then bridge can start to publish lowcmd     
-        if there is lowcmd from client and checkout custom mode, then move to defauft position for standing.
+## What breaks it
 
-Step2: Lower the robot’s body and make its feet touch the ground.
+- **G1 and H1 need `L2 + R2` first**, to enter debug mode. Nothing responds otherwise.
+- **`PYTHONPATH=.` after sourcing ROS drops rclpy.** Append instead: `.:$PYTHONPATH`.
+- **Clients import the *installed* client**, so rebuild after every Python change.
+- **Moving a package leaves colcon's cache pointing at the old path.**
+  `tools/build.sh --clean <pkg>`.
+- **`start_control` with an empty `default_position` arms to `ready_q_`**, legs
+  included. Any length other than 29 is refused, and nothing moves. So are
+  non-empty `default_kp`/`default_kd`: arming uses the config gains.
+- **G1: no arming without the remote.** `estop.require_remote` refuses every
+  arming service until the remote's header arrives: switch the remote on.
+  A G1 config without the key gets `true`.
+- **The first `/robot_cmd` cuts the arming ramp short.** `controlStarted_` is
+  set before the 2 s ramp, so a client already streaming jumps to its own
+  target at the gate-2 speed limit (G1: arms 3, rest 6 rad/s). Arm before the
+  client streams.
+- **Control stops 200 ms after the last command's interpolation ends**, unless
+  `hold_position`. On the G1 that latches `hold` until `/estop_reset`. A chunked client must cover the gap with `duration`.
+- **G1: a fault latches the mode `estop:` names** (damp for IMU, state loss,
+  invalid state; hold for a command timeout). A killed or crashed bridge leaves `/lowcmd`
+  silent, and the motors go passive about 0.4 s later (`docs/estop.md`, G0).
+  Ctrl-C or SIGTERM while sending damps for 1 s first.
+- **H1, H1_2: an abort does not release the joints.** `finishControl_` only
+  logs, so the robot holds its last pose at full kp/kd. Only T1 drops to damping.
+- **`kp = 0` makes the torque clamp a no-op for that joint** (`upper_limbs_kp_min: 0.0`).
+- **G1: `/robot_bridge` parameters are read-only.** `ros2 param set` is refused:
+  the bridge reads them once at start. Edit the config and restart.
+- **`robot_bridge/package.xml` depends on `booster_interface` and `aimdk_msgs`
+  unconditionally**, so both build even with T1 and X2 off.
+- **X2: never run on a robot in this fork.** Every stop damps and latches in
+  `X2Bridge`; motion again needs a bridge restart, not `/estop_reset`.
+- **Hand control needs its own `/start_hand_control`.** `/start_control` does
+  not enable it, and it refuses any hand whose state topic is silent.
+- **`create domain error` from a DDS client**: `unitree_sdk2py` hardcodes
+  `/tmp/cdds.LOG`, owned by whoever ran first. `CYCLONEDDS_URI` cannot override
+  it; the inline config wins.
 
-Step3: Press `LT + A` to start the policy inference, then robot can use policy to keep standing.
-
-Step4: Use keyboad (w,s,a,d,space) to control the robot
-
-Step5: Press `back` to send the `stop service` request for stopping the control, then bridge can stop to publish any lowcmd and 
-        checkout damping mode .
-
-#### G1 operation instruction:   
-use two joysticks to control the robot movement. Tilt the `left joystick` to control the robot translation. Tilt the `right joystick` to left/right to control the robot yaw rotation. You can see the current velocity in terminal output.  
-
-Step1: Press `L2 + start` to send the `start service` request for starting the control, then bridge can start to publish lowcmd     
-        if there is lowcmd from client and checkout custom mode, then move to defauft position for standing.
-
-Step2: Lower the robot’s body and make its feet touch the ground.
-
-Step3: Press `R2 + A` to start the policy inference, then robot can use policy to keep standing.
-
-Step4: Use keyboad (w,s,a,d,space) to control the robot
-
-Step5: Press `L2 + up + left` to send the `stop service` request for stopping the control, then bridge can stop to publish any lowcmd and 
-        checkout damping mode .
-
-#### H1 operation instruction:   
-use two joysticks to control the robot movement. Tilt the `left joystick` to control the robot translation. Tilt the `right joystick` to left/right to control the robot yaw rotation. You can see the current velocity in terminal output.  
-
-Step1: Press `L2 + start` to send the `start service` request for starting the control, then bridge can start to publish lowcmd     
-        if there is lowcmd from client and checkout custom mode, then move to defauft position for standing.
-
-Step2: Lower the robot’s body and make its feet touch the ground.
-
-Step3: Press `R2 + A` to start the policy inference, then robot can use policy to keep standing.
-
-Step4: Use keyboad (w,s,a,d,space) to control the robot
-
-Step5: Press `L2 + up + left` to send the `stop service` request for stopping the control, then bridge can stop to publish any lowcmd and 
-        checkout damping mode .
-
-### Notes
-For step 1 you can also use your own joints position for initial joints position with ros2 service command instead of remote controller, for T1 such as:
-```bash
-    ros2 service call /start_control bridge_interface/srv/SetDefaultPosition "{
-        default_position: [0, 0,
-                            0.2, -1.35, 0, -0.5,
-                            0.2, 1.35, 0, 0.5,
-                            0,
-                            -0.2, 0, 0, 0.4, -0.25, 0,
-                            -0.2, 0, 0, 0.4, -0.25, 0]
-        }"
-```
-And for step 5 you can also use ros2 service command instead of remote controller:
-```bash
-    ros2 service call /stop_control std_srvs/srv/Trigger {}
-```
-
-## Other demos
-In addition, we have prepared some other demos after you launch `T1_example.py`, `G1_example.py` or `H1_example.py` such as ready position control: 
-```bash
-    ros2 service call /ready_position_control std_srvs/srv/Trigger {} # you can also press LB/L1 of controller
-```
-And zero position control:
-```bash
-    ros2 service call /zero_position_control std_srvs/srv/Trigger {}  # you can also press RB/R1 of controller  
-```
-But you should pay attention to stopping policy inference firstly.
-If you want to modify the default configuration of the bridge interface like kp/kd limit or tau limit, you can jump into the /robot_bridge/params to modify.
-
+Limits, gains and joint tables live in `bridge/robot_bridge/params/`.
