@@ -1,8 +1,9 @@
 """MuJoCo robot in real time on its own topics (robots/<name>.py); passive 0.4 s after a command.
 
 Inputs: /robot_sim/gantry (Bool, hold the base), /robot_sim/remote (Bool, remote connected),
-/robot_sim/buttons (String, held buttons as `R1+R2`, "" releases), /robot_sim/reset (Empty, back on
-the gantry), /robot_sim/link (Float32 s: no state out, no command in; sim time runs on),
+/robot_sim/buttons (String, held buttons as `R1+R2`, "" releases), /robot_sim/sticks
+(Float32MultiArray [lx, ly, rx, ry], G1 only, zero 0.2 s after the last), /robot_sim/reset (Empty,
+back on the gantry), /robot_sim/link (Float32 s: no state out, no command in; sim time runs on),
 /robot_sim/reboot (Float32 s: as link, then a reset, tick from 0, and the robot's motion service).
 Parameters (read-only): robot (g1, t1, go2), mjcf, the absolute path of the loaded model.
 """
@@ -18,7 +19,7 @@ import rclpy
 from rcl_interfaces.msg import ParameterDescriptor
 from rclpy.node import Node
 from rclpy.utilities import remove_ros_args
-from std_msgs.msg import Bool, Empty, Float32, String
+from std_msgs.msg import Bool, Empty, Float32, Float32MultiArray, String
 
 from g1_camera import wire
 from g1_camera.server import CameraServer
@@ -26,6 +27,7 @@ from robot_sim import robots
 from robot_sim.camera import SimCamera
 from robot_sim.guard import FIX, not_loopback
 from robot_sim.physics import RobotSim
+from robot_sim.sticks import Sticks
 
 LAG_WARN_S = 0.05  # the bridge damps on state older than 0.2 s
 VIEWER_PERIOD_S = 0.02
@@ -47,10 +49,12 @@ class RobotSimNode(Node):
         self.boot_pending = False  # the silence is a reboot: reset at its end
         self.hand_cmds = {}  # side -> HandCommand; empty: the fingers are slack
         self.hand_due = 0.0  # sim time of the next hand state
+        self.sticks = Sticks()  # guarded by self.lock; the wire's tick reads it
         self.wire = wire_type(self, sim, self.lock)
         self.create_subscription(Bool, "/robot_sim/gantry", self._on_gantry, 10)
         self.create_subscription(Bool, "/robot_sim/remote", self._on_remote, 10)
         self.create_subscription(String, "/robot_sim/buttons", self._on_buttons, 10)
+        self.create_subscription(Float32MultiArray, "/robot_sim/sticks", self._on_sticks, 10)
         self.create_subscription(Empty, "/robot_sim/reset", self._on_reset, 10)
         self.create_subscription(Float32, "/robot_sim/link", self._on_link, 10)
         self.create_subscription(Float32, "/robot_sim/reboot", self._on_reboot, 10)
@@ -88,6 +92,15 @@ class RobotSimNode(Node):
             self.wire.press(names)
         except ValueError as exc:
             self.get_logger().error(f"/robot_sim/buttons {msg.data!r}: {exc}")
+
+    def _on_sticks(self, msg):
+        if not getattr(self.wire, "STICKS", False):
+            refused = f"no sticks on the {self.get_parameter('robot').value}"
+        else:
+            with self.lock:
+                refused = self.sticks.set(msg.data, time.monotonic())
+        if refused:
+            self.get_logger().warn(f"/robot_sim/sticks: {refused}", throttle_duration_sec=1.0)
 
     def _on_reset(self, _msg):
         with self.lock:

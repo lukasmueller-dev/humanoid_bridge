@@ -1,5 +1,7 @@
 """What the G1 and Go2 share in sim: the remote's bytes, the motion switcher, the Wire base."""
 
+import struct
+
 import numpy as np
 
 from robot_sim.motion import BOOT_MODE, MotionSwitcher
@@ -28,6 +30,12 @@ def set_remote(wireless_remote, connected):
 def set_keys(wireless_remote, mask):
     wireless_remote[2] = mask & 0xFF  # little-endian
     wireless_remote[3] = mask >> 8
+
+
+def set_sticks(wireless_remote, sticks):
+    """[lx, ly, rx, ry] into bytes 4-24 as estop.cpp remoteSticks reads them: lx rx ry L2(0) ly."""
+    lx, ly, rx, ry = sticks
+    wireless_remote[4:24] = list(struct.pack("<5f", lx, rx, ry, 0.0, ly))
 
 
 class MotionService:

@@ -25,7 +25,7 @@
 #          state stops (hands-stale), the left hand overheats (hands-hot), Ready opens
 #          both hands (hands-ready), Ready with the left hand silent (hands-ready-one)
 #   config the real G1_bridge refuses broken copies of G1_config.yaml
-#   sim    opt-in (--sim), host only: the real G1_bridge against robot_sim (MuJoCo G1): arm,
+#   sim    opt-in (--sim), host only: the real G1_bridge against robot_sim (MuJoCo G1): sticks, arm,
 #          hold, /robot_cmd, remote damp; sim-link: link drop, reboot, g1-bringup.sh --sim release;
 #          sim-t1: T1_bridge against robot_sim --robot t1, through robot-bringup.sh --robot t1
 #
