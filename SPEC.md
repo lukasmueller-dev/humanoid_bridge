@@ -42,7 +42,7 @@ A policy selects the low-level controller per stream with `RobotCmd.controller`.
 
 ## Milestones
 
-- [ ] Interface package, `motor_pd` and `bridge_pd` as plugins, the call in `BridgeCore` for G1, T1, Go2; no behavior change — code — done when `tools/test.sh --docker` passes, with a new gtest `test_controllers` (both plugins against a fixed state)
+- [x] Interface package, `motor_pd` and `bridge_pd` as plugins, the call in `BridgeCore` for G1, T1, Go2; no behavior change — code — done when `tools/test.sh --docker` passes, with a new gtest `test_controllers` (both plugins against a fixed state)
 - [ ] `RobotCmd.controller`, `controllers_allowed`, the stream rule, `/low_level_controller`, the `cmd_client` argument — code — done when a new `tools/test.sh` stage `controllers` passes in `--docker`: G1_bridge against `fake_g1`: `bridge_pd` gives `kp = kd = 0` with `tau` on `/lowcmd`; an unknown name and a change inside a stream are dropped; hold after the stream is `motor_pd`; the topic names the active controller
 - [ ] `example_controller` package and `docs/low-level-controllers.md` — code — done when the `controllers` stage also loads `example_controller` by name, and a bridge start with a missing plugin name exits nonzero with the name in the error
 - [ ] End action — code — done when `SPEC.md` is gone and the PR body holds the decisions
