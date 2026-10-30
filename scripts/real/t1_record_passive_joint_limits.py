@@ -192,7 +192,7 @@ class PassiveJointLimitLogger:
 
 class T1PassiveJointLimitRecorder:
     def __init__(self, node, args, joint_names, output_dir):
-        from robot_bridge_py.robot_client import RobotClient
+        from robot_bridge.robot_client import RobotClient
 
         self.node = node
         self.args = args

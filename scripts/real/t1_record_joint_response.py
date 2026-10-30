@@ -228,7 +228,7 @@ class T1JointResponseController:
         output_dir,
         metadata,
     ):
-        from robot_bridge_py.robot_client import RobotClient
+        from robot_bridge.robot_client import RobotClient
 
         self.node = node
         self.cfg = cfg
