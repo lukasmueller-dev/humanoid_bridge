@@ -7,7 +7,8 @@ checks on command and state, and publishes motor commands at 1 kHz.
 ```
 bridge/           the bridge and its Python client, upstream-bound
   bridge_interface/   messages and services
-  low_level_controller/  header-only plugin interface of the 1 kHz low-level controllers
+  low_level_controller/  header-only plugin interface of the 1 kHz low-level controllers (docs/low-level-controllers.md)
+  examples/example_controller/  a template low-level controller plugin
   robot_bridge/       C++ bridge, robot_bridge/ Python client, adapters, motor_pd and bridge_pd plugins
     examples/           reference clients per robot (not built or installed)
 robot_stacks/     per-robot deploy layers
@@ -190,6 +191,7 @@ ros2 service call /estop_reset std_srvs/srv/Trigger {}       # refused while the
 ros2 topic echo /bridge_state                                # G1, T1, Go2
 ros2 topic echo /robot_link                                  # G1, T1, Go2: OK, LOST, BACK, RESTARTED (docs/estop.md)
 ros2 topic echo /robot_state                                 # G1, T1, Go2: bridge_interface/RobotState, names + q/dq/tau, IMU, remote by name
+ros2 topic echo /low_level_controller                        # the tick's controller, picked by RobotCmd.controller (docs/low-level-controllers.md)
 ros2 topic echo /hand_state/left                             # G1 Dex3: bridge_interface/HandState
 ```
 
