@@ -454,11 +454,13 @@ namespace sairol_bridge
                 return false;
             }
             const size_t index = static_cast<size_t>(at - jointNames_.begin());
+            const float_t base = joints_[index].*(field->second);
             // Compared as float, as dq_limit is stored: 2 x it written out in decimal passes.
-            if (value > 2 * joints_[index].dq_limit)
+            // A value no higher than the base is always fine: a T1 or Go2 base trip can be over the cap.
+            if (value > 2 * joints_[index].dq_limit && value > base)
             {
-                RCLCPP_ERROR(nh->get_logger(), "override.%s: %.3f is above 2 x dq_limit (%.3f)",
-                             name.c_str(), number, 2 * joints_[index].dq_limit);
+                RCLCPP_ERROR(nh->get_logger(), "override.%s: %.3f is above 2 x dq_limit (%.3f) and the base (%.3f)",
+                             name.c_str(), number, 2 * joints_[index].dq_limit, base);
                 return false;
             }
             changes.push_back({index, key, field->second, value});
