@@ -597,26 +597,31 @@ namespace sairol_bridge
         for (int i = 0; i < numJoint_; ++i)
         {
             auto &cmd = frame_[i];
+            const auto &target = target_[i];
             auto &last_cmd = lastCommand_.motor_cmd[i];
             const auto &joint_info = joints_[i];
             const auto &motor = currentState_.motor_state[i];
+            // A parallel joint sends its P part as tau below and drops the command's tau, so its window leaves it out.
+            const bool parallel = receivedCmd_ && joint_info.if_parallel_joint;
+
+            // Gate 2 and the next ramp start from the target, not the frame: bridge_pd's has kp 0 and q_meas.
+            // Gate 4 on it as on a motor_pd frame, which is the target: that path stays bit for bit.
+            last_cmd.q = gates::torqueWindow(target.q, motor.q, motor.dq, target.dq, target.kp, target.kd,
+                                             parallel ? 0.0f : target.tau, joint_info.tau_limit);
+            last_cmd.dq = target.dq;
+            last_cmd.kp = target.kp;
+            last_cmd.kd = target.kd;
+            last_cmd.tau = target.tau;
 
             cmd.tau = std::clamp(cmd.tau, -joint_info.tau_limit, joint_info.tau_limit);
             // Gate 4: the torque window, feedforward included; at kp 0 the measured q, never inf or NaN.
-            // A parallel joint sends its P part as tau below and drops this tau, so its window leaves it out.
-            const bool parallel = receivedCmd_ && joint_info.if_parallel_joint;
             cmd.q = gates::torqueWindow(cmd.q, motor.q, motor.dq, cmd.dq, cmd.kp, cmd.kd,
                                         parallel ? 0.0f : cmd.tau, joint_info.tau_limit);
 
-            last_cmd.q = cmd.q;
-            last_cmd.dq = cmd.dq;
-            last_cmd.kp = cmd.kp;
-            last_cmd.kd = cmd.kd;
-            last_cmd.tau = cmd.tau;
-
-            if (parallel)
+            // At kp 0 there is no P part to move: bridge_pd's tau holds the whole PD already.
+            if (parallel && cmd.kp > 0.0f)
             {
-                cmd.tau = std::clamp((last_cmd.q - motor.q) * cmd.kp, -joint_info.tau_limit, joint_info.tau_limit);
+                cmd.tau = std::clamp((cmd.q - motor.q) * cmd.kp, -joint_info.tau_limit, joint_info.tau_limit);
                 cmd.q = motor.q;
                 cmd.kp = 0.0;
             }
