@@ -58,6 +58,9 @@ namespace sairol_bridge
 
     protected:
         bool loadParameters_();
+        // Declares override_keys, then checks every override.<joint>.<key> and applies it over the loaded
+        // joints_ (docs/estop.md, Overrides); false logs the one refusal. The parameters stay as loaded.
+        bool loadOverrides_();
         // motor_pd and every name in controllers_allowed; false names the one that does not load.
         bool loadControllers_();
         // mutex_ held. The tick's controller from the next tick on; /low_level_controller on a change.
