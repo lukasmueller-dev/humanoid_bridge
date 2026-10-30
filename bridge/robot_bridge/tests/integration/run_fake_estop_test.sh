@@ -17,15 +17,18 @@ trap cleanup EXIT
 
 require_ros
 
-# G1_config.yaml has no dq_trip: a copy gives joint 1 twice its dq_limit; joint 0 keeps the dq_limit trip.
-python3 - "$PARAMS" "$OUT/estop_config.yaml" <<'PY'
+# G1_config.yaml has no dq_trip: a copy gives joint 1 twice its dq_limit, an override file 1.5 times;
+# joint 0 keeps the dq_limit trip.
+python3 - "$PARAMS" "$OUT/estop_config.yaml" "$OUT/override.yaml" <<'PY'
 import sys
 import yaml
 config = yaml.safe_load(open(sys.argv[1]))
 params = config["robot_bridge"]["ros__parameters"]
-joint = params[params["joint_names"][1]]
-joint["dq_trip"] = 2 * joint["dq_limit"]
+name = params["joint_names"][1]
+params[name]["dq_trip"] = 2 * params[name]["dq_limit"]
 yaml.safe_dump(config, open(sys.argv[2], "w"))
+override = {name: {"dq_trip": 1.5 * params[name]["dq_limit"]}}
+yaml.safe_dump({"robot_bridge": {"ros__parameters": {"override": override}}}, open(sys.argv[3], "w"))
 PY
 PARAMS="$OUT/estop_config.yaml"
 
@@ -35,7 +38,8 @@ sleep 2
 
 # The driver holds a /lowcmd publisher before the bridge starts, and drops it once checked.
 HOLDING="driver: holding /lowcmd"   # drive_estop.py prints it once the publisher exists
-python3 "$HERE/drive_estop.py" "$PARAMS" "$OUT/bridge.log" > >(tee "$OUT/driver.log") 2>&1 &
+python3 "$HERE/drive_estop.py" "$PARAMS" "$OUT/bridge.log" --override "$OUT/override.yaml" \
+    > >(tee "$OUT/driver.log") 2>&1 &
 DRIVER_PID=$!
 for _ in $(seq 1 100); do
     grep -q "$HOLDING" "$OUT/driver.log" 2>/dev/null && break
@@ -46,7 +50,7 @@ if ! grep -q "$HOLDING" "$OUT/driver.log" 2>/dev/null; then
     echo "driver did not print '$HOLDING' within 10 s"; exit 1
 fi
 
-start_bridge "$OUT/bridge.log"
+start_bridge "$OUT/bridge.log" "$PARAMS" "$OUT/override.yaml"
 BRIDGE_PID=$!; disown "$BRIDGE_PID"
 
 or_tail "$OUT/bridge.log" wait "$DRIVER_PID"
