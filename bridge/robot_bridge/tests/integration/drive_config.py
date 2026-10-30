@@ -1,4 +1,4 @@
-"""Starts G1_bridge on broken copies of a config: each must fail its parameter load.
+"""Starts G1_bridge on broken copies of a config and on bad override files: each must fail its load.
 
 Exit 1 on failure. run_config_test.sh pins DDS to loopback. No fake robot: a config
 that loads waits for /lowstate, and is killed once its load is logged.
@@ -74,11 +74,52 @@ def variants(params):
     ]
 
 
-def start(params_file, log_file, until=None):
+def refused_overrides(params):
+    """(name, text the refusal must log, override values) per override file that is refused."""
+    joint = params["joint_names"][3]
+    limit = params[joint]["dq_limit"]
+    return [
+        (
+            "override of a key not in override_keys",
+            "is not an override key",
+            {joint: {"dq_limit": 1.0}},
+        ),
+        (
+            "override of an unknown joint",
+            "no joint 'no_such_joint'",
+            {"no_such_joint": {"dq_trip": 1.0}},
+        ),
+        ("override of zero", "needs a finite number > 0", {joint: {"dq_trip": 0.0}}),
+        ("negative override", "needs a finite number > 0", {joint: {"dq_trip": -1.0}}),
+        ("infinite override", "needs a finite number > 0", {joint: {"dq_trip": float("inf")}}),
+        ("NaN override", "needs a finite number > 0", {joint: {"dq_trip": "nan"}}),
+        ("override that is text", "needs a finite number > 0", {joint: {"dq_trip": "fast"}}),
+        ("override above 2 x dq_limit", "is above 2 x dq_limit", {joint: {"dq_trip": 2.1 * limit}}),
+    ]
+
+
+def valid_overrides(params):
+    """(name, WARN the load must log, override values) per override file that loads."""
+    joint = params["joint_names"][3]
+    limit = params[joint]["dq_limit"]
+    base = params[joint].get("dq_trip", limit)  # absent = dq_limit
+
+    def warn(new):
+        return f"Override {joint}.dq_trip: {base:.3f} -> {new:.3f}"
+
+    return [
+        ("override at 2 x dq_limit", warn(2 * limit), {joint: {"dq_trip": 2 * limit}}),
+        ("override below the base", warn(0.5 * limit), {joint: {"dq_trip": 0.5 * limit}}),
+        ("override as an integer", warn(int(limit)), {joint: {"dq_trip": int(limit)}}),
+    ]
+
+
+def start(params_files, log_file, until=None):
     """Runs G1_bridge until it exits, logs `until`, or TIMEOUT. Returns (exit code or None, log)."""
+    args = [arg for path in params_files for arg in ("--params-file", path)]
     with open(log_file, "w") as log:
         proc = subprocess.Popen(
-            BRIDGE + ["--params-file", params_file],
+            BRIDGE + args,
             stdout=log,
             stderr=subprocess.STDOUT,
             start_new_session=True,
@@ -117,10 +158,10 @@ def main():
             failures.append(name)
 
     # The copy, unchanged, must load: the round trip through yaml is not what refuses.
-    path = os.path.join(out, "unchanged.yaml")
-    with open(path, "w") as handle:
+    unchanged = os.path.join(out, "unchanged.yaml")
+    with open(unchanged, "w") as handle:
         yaml.safe_dump(config, handle)
-    _, log = start(path, os.path.join(out, "unchanged.log"), until=LOADED)
+    _, log = start([unchanged], os.path.join(out, "unchanged.log"), until=LOADED)
     check("unchanged config loads", LOADED in log and REFUSED not in log)
 
     for i, (name, text, change) in enumerate(variants(config["robot_bridge"]["ros__parameters"])):
@@ -129,7 +170,7 @@ def main():
         path = os.path.join(out, f"broken{i}.yaml")
         with open(path, "w") as handle:
             yaml.safe_dump(broken, handle)
-        code, log = start(path, os.path.join(out, f"broken{i}.log"))
+        code, log = start([path], os.path.join(out, f"broken{i}.log"))
         # Exit 1, not a signal: `ros2 run` reports an abort as 250.
         refused = code == 1 and REFUSED in log and text in log
         if code is None:
@@ -137,6 +178,39 @@ def main():
         else:
             why = f"exit {code}" + ("" if text in log else f", no '{text}'")
         check(f"{name}: refused", refused, "" if refused else f"{why}, log {out}/broken{i}.log")
+
+    # A second --params-file after the unchanged copy, as robot-bringup.sh --override passes it.
+    params = config["robot_bridge"]["ros__parameters"]
+
+    def override_file(name, values):
+        override = os.path.join(out, name + ".yaml")
+        with open(override, "w") as handle:
+            yaml.safe_dump({"robot_bridge": {"ros__parameters": {"override": values}}}, handle)
+        return override
+
+    for i, (name, text, values) in enumerate(refused_overrides(params)):
+        override = override_file(f"refused{i}", values)
+        code, log = start([unchanged, override], os.path.join(out, f"refused{i}.log"))
+        # One ERROR line names the override: the refusal, not a second complaint after it.
+        errors = [line for line in log.splitlines() if "ERROR" in line and "override." in line]
+        refused = code == 1 and REFUSED in log and text in log and len(errors) == 1
+        if code is None:
+            why = f"still running after {TIMEOUT:.0f} s"
+        else:
+            why = f"exit {code}, {len(errors)} override ERROR line(s)" + (
+                "" if text in log else f", no '{text}'"
+            )
+        check(f"{name}: refused", refused, "" if refused else f"{why}, log {out}/refused{i}.log")
+
+    for i, (name, text, values) in enumerate(valid_overrides(params)):
+        override = override_file(f"valid{i}", values)
+        _, log = start([unchanged, override], os.path.join(out, f"valid{i}.log"), until=LOADED)
+        loaded = LOADED in log and REFUSED not in log and text in log
+        check(
+            f"{name}: loads, logs the change",
+            loaded,
+            "" if loaded else f"no '{text}', log {out}/valid{i}.log",
+        )
 
     if failures:
         print("\n{} check(s) failed: {}".format(len(failures), ", ".join(failures)))
