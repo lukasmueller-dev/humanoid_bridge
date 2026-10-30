@@ -11,9 +11,9 @@ for s, then tick from 0 and a motion service holding /lowcmd (never sends); /fak
 import argparse
 import json
 import math
+import os
 import signal
 import struct
-import sys
 import time
 
 import rclpy
@@ -162,7 +162,8 @@ def main():
 
     rclpy.init()
     node = FakeG1(args.out, args.start_q)
-    signal.signal(signal.SIGTERM, lambda *_: (node.dump(), sys.exit(0)))
+    # os._exit: a SystemExit raised inside an rclpy __del__ is swallowed and the fake spins on.
+    signal.signal(signal.SIGTERM, lambda *_: (node.dump(), os._exit(0)))
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:

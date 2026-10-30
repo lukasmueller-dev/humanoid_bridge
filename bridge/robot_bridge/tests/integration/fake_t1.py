@@ -9,8 +9,8 @@ must bound its copy. Test inputs: /fake_t1/buttons (String, held buttons as `RB+
 """
 
 import argparse
+import os
 import signal
-import sys
 
 import rclpy
 from booster_interface.msg import LowCmd, LowState, MotorState, RemoteControllerState
@@ -85,10 +85,11 @@ def main():
     args = parser.parse_args()
     rclpy.init()
     node = FakeT1(args.start_q, args.no_pad)
-    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    # os._exit: a SystemExit raised inside an rclpy __del__ is swallowed and the fake spins on.
+    signal.signal(signal.SIGTERM, lambda *_: os._exit(0))
     try:
         rclpy.spin(node)
-    except (KeyboardInterrupt, SystemExit):
+    except KeyboardInterrupt:
         pass
     finally:
         if rclpy.ok():

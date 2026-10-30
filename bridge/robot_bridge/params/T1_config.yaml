@@ -11,8 +11,10 @@ robot_bridge:
     control_dt: 0.002
     empty_joint_index: -1
     num_joint: 23
-    torque_control: false
     imu_rpy_threshold: 1.0 #radians
+
+    # docs/low-level-controllers.md: the names a /robot_cmd may pick; motor_pd always.
+    controllers_allowed: ["motor_pd", "bridge_pd"]
 
     # Parallel ankle mapping (bridge/robot_bridge/include/t1_parallel_ankle.hpp, port of loco-mujoco-t1 parallel_act).
     # false: CMD_TYPE_SERIAL, the Booster firmware maps the ankle pitch/roll commands to the crank motors.

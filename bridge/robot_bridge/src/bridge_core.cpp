@@ -1,4 +1,5 @@
 #include "bridge_core.hpp"
+#include "gates.hpp"
 #include <algorithm>
 
 using std::placeholders::_1;
@@ -6,6 +7,45 @@ using std::placeholders::_2;
 
 namespace sairol_bridge
 {
+    namespace
+    {
+        // An empty RobotCmd.controller; Arm, Ready and every stop run it.
+        const std::string MOTOR_PD = "motor_pd";
+
+        // controllers.<name>.* as plain numbers; false names the key that is not a number or a number list.
+        bool controllerParameters(rclcpp::Node &node, const std::string &name,
+                                  low_level_controller::Parameters &params, std::string &error)
+        {
+            std::map<std::string, rclcpp::Parameter> values;
+            node.get_node_parameters_interface()->get_parameters_by_prefix("controllers." + name, values);
+            for (const auto &[key, value] : values)
+            {
+                switch (value.get_type())
+                {
+                case rclcpp::ParameterType::PARAMETER_DOUBLE:
+                    params[key] = {value.as_double()};
+                    break;
+                case rclcpp::ParameterType::PARAMETER_INTEGER:
+                    params[key] = {static_cast<double>(value.as_int())};
+                    break;
+                case rclcpp::ParameterType::PARAMETER_DOUBLE_ARRAY:
+                    params[key] = value.as_double_array();
+                    break;
+                case rclcpp::ParameterType::PARAMETER_INTEGER_ARRAY:
+                    for (const int64_t number : value.as_integer_array())
+                    {
+                        params[key].push_back(static_cast<double>(number));
+                    }
+                    break;
+                default:
+                    error = "controllers." + name + "." + key + " is not a number or a list of numbers";
+                    return false;
+                }
+            }
+            return true;
+        }
+    }
+
     BridgeCore::BridgeCore(rclcpp::Node::SharedPtr node)
     {
         nh = node;
@@ -23,6 +63,17 @@ namespace sairol_bridge
         currentState_.motor_state.resize(numJoint_);
         cmdParams_.resize(numJoint_);
         holdQ_.assign(numJoint_, 0.0f);
+
+        controllerState_.joints.resize(numJoint_);
+        target_.resize(numJoint_);
+        frame_.resize(numJoint_);
+        // Transient-local: a late subscriber still gets the active controller.
+        controllerPublisher_ = nh->create_publisher<std_msgs::msg::String>(
+            "/low_level_controller", rclcpp::QoS(1).reliable().transient_local());
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            useController_(MOTOR_PD);
+        }
 
         desiredSubscriber_ = nh->create_subscription<bridge_interface::msg::RobotCmd>(
             "/robot_cmd", 1, std::bind(&BridgeCore::robotCmdCallBack_, this, _1));
@@ -189,10 +240,8 @@ namespace sairol_bridge
             RCLCPP_ERROR(nh->get_logger(), "Failed to get '%s' from parameters", key);
             return false;
         };
-        if (!require("torque_control", torqueControl_))
-        {
-            return false;
-        }
+        // H1, H1_2, X2 only: G1, T1 and Go2 have the bridge_pd controller.
+        nh->get_parameter("torque_control", torqueControl_);
         // Checks below return false, not assert: a Release build (NDEBUG) drops every assert.
         if (torqueControl_)
         {
@@ -332,7 +381,79 @@ namespace sairol_bridge
             RCLCPP_ERROR(nh->get_logger(), "A gain range is inverted: every *_max must be >= its *_min");
             return false;
         }
-        return loadEstopParameters_();
+        return loadControllers_() && loadEstopParameters_();
+    }
+
+    bool BridgeCore::loadControllers_()
+    {
+        std::vector<std::string> allowed;
+        nh->get_parameter("controllers_allowed", allowed);
+        allowed.insert(allowed.begin(), MOTOR_PD);
+        try
+        {
+            controllerLoader_ = std::make_unique<pluginlib::ClassLoader<low_level_controller::Controller>>(
+                "low_level_controller", "low_level_controller::Controller");
+        }
+        catch (const pluginlib::PluginlibException &e)
+        {
+            RCLCPP_ERROR(nh->get_logger(), "No low-level controller loads: %s", e.what());
+            return false;
+        }
+        std::string names;
+        for (const auto &name : allowed)
+        {
+            if (controllers_.count(name) != 0)
+            {
+                continue;
+            }
+            std::shared_ptr<low_level_controller::Controller> controller;
+            low_level_controller::Parameters params;
+            std::string error;
+            try
+            {
+                controller = controllerLoader_->createSharedInstance(name);
+                if (!controllerParameters(*nh, name, params, error) ||
+                    !controller->configure(params, static_cast<size_t>(numJoint_), error))
+                {
+                    controller.reset();
+                }
+            }
+            catch (const std::exception &e)   // pluginlib's, or the plugin's own
+            {
+                controller.reset();
+                error = e.what();
+            }
+            if (!controller)
+            {
+                RCLCPP_ERROR(nh->get_logger(), "Low-level controller %s does not load: %s", name.c_str(),
+                             error.empty() ? "configure() returned false" : error.c_str());
+                return false;
+            }
+            controllers_[name] = controller;
+            names += (names.empty() ? "" : ", ") + name;
+        }
+        RCLCPP_INFO(nh->get_logger(), "Low-level controllers allowed: %s", names.c_str());
+        return true;
+    }
+
+    void BridgeCore::useController_(const std::string &name)
+    {
+        if (name == controllerName_)
+        {
+            return;
+        }
+        controller_ = controllers_.at(name);
+        controllerName_ = name;
+        std_msgs::msg::String message;
+        message.data = name;
+        controllerPublisher_->publish(message);
+        RCLCPP_INFO(nh->get_logger(), "Low-level controller: %s", name.c_str());
+    }
+
+    void BridgeCore::endStream_()
+    {
+        stream_.clear();
+        useController_(MOTOR_PD);
     }
 
     bool BridgeCore::loadEstopParameters_()
@@ -434,17 +555,41 @@ namespace sairol_bridge
             return;
         }
 
-        if (checkCommand_(message))
-        {   
-            lowCommandDesired_.motor_cmd = message->motor_cmd;
-            receivedCmd_ = true;
-            calculateInterpolationParams_(duration, interpolation_order, hold_position);
+        // Empty: motor_pd, so a client from before the field works unchanged.
+        const std::string controller = message->controller.empty() ? MOTOR_PD : message->controller;
+        if (controllers_.count(controller) == 0)
+        {
+            RCLCPP_WARN_THROTTLE(nh->get_logger(), steadyClock_, 1000,
+                                 "Controller '%s' is not in controllers_allowed: /robot_cmd dropped",
+                                 controller.c_str());
+            return;
         }
-        else
+
+        if (!checkCommand_(message))
         {
             RCLCPP_ERROR(nh->get_logger(), "Command check failed. Please inspect the command message.");
             return;
         }
+
+        // The first accepted /robot_cmd starts the stream and fixes its controller until a stop.
+        // One mutex_ hold: no tick runs the stream's controller on another command's target.
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!controlStarted_ || arming_)
+        {
+            return;   // stopped since the check above, or still arming: no stream
+        }
+        if (!stream_.empty() && controller != stream_)
+        {
+            RCLCPP_WARN_THROTTLE(nh->get_logger(), steadyClock_, 1000,
+                                 "Controller '%s' inside a '%s' stream: /robot_cmd dropped; "
+                                 "/stop_control first", controller.c_str(), stream_.c_str());
+            return;
+        }
+        stream_ = controller;
+        lowCommandDesired_.motor_cmd = message->motor_cmd;
+        receivedCmd_ = true;
+        interpolationParams_(duration, interpolation_order, hold_position);
+        useController_(controller);   // again after Ready, which runs motor_pd
     }
 
     void BridgeCore::zeroPositionControl_()
@@ -526,11 +671,110 @@ namespace sairol_bridge
         }
     }
 
+    bool BridgeCore::trackingFrame_()
+    {
+        float_t phase = 1.0f;
+        if (tFinal_ - tStart_ > 1e-6) {
+            phase = (steadyClock_.now().seconds() - tStart_) / (tFinal_ - tStart_);
+        }
+        phase = std::clamp(phase, 0.0f, 1.0f);
+
+        for (int i = 0; i < numJoint_; ++i)
+        {
+            auto &cmd = target_[i];
+            const auto &last_cmd = lastCommand_.motor_cmd[i];
+            const auto &joint_info = joints_[i];
+            const auto &motor = currentState_.motor_state[i];
+
+            if (1e-6 < cmdInterpOrder_ && cmdInterpOrder_ < 1.0 - 1e-6)
+            {
+                // Low pass filter for cmd
+                cmd.q = last_cmd.q * cmdInterpOrder_ + cmdParams_[i].q_0 * (1 - cmdInterpOrder_);
+                cmd.dq = last_cmd.dq * cmdInterpOrder_ + cmdParams_[i].dq_0 * (1 - cmdInterpOrder_);
+            }
+            else
+            {
+                // Interpolation
+                cmd.q = cmdParams_[i].q_0 + cmdParams_[i].q_1 * phase;
+                cmd.dq = cmdParams_[i].dq_0 + cmdParams_[i].dq_1 * phase;
+            }
+
+            // Gates 1 and 2 (docs/psi0_gates.md): the joint range, then the target speed.
+            if (cmd.q < joint_info.q_min || cmd.q > joint_info.q_max)
+            {
+                RCLCPP_WARN_THROTTLE(nh->get_logger(), steadyClock_, 1000,
+                                     "joint %d target %.3f outside [%.3f, %.3f]: clamped",
+                                     i, cmd.q, joint_info.q_min, joint_info.q_max);
+            }
+            cmd.q = gates::limitTarget(cmd.q, last_cmd.q, joint_info, controlDt_);
+
+            cmd.kp = cmdParams_[i].kp_0 + cmdParams_[i].kp_1 * phase;
+            cmd.kd = cmdParams_[i].kd_0 + cmdParams_[i].kd_1 * phase;
+            cmd.dq = std::clamp(cmd.dq, -joint_info.dq_limit, joint_info.dq_limit);
+            cmd.tau = cmdParams_[i].tau_0 + cmdParams_[i].tau_1 * phase;
+
+            controllerState_.joints[i] = {motor.q, motor.dq, motor.tau_est};
+        }
+        controllerState_.imu.quaternion = imu_.quaternion;
+        controllerState_.imu.gyroscope = imu_.gyroscope;
+        controllerState_.imu.accelerometer = imu_.accelerometer;
+        controllerState_.imu.rpy = imu_.rpy;
+
+        controller_->compute(controllerState_, target_, frame_);
+
+        bool finite = true;
+        for (int i = 0; i < numJoint_; ++i)
+        {
+            auto &cmd = frame_[i];
+            const auto &target = target_[i];
+            auto &last_cmd = lastCommand_.motor_cmd[i];
+            const auto &joint_info = joints_[i];
+            const auto &motor = currentState_.motor_state[i];
+            // A parallel joint sends its P part as tau below and drops the command's tau, so its window leaves it out.
+            // A robot that maps its parallel joints itself gets them here as serial joints.
+            const bool parallel = receivedCmd_ && joint_info.if_parallel_joint && !robotMapsParallelJoints_;
+
+            // Gate 2 and the next ramp start from the target, not the frame: bridge_pd's has kp 0 and q_meas.
+            // Gate 4 on it as on a motor_pd frame, which is the target: motor_pd's lastCommand_ stays bit for bit.
+            last_cmd.q = gates::torqueWindow(target.q, motor.q, motor.dq, target.dq, target.kp, target.kd,
+                                             parallel ? 0.0f : target.tau, joint_info.tau_limit);
+            last_cmd.dq = target.dq;
+            last_cmd.kp = target.kp;
+            last_cmd.kd = target.kd;
+            last_cmd.tau = target.tau;
+
+            cmd.tau = std::clamp(cmd.tau, -joint_info.tau_limit, joint_info.tau_limit);
+            // Gate 4: the torque window, feedforward included; at kp 0 the measured q, never inf or NaN.
+            cmd.q = gates::torqueWindow(cmd.q, motor.q, motor.dq, cmd.dq, cmd.kp, cmd.kd,
+                                        parallel ? 0.0f : cmd.tau, joint_info.tau_limit);
+
+            // At kp 0 there is no P part to move: tau goes as is (bridge_pd's PD, motor_pd's feedforward).
+            if (parallel && cmd.kp > 0.0f)
+            {
+                cmd.tau = std::clamp((cmd.q - motor.q) * cmd.kp, -joint_info.tau_limit, joint_info.tau_limit);
+                cmd.q = motor.q;
+                cmd.kp = 0.0;
+            }
+            finite = finite && gates::finiteCommand(cmd.q, cmd.dq, cmd.kp, cmd.kd, cmd.tau);
+        }
+        // A NaN /lowstate after checkState_'s copy reaches kp-0 and parallel joints.
+        if (!finite)
+        {
+            invalidFrame_ = true;   // update_() latches state_invalid once mutex_ is free
+        }
+        return finite;
+    }
+
     void BridgeCore::calculateInterpolationParams_(float_t duration,
                                                    float_t interpolation_order,
                                                    bool hold_position)
     {
-        std::unique_lock<std::mutex> lock(mutex_);
+        std::lock_guard<std::mutex> lock(mutex_);
+        interpolationParams_(duration, interpolation_order, hold_position);
+    }
+
+    void BridgeCore::interpolationParams_(float_t duration, float_t interpolation_order, bool hold_position)
+    {
         cmdInterpOrder_ = interpolation_order;
         if (0.0 <= cmdInterpOrder_ && cmdInterpOrder_ < 1.0)
         {
@@ -699,6 +943,7 @@ namespace sairol_bridge
         {
             std::lock_guard<std::mutex> lock(mutex_);
             const bool was_tracking = controlStarted_.exchange(false);
+            endStream_();
             transition = latch_.trigger(cause, was_tracking);
             if (transition.snapshot)
             {
@@ -746,6 +991,13 @@ namespace sairol_bridge
     bool BridgeCore::armControl_(bridge_interface::msg::RobotCmd default_cmd, std::string &why)
     {
         uint64_t generation = 0;
+        // initControl_ sets controlStarted_ before its arm ramp: a /robot_cmd until the end starts no stream.
+        arming_ = true;
+        struct EndArming
+        {
+            std::atomic<bool> &arming;
+            ~EndArming() { arming = false; }
+        } end_arming{arming_};
         // Before the latch: after a restart /estop_reset is refused too, so "reset first" would mislead.
         if (!linkAllowsArming_(why))
         {
@@ -1008,8 +1260,13 @@ namespace sairol_bridge
             response->message = why;
             return;
         }
-        setPose_(q);
-        calculateInterpolationParams_(duration_, 1, true);
+        {
+            // One mutex_ hold: motor_pd never runs the stream's target, nor the stream's controller this pose.
+            std::lock_guard<std::mutex> lock(mutex_);
+            setPose_(q);
+            interpolationParams_(duration_, 1, true);
+            useController_(MOTOR_PD);   // the stream goes on: its next /robot_cmd switches back
+        }
         RCLCPP_INFO(nh->get_logger(), "%s position control activated", name.c_str());
         response->success = true;
         response->message = name + " position control activated";

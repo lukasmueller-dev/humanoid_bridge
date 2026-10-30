@@ -1,5 +1,4 @@
 #include "T1_bridge.hpp"
-#include "gates.hpp"
 
 #include <cmath>
 
@@ -177,87 +176,27 @@ void sairol_bridge::T1Bridge::watchJointCtrl_()
 
 void sairol_bridge::T1Bridge::publishLowCommand_()
 {
-    rclcpp::Time current = steadyClock_.now();
-
-    float_t phase = 1.0f;
-    if (tFinal_ - tStart_ > 1e-6) {
-        phase = (current.seconds() - tStart_) / (tFinal_ - tStart_);
+    if (!trackingFrame_())
+    {
+        return;
     }
-    phase = std::clamp(phase, 0.0f, 1.0f);
-
     booster_interface::msg::LowCmd booster_cmd;
     booster_cmd.motor_cmd.resize(numJoint_);
     booster_cmd.cmd_type = parallelAnkle_ ? booster_interface::msg::LowCmd::CMD_TYPE_PARALLEL
                                           : booster_interface::msg::LowCmd::CMD_TYPE_SERIAL;
-
-    bool finite = true;
     for (int i = 0; i < numJoint_; ++i)
     {
         auto &cmd = booster_cmd.motor_cmd[i];
-        auto &last_cmd = lastCommand_.motor_cmd[i];
-        auto &joint_info = joints_[i];
-
         cmd.mode = 0;
         cmd.weight = 1.0;
-
-        if (1e-6 < cmdInterpOrder_ && cmdInterpOrder_ < 1.0 - 1e-6)
-        {
-            cmd.q = last_cmd.q * cmdInterpOrder_ + cmdParams_[i].q_0 * (1 - cmdInterpOrder_);
-            cmd.dq = last_cmd.dq * cmdInterpOrder_ + cmdParams_[i].dq_0 * (1 - cmdInterpOrder_);
-        }
-        else
-        {
-            cmd.q = cmdParams_[i].q_0 + cmdParams_[i].q_1 * phase;
-            cmd.dq = cmdParams_[i].dq_0 + cmdParams_[i].dq_1 * phase;
-        }
-
-        // Gates 1 and 2 (docs/psi0_gates.md): the joint range, then the target speed.
-        if (cmd.q < joint_info.q_min || cmd.q > joint_info.q_max)
-        {
-            RCLCPP_WARN_THROTTLE(nh->get_logger(), steadyClock_, 1000,
-                                 "joint %d target %.3f outside [%.3f, %.3f]: clamped",
-                                 i, cmd.q, joint_info.q_min, joint_info.q_max);
-        }
-        cmd.q = gates::limitTarget(cmd.q, last_cmd.q, joint_info, controlDt_);
-
-        cmd.kp = cmdParams_[i].kp_0 + cmdParams_[i].kp_1 * phase;
-        cmd.kd = cmdParams_[i].kd_0 + cmdParams_[i].kd_1 * phase;
-        cmd.dq = std::clamp(cmd.dq, -joint_info.dq_limit, joint_info.dq_limit);
-
-        if (torqueControl_)
-        {
-            cmd.tau = cmd.kp * (cmd.q - currentState_.motor_state[i].q) +
-                      cmd.kd * (cmd.dq - currentState_.motor_state[i].dq) + cmdParams_[i].tau_0;
-            cmd.tau = std::clamp(cmd.tau, -joint_info.tau_limit, joint_info.tau_limit);
-            cmd.kp = 0.0;
-            cmd.kd = 0.0;
-        }
-        else
-        {
-            cmd.tau = cmdParams_[i].tau_0 + cmdParams_[i].tau_1 * phase;
-        }
-        // Gate 4: the torque window, feedforward included; at kp 0 the measured q, never inf or NaN.
-        // A parallel joint drops its tau below; under the bridge's ankle mapping it keeps it, as a serial joint.
-        const bool parallel = receivedCmd_ && joint_info.if_parallel_joint && !parallelAnkle_;
-        cmd.q = gates::torqueWindow(cmd.q, currentState_.motor_state[i].q, currentState_.motor_state[i].dq,
-                                    cmd.dq, cmd.kp, cmd.kd, parallel ? 0.0f : cmd.tau, joint_info.tau_limit);
-
-        last_cmd.q = cmd.q;
-        last_cmd.dq = cmd.dq;
-        last_cmd.kp = cmd.kp;
-        last_cmd.kd = cmd.kd;
-        last_cmd.tau = cmd.tau;
-
-        if (parallel)
-        {
-            cmd.tau = std::clamp((last_cmd.q - currentState_.motor_state[i].q) * cmd.kp,
-                                 -joint_info.tau_limit, joint_info.tau_limit);
-            cmd.q = currentState_.motor_state[i].q;
-            cmd.kp = 0.0;
-        }
-        finite = finite && gates::finiteCommand(cmd.q, cmd.dq, cmd.kp, cmd.kd, cmd.tau);
+        cmd.q = frame_[i].q;
+        cmd.dq = frame_[i].dq;
+        cmd.kp = frame_[i].kp;
+        cmd.kd = frame_[i].kd;
+        cmd.tau = frame_[i].tau;
     }
-    if (finite && parallelAnkle_)
+    // trackingFrame_ left the ankles serial (robotMapsParallelJoints_); a crank that is not finite fails the map.
+    if (parallelAnkle_)
     {
         std::array<AnkleMapping, 2> mapping;
         if (!mapAnklesToCranks_(booster_cmd, mapping))
@@ -266,21 +205,9 @@ void sairol_bridge::T1Bridge::publishLowCommand_()
                          "Parallel ankle mapping failed (left ok=%d err=%.3f, right ok=%d err=%.3f rad, limit %.3f)",
                          mapping[0].ok, mapping[0].estimate_error, mapping[1].ok, mapping[1].estimate_error,
                          parallelAnkleMaxEstimateError_);
-            finite = false;
+            invalidFrame_ = true;   // update_() latches state_invalid once mutex_ is free
+            return;
         }
-        for (int side = 0; side < 2 && finite; ++side)
-        {
-            for (int c = 0; c < 2; ++c)
-            {
-                const auto &motor_cmd = booster_cmd.motor_cmd[crankSlot_(side, c)];
-                finite = finite && gates::finiteCommand(motor_cmd.q, motor_cmd.dq, motor_cmd.kp, motor_cmd.kd, motor_cmd.tau);
-            }
-        }
-    }
-    if (!finite)
-    {
-        invalidFrame_ = true;   // update_() latches state_invalid once mutex_ is free
-        return;
     }
     lowCommandPublisher_->publish(booster_cmd);
 }
@@ -402,6 +329,7 @@ void sairol_bridge::T1Bridge::loadParallelAnkleParameters_()
     nh->get_parameter("parallel_ankle_crank_sign", parallelAnkleCrankSign_);
     nh->get_parameter("parallel_ankle_crank_tau_limit", parallelAnkleCrankTauLimit_);
     nh->get_parameter("parallel_ankle_max_estimate_error", parallelAnkleMaxEstimateError_);
+    robotMapsParallelJoints_ = parallelAnkle_;
     if (parallelAnkleCrankSign_.size() != 2)
     {
         RCLCPP_FATAL(nh->get_logger(), "parallel_ankle_crank_sign must have two entries (crank a, crank b)");

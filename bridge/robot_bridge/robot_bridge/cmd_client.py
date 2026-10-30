@@ -30,7 +30,16 @@ HAND_MOTOR_MODE = 0
 
 
 def pack_robot_cmd(
-    q, dq, tau, kp, kd, interpolation_order=1.0, duration=0.02, hold_position=False, mode=MOTOR_MODE
+    q,
+    dq,
+    tau,
+    kp,
+    kd,
+    interpolation_order=1.0,
+    duration=0.02,
+    hold_position=False,
+    mode=MOTOR_MODE,
+    controller="",
 ):
     """Build a RobotCmd from five equal-length per-motor arrays."""
     lengths = {len(a) for a in (q, dq, tau, kp, kd)}
@@ -44,6 +53,7 @@ def pack_robot_cmd(
     cmd.interpolation_order = float(interpolation_order)
     cmd.hold_position = bool(hold_position)
     cmd.duration = float(duration)
+    cmd.controller = controller
 
     motor_cmd = []
     for i in range(lengths.pop()):
@@ -190,8 +200,13 @@ class RobotCmdClient:
         target_kd=None,
         duration=None,
         hold_position=False,
+        controller="",
     ):
-        """Publish one /robot_cmd. Dropped by the bridge until start_control succeeds."""
+        """Publish one /robot_cmd. Dropped by the bridge until start_control succeeds.
+
+        controller: the bridge's low-level controller by name, "" for motor_pd. The first accepted
+        /robot_cmd after start_control fixes it until a stop; another name is dropped until then.
+        """
         cmd = pack_robot_cmd(
             q=self._resolve(q_target_pos, self._default_pos, "q_target_pos"),
             dq=q_target_vel if q_target_vel is not None else self._zeros,
@@ -201,6 +216,7 @@ class RobotCmdClient:
             interpolation_order=self.interpolation_order,
             duration=self.duration if duration is None else duration,
             hold_position=hold_position,
+            controller=controller,
         )
         if len(cmd.motor_cmd) != self.num_dof:
             raise ValueError(f"expected {self.num_dof} motors, packed {len(cmd.motor_cmd)}")

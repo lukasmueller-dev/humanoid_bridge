@@ -28,9 +28,17 @@ find_package(rosidl_default_runtime REQUIRED)
 find_package(unitree_go REQUIRED)
 find_package(unitree_hg REQUIRED)
 find_package(unitree_api REQUIRED)
+find_package(pluginlib REQUIRED)
+find_package(low_level_controller REQUIRED)
 
 
 include_directories(include include/common)
+
+# motor_pd and bridge_pd: the default low-level controllers, plugins as a colleague's are (controllers.xml).
+add_library(robot_bridge_controllers SHARED src/controllers.cpp)
+ament_target_dependencies(robot_bridge_controllers pluginlib low_level_controller)
+pluginlib_export_plugin_description_file(low_level_controller controllers.xml)
+install(TARGETS robot_bridge_controllers LIBRARY DESTINATION lib)
 
 # ==============================================================Unitree H1 and G1=============================================================
 
@@ -48,6 +56,8 @@ ament_target_dependencies(G1_bridge
   unitree_hg
   unitree_api
   rclcpp
+  pluginlib
+  low_level_controller
   std_msgs
   sensor_msgs
   std_srvs
@@ -67,6 +77,7 @@ install(
 add_executable(H1_bridge
   src/bridge_core.cpp
   src/estop.cpp
+  src/gates.cpp
   src/H1_bridge.cpp
   src/h1_node.cpp
   src/common/motor_crc.cpp
@@ -77,6 +88,8 @@ ament_target_dependencies(H1_bridge
   unitree_hg
   unitree_api
   rclcpp
+  pluginlib
+  low_level_controller
   std_msgs
   sensor_msgs
   std_srvs
@@ -107,6 +120,8 @@ add_executable(Go2_bridge
 ament_target_dependencies(Go2_bridge
   unitree_go
   rclcpp
+  pluginlib
+  low_level_controller
   std_msgs
   std_srvs
   bridge_interface
@@ -122,6 +137,7 @@ install(
 add_executable(H1_2_bridge
   src/bridge_core.cpp
   src/estop.cpp
+  src/gates.cpp
   src/H1_2_bridge.cpp
   src/h1_2_node.cpp
   src/common/motor_crc_hg.cpp
@@ -133,6 +149,8 @@ ament_target_dependencies(H1_2_bridge
   unitree_hg
   unitree_api
   rclcpp
+  pluginlib
+  low_level_controller
   std_msgs
   sensor_msgs
   std_srvs
@@ -244,6 +262,8 @@ if(BUILD_BOOSTER_T1)
 
   ament_target_dependencies(T1_bridge
     rclcpp
+    pluginlib
+    low_level_controller
     std_msgs
     std_srvs
     bridge_interface
@@ -267,12 +287,15 @@ if(BUILD_AGIBOT_X2)
   add_executable(X2_bridge
     src/bridge_core.cpp
     src/estop.cpp
+    src/gates.cpp
     src/X2_bridge.cpp
     src/x2_node.cpp
   )
 
   ament_target_dependencies(X2_bridge
     rclcpp
+    pluginlib
+    low_level_controller
     std_msgs
     sensor_msgs
     std_srvs
@@ -348,6 +371,9 @@ if(BUILD_TESTING)
   ament_add_gtest(test_crc tests/test_crc.cpp src/common/motor_crc_hg.cpp)
   target_include_directories(test_crc PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/include/common)
   ament_target_dependencies(test_crc rclcpp unitree_hg)
+  # motor_pd and bridge_pd loaded by name, as the bridge does: needs the installed workspace sourced.
+  ament_add_gtest(test_controllers tests/test_controllers.cpp)
+  ament_target_dependencies(test_controllers pluginlib low_level_controller)
 endif()
 
 ament_package()

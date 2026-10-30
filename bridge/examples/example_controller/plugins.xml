@@ -1,0 +1,5 @@
+<library path="example_controller">
+  <class name="example_controller" type="example_controller::ExampleController" base_class_type="low_level_controller::Controller">
+    <description>A damper, tau = -kd·dq on every joint: the template for your own controller.</description>
+  </class>
+</library>
