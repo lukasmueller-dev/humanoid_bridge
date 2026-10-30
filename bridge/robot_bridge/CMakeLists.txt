@@ -56,6 +56,8 @@ ament_target_dependencies(G1_bridge
   unitree_hg
   unitree_api
   rclcpp
+  pluginlib
+  low_level_controller
   std_msgs
   sensor_msgs
   std_srvs
@@ -75,6 +77,7 @@ install(
 add_executable(H1_bridge
   src/bridge_core.cpp
   src/estop.cpp
+  src/gates.cpp
   src/H1_bridge.cpp
   src/h1_node.cpp
   src/common/motor_crc.cpp
@@ -85,6 +88,8 @@ ament_target_dependencies(H1_bridge
   unitree_hg
   unitree_api
   rclcpp
+  pluginlib
+  low_level_controller
   std_msgs
   sensor_msgs
   std_srvs
@@ -115,6 +120,8 @@ add_executable(Go2_bridge
 ament_target_dependencies(Go2_bridge
   unitree_go
   rclcpp
+  pluginlib
+  low_level_controller
   std_msgs
   std_srvs
   bridge_interface
@@ -130,6 +137,7 @@ install(
 add_executable(H1_2_bridge
   src/bridge_core.cpp
   src/estop.cpp
+  src/gates.cpp
   src/H1_2_bridge.cpp
   src/h1_2_node.cpp
   src/common/motor_crc_hg.cpp
@@ -141,6 +149,8 @@ ament_target_dependencies(H1_2_bridge
   unitree_hg
   unitree_api
   rclcpp
+  pluginlib
+  low_level_controller
   std_msgs
   sensor_msgs
   std_srvs
@@ -252,6 +262,8 @@ if(BUILD_BOOSTER_T1)
 
   ament_target_dependencies(T1_bridge
     rclcpp
+    pluginlib
+    low_level_controller
     std_msgs
     std_srvs
     bridge_interface
@@ -275,12 +287,15 @@ if(BUILD_AGIBOT_X2)
   add_executable(X2_bridge
     src/bridge_core.cpp
     src/estop.cpp
+    src/gates.cpp
     src/X2_bridge.cpp
     src/x2_node.cpp
   )
 
   ament_target_dependencies(X2_bridge
     rclcpp
+    pluginlib
+    low_level_controller
     std_msgs
     sensor_msgs
     std_srvs

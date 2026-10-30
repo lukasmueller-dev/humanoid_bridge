@@ -1,5 +1,4 @@
 #include "T1_bridge.hpp"
-#include "gates.hpp"
 
 #include <cmath>
 
@@ -172,88 +171,23 @@ void sairol_bridge::T1Bridge::watchJointCtrl_()
 
 void sairol_bridge::T1Bridge::publishLowCommand_()
 {
-    rclcpp::Time current = steadyClock_.now();
-
-    float_t phase = 1.0f;
-    if (tFinal_ - tStart_ > 1e-6) {
-        phase = (current.seconds() - tStart_) / (tFinal_ - tStart_);
+    if (!trackingFrame_())
+    {
+        return;
     }
-    phase = std::clamp(phase, 0.0f, 1.0f);
-
     booster_interface::msg::LowCmd booster_cmd;
     booster_cmd.motor_cmd.resize(numJoint_);
     booster_cmd.cmd_type = booster_interface::msg::LowCmd::CMD_TYPE_SERIAL;
-
-    bool finite = true;
     for (int i = 0; i < numJoint_; ++i)
     {
         auto &cmd = booster_cmd.motor_cmd[i];
-        auto &last_cmd = lastCommand_.motor_cmd[i];
-        auto &joint_info = joints_[i];
-
         cmd.mode = 0;
         cmd.weight = 1.0;
-
-        if (1e-6 < cmdInterpOrder_ && cmdInterpOrder_ < 1.0 - 1e-6)
-        {
-            cmd.q = last_cmd.q * cmdInterpOrder_ + cmdParams_[i].q_0 * (1 - cmdInterpOrder_);
-            cmd.dq = last_cmd.dq * cmdInterpOrder_ + cmdParams_[i].dq_0 * (1 - cmdInterpOrder_);
-        }
-        else
-        {
-            cmd.q = cmdParams_[i].q_0 + cmdParams_[i].q_1 * phase;
-            cmd.dq = cmdParams_[i].dq_0 + cmdParams_[i].dq_1 * phase;
-        }
-
-        // Gates 1 and 2 (docs/psi0_gates.md): the joint range, then the target speed.
-        if (cmd.q < joint_info.q_min || cmd.q > joint_info.q_max)
-        {
-            RCLCPP_WARN_THROTTLE(nh->get_logger(), steadyClock_, 1000,
-                                 "joint %d target %.3f outside [%.3f, %.3f]: clamped",
-                                 i, cmd.q, joint_info.q_min, joint_info.q_max);
-        }
-        cmd.q = gates::limitTarget(cmd.q, last_cmd.q, joint_info, controlDt_);
-
-        cmd.kp = cmdParams_[i].kp_0 + cmdParams_[i].kp_1 * phase;
-        cmd.kd = cmdParams_[i].kd_0 + cmdParams_[i].kd_1 * phase;
-        cmd.dq = std::clamp(cmd.dq, -joint_info.dq_limit, joint_info.dq_limit);
-
-        if (torqueControl_)
-        {
-            cmd.tau = cmd.kp * (cmd.q - currentState_.motor_state[i].q) +
-                      cmd.kd * (cmd.dq - currentState_.motor_state[i].dq) + cmdParams_[i].tau_0;
-            cmd.tau = std::clamp(cmd.tau, -joint_info.tau_limit, joint_info.tau_limit);
-            cmd.kp = 0.0;
-            cmd.kd = 0.0;
-        }
-        else
-        {
-            cmd.tau = cmdParams_[i].tau_0 + cmdParams_[i].tau_1 * phase;
-        }
-        // Gate 4: the torque window, feedforward included; at kp 0 the measured q, never inf or NaN.
-        const bool parallel = receivedCmd_ && joint_info.if_parallel_joint;
-        cmd.q = gates::torqueWindow(cmd.q, currentState_.motor_state[i].q, currentState_.motor_state[i].dq,
-                                    cmd.dq, cmd.kp, cmd.kd, parallel ? 0.0f : cmd.tau, joint_info.tau_limit);
-
-        last_cmd.q = cmd.q;
-        last_cmd.dq = cmd.dq;
-        last_cmd.kp = cmd.kp;
-        last_cmd.kd = cmd.kd;
-        last_cmd.tau = cmd.tau;
-
-        if (parallel)
-        {
-            cmd.tau = std::clamp((last_cmd.q - currentState_.motor_state[i].q) * cmd.kp,
-                                 -joint_info.tau_limit, joint_info.tau_limit);
-            cmd.q = currentState_.motor_state[i].q;
-            cmd.kp = 0.0;
-        }
-        finite = finite && gates::finiteCommand(cmd.q, cmd.dq, cmd.kp, cmd.kd, cmd.tau);
-    }
-    if (!finite)
-    {
-        invalidFrame_ = true;   // update_() latches state_invalid once mutex_ is free
-        return;
+        cmd.q = frame_[i].q;
+        cmd.dq = frame_[i].dq;
+        cmd.kp = frame_[i].kp;
+        cmd.kd = frame_[i].kd;
+        cmd.tau = frame_[i].tau;
     }
     lowCommandPublisher_->publish(booster_cmd);
 }

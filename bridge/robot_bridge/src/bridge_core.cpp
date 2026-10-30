@@ -1,4 +1,5 @@
 #include "bridge_core.hpp"
+#include "gates.hpp"
 #include <algorithm>
 
 using std::placeholders::_1;
@@ -23,6 +24,23 @@ namespace sairol_bridge
         currentState_.motor_state.resize(numJoint_);
         cmdParams_.resize(numJoint_);
         holdQ_.assign(numJoint_, 0.0f);
+
+        // The tick's low-level controller, a plugin as a colleague's is (controllers.xml). None: no start.
+        try
+        {
+            controllerLoader_ = std::make_unique<pluginlib::ClassLoader<low_level_controller::Controller>>(
+                "low_level_controller", "low_level_controller::Controller");
+            controller_ = controllerLoader_->createSharedInstance("motor_pd");
+        }
+        catch (const pluginlib::PluginlibException &e)
+        {
+            RCLCPP_FATAL(nh->get_logger(), "Low-level controller motor_pd does not load: %s", e.what());
+            throw ConfigError("low-level controller motor_pd does not load");
+        }
+        controllerState_.joints.resize(numJoint_);
+        target_.resize(numJoint_);
+        frame_.resize(numJoint_);
+        RCLCPP_INFO(nh->get_logger(), "Low-level controller: motor_pd");
 
         desiredSubscriber_ = nh->create_subscription<bridge_interface::msg::RobotCmd>(
             "/robot_cmd", 1, std::bind(&BridgeCore::robotCmdCallBack_, this, _1));
@@ -189,10 +207,8 @@ namespace sairol_bridge
             RCLCPP_ERROR(nh->get_logger(), "Failed to get '%s' from parameters", key);
             return false;
         };
-        if (!require("torque_control", torqueControl_))
-        {
-            return false;
-        }
+        // H1, H1_2, X2 only: G1, T1 and Go2 have the bridge_pd controller.
+        nh->get_parameter("torque_control", torqueControl_);
         // Checks below return false, not assert: a Release build (NDEBUG) drops every assert.
         if (torqueControl_)
         {
@@ -524,6 +540,94 @@ namespace sairol_bridge
             }
             rate.sleep();
         }
+    }
+
+    bool BridgeCore::trackingFrame_()
+    {
+        float_t phase = 1.0f;
+        if (tFinal_ - tStart_ > 1e-6) {
+            phase = (steadyClock_.now().seconds() - tStart_) / (tFinal_ - tStart_);
+        }
+        phase = std::clamp(phase, 0.0f, 1.0f);
+
+        for (int i = 0; i < numJoint_; ++i)
+        {
+            auto &cmd = target_[i];
+            const auto &last_cmd = lastCommand_.motor_cmd[i];
+            const auto &joint_info = joints_[i];
+            const auto &motor = currentState_.motor_state[i];
+
+            if (1e-6 < cmdInterpOrder_ && cmdInterpOrder_ < 1.0 - 1e-6)
+            {
+                // Low pass filter for cmd
+                cmd.q = last_cmd.q * cmdInterpOrder_ + cmdParams_[i].q_0 * (1 - cmdInterpOrder_);
+                cmd.dq = last_cmd.dq * cmdInterpOrder_ + cmdParams_[i].dq_0 * (1 - cmdInterpOrder_);
+            }
+            else
+            {
+                // Interpolation
+                cmd.q = cmdParams_[i].q_0 + cmdParams_[i].q_1 * phase;
+                cmd.dq = cmdParams_[i].dq_0 + cmdParams_[i].dq_1 * phase;
+            }
+
+            // Gates 1 and 2 (docs/psi0_gates.md): the joint range, then the target speed.
+            if (cmd.q < joint_info.q_min || cmd.q > joint_info.q_max)
+            {
+                RCLCPP_WARN_THROTTLE(nh->get_logger(), steadyClock_, 1000,
+                                     "joint %d target %.3f outside [%.3f, %.3f]: clamped",
+                                     i, cmd.q, joint_info.q_min, joint_info.q_max);
+            }
+            cmd.q = gates::limitTarget(cmd.q, last_cmd.q, joint_info, controlDt_);
+
+            cmd.kp = cmdParams_[i].kp_0 + cmdParams_[i].kp_1 * phase;
+            cmd.kd = cmdParams_[i].kd_0 + cmdParams_[i].kd_1 * phase;
+            cmd.dq = std::clamp(cmd.dq, -joint_info.dq_limit, joint_info.dq_limit);
+            cmd.tau = cmdParams_[i].tau_0 + cmdParams_[i].tau_1 * phase;
+
+            controllerState_.joints[i] = {motor.q, motor.dq, motor.tau_est};
+        }
+        controllerState_.imu.quaternion = imu_.quaternion;
+        controllerState_.imu.gyroscope = imu_.gyroscope;
+        controllerState_.imu.accelerometer = imu_.accelerometer;
+        controllerState_.imu.rpy = imu_.rpy;
+
+        controller_->compute(controllerState_, target_, frame_);
+
+        bool finite = true;
+        for (int i = 0; i < numJoint_; ++i)
+        {
+            auto &cmd = frame_[i];
+            auto &last_cmd = lastCommand_.motor_cmd[i];
+            const auto &joint_info = joints_[i];
+            const auto &motor = currentState_.motor_state[i];
+
+            cmd.tau = std::clamp(cmd.tau, -joint_info.tau_limit, joint_info.tau_limit);
+            // Gate 4: the torque window, feedforward included; at kp 0 the measured q, never inf or NaN.
+            // A parallel joint sends its P part as tau below and drops this tau, so its window leaves it out.
+            const bool parallel = receivedCmd_ && joint_info.if_parallel_joint;
+            cmd.q = gates::torqueWindow(cmd.q, motor.q, motor.dq, cmd.dq, cmd.kp, cmd.kd,
+                                        parallel ? 0.0f : cmd.tau, joint_info.tau_limit);
+
+            last_cmd.q = cmd.q;
+            last_cmd.dq = cmd.dq;
+            last_cmd.kp = cmd.kp;
+            last_cmd.kd = cmd.kd;
+            last_cmd.tau = cmd.tau;
+
+            if (parallel)
+            {
+                cmd.tau = std::clamp((last_cmd.q - motor.q) * cmd.kp, -joint_info.tau_limit, joint_info.tau_limit);
+                cmd.q = motor.q;
+                cmd.kp = 0.0;
+            }
+            finite = finite && gates::finiteCommand(cmd.q, cmd.dq, cmd.kp, cmd.kd, cmd.tau);
+        }
+        // A NaN /lowstate after checkState_'s copy reaches kp-0 and parallel joints.
+        if (!finite)
+        {
+            invalidFrame_ = true;   // update_() latches state_invalid once mutex_ is free
+        }
+        return finite;
     }
 
     void BridgeCore::calculateInterpolationParams_(float_t duration,

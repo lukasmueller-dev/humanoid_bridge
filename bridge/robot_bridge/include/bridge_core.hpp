@@ -10,10 +10,13 @@
 #include "bridge_interface/srv/set_default_position.hpp"
 #include "std_srvs/srv/trigger.hpp"
 #include "std_msgs/msg/string.hpp"
+#include "low_level_controller/controller.hpp"
+#include "pluginlib/class_loader.hpp"
 #include "joint.hpp"
 #include "estop.hpp"
 
 #include <atomic>
+#include <memory>
 #include <string>
 #include <vector>
 #include <limits>
@@ -70,6 +73,9 @@ namespace sairol_bridge
         void setPose_(const std::vector<double> &q);
         void update_();
         virtual void publishLowCommand_() = 0;
+        // mutex_ held. Interpolation, gates 1-2, the controller, the tau_limit clamp, gate 4 into
+        // frame_; false (invalidFrame_ set) if a field is not finite: send nothing.
+        bool trackingFrame_();
         virtual bool initControl_(bridge_interface::msg::RobotCmd default_cmd) = 0;
         bool checkCommand_(bridge_interface::msg::RobotCmd::SharedPtr robotCommand);
 
@@ -172,7 +178,12 @@ namespace sairol_bridge
         float_t lower_limbs_kp_min_{0}, lower_limbs_kp_max_{0};
         float_t lower_limbs_kd_min_{0}, lower_limbs_kd_max_{0};
 
-        bool torqueControl_{false};
+        bool torqueControl_{false};   // H1, H1_2, X2 only
+        // The loader outlives the controller it made: members are destroyed in reverse order.
+        std::unique_ptr<pluginlib::ClassLoader<low_level_controller::Controller>> controllerLoader_;
+        std::shared_ptr<low_level_controller::Controller> controller_;
+        low_level_controller::State controllerState_;   // control thread only, sized once
+        std::vector<low_level_controller::MotorCommand> target_, frame_;   // control thread only, sized once
         std::atomic<bool> controlStarted_{false};   // tracking /robot_cmd
         bool receivedCmd_{false}; // Whether the control is initialized
         float_t imu_rpy_threshold_{1.0}; // Threshold for IMU roll/pitch in radians
