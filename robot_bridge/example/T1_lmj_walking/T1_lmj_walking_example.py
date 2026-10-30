@@ -2,6 +2,8 @@ import argparse
 import hashlib
 import json
 import math
+import signal
+import sys
 import time
 from datetime import datetime
 from pathlib import Path
@@ -9,12 +11,23 @@ from pathlib import Path
 import numpy as np
 import rclpy
 import yaml
-from robot_bridge_py.robot_client import RobotClient
+from robot_bridge.robot_client import RobotClient
 from utils.lmj_policy import JOINT_NAMES, LMJWalkingPolicy, normalize_actor_observation, projected_gravity_from_quat_wxyz
 
 
 DEFAULT_CONFIG_FILE = "src/humanoid_bridge/robot_bridge/example/T1_lmj_walking/configs/T1_lmj_walking.yaml"
 STICK_COMMAND_DEADBAND = 0.03
+CONTROL_DT = 0.02
+COMMANDER_FIRST_STATE_S = 10.0  # --commander: /low_state and /bridge_state must arrive within this
+COMMANDER_STATE_TIMEOUT_S = 0.1  # --commander: /low_state older than this ends the run
+
+
+class CommanderStop(Exception):
+    """--commander: the run ends; `fault` False for an operator stop."""
+
+    def __init__(self, reason, fault=True):
+        super().__init__(reason)
+        self.fault = fault
 
 
 def scale_stick_axis_to_command(
@@ -38,6 +51,14 @@ def parse_args(argv=None):
         default=DEFAULT_CONFIG_FILE,
         help="Path to the LMJ walking YAML config. Relative paths are checked from cwd, then this example directory.",
     )
+    parser.add_argument(
+        "--commander",
+        action="store_true",
+        help="Run under robot_web_commander: the page arms the bridge. Ramps from the measured pose to "
+        "default_qpos, then runs the policy; sticks set the command. SIGINT/SIGTERM or BACK: /stop_control, "
+        "the bridge holds the pose. Exits 1 if the bridge leaves ARMED or /low_state stops.",
+    )
+    parser.add_argument("--ramp-s", type=float, default=2.0, help="--commander: measured pose -> default_qpos")
     return parser.parse_args(argv)
 
 
@@ -52,9 +73,10 @@ def resolve_config_path(config_path):
 
 
 class RobotController:
-    def __init__(self, node, cfg):
+    def __init__(self, node, cfg, commander=False, ramp_s=2.0):
         self.node = node
         self.cfg = cfg
+        self.commander = commander
         self.robot = RobotClient(
             node=self.node,
             robot_type="T1",
@@ -62,7 +84,7 @@ class RobotController:
             control_frequency=50.0,
             interpolation_order=0.0,
         )
-        self.timer = self.node.create_timer(0.02, self.step)
+        self.timer = self.node.create_timer(CONTROL_DT, self.step)
         self.policy = LMJWalkingPolicy(cfg=cfg)
 
         self.init_pos = np.array(cfg["common"]["default_qpos"], dtype=np.float32)
@@ -93,6 +115,33 @@ class RobotController:
         debug_path = debug_dir / f"lmj_debug_{model_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jsonl"
         self.debug_log = debug_path.open("w", encoding="utf-8")
         self._write_debug_metadata()
+
+        if commander:
+            from rclpy.qos import QoSDurabilityPolicy, QoSProfile, QoSReliabilityPolicy
+            from std_msgs.msg import String
+
+            latched = QoSProfile(
+                depth=1, reliability=QoSReliabilityPolicy.RELIABLE, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL
+            )
+            self.bridge_state = None
+            self.node.create_subscription(String, "/bridge_state", self._on_bridge_state, latched)
+            self.ramp_steps = max(1, int(round(ramp_s / CONTROL_DT)))
+            self.ramp_step = 0
+            self.ramp_start_q = None
+            self.first_state_deadline = time.monotonic() + COMMANDER_FIRST_STATE_S
+            self.last_state_count = None
+            self.last_state_at = None
+            self.stop_requested = None
+            self.streaming = False
+            print(
+                f"policy {self.policy.actor_path.name}: waits for the ARMED bridge, ramps to default_qpos "
+                f"({self.ramp_steps * CONTROL_DT:.1f} s), then walks.\n"
+                "\t left stick: vx / vy, right stick: yaw,\n"
+                "\t \"LS\" or \"RS\" for a zero command,\n"
+                "\t \"BACK\" or Stop on the page: the bridge holds the pose.",
+                flush=True,
+            )
+            return
         print(
             "Please press\n"
             "\t \"LT + RT + START\" to start bridge control,\n"
@@ -104,9 +153,70 @@ class RobotController:
         )
 
     def step(self):
+        if self.commander:
+            self.commander_step()
+            return
         self.check_state()
         if self.robot.control_started and self.agent_started:
             self.policy_step()
+
+    def _on_bridge_state(self, msg):
+        self.bridge_state = msg.data
+
+    def request_stop(self, reason):
+        self.stop_requested = reason
+
+    def commander_step(self):
+        """--commander: the page armed the bridge; ramp to default_qpos, then the policy. Raises CommanderStop."""
+        if self.stop_requested:
+            raise CommanderStop(self.stop_requested, fault=False)
+        now = time.monotonic()
+        if self.robot.time_count != self.last_state_count:
+            self.last_state_count, self.last_state_at = self.robot.time_count, now
+        if self.last_state_at is None or self.bridge_state is None:
+            if now > self.first_state_deadline:
+                raise CommanderStop("no /low_state or /bridge_state: is the bridge running?")
+            return
+        if not self.bridge_state.startswith("ARMED"):
+            raise CommanderStop(f"the bridge is {self.bridge_state!r}" + ("" if self.streaming else ": arm it first"))
+        if now - self.last_state_at > COMMANDER_STATE_TIMEOUT_S:
+            raise CommanderStop(f"no /low_state for {now - self.last_state_at:.2f} s")
+        if self.ramp_start_q is None:
+            self.ramp_start_q = np.asarray(self.robot.q_pos, dtype=np.float32).copy()
+            self.robot.control_start_time = time.time()  # control_started for check_state; BACK clears it
+            print(f"ramp to default_qpos ({self.ramp_steps * CONTROL_DT:.1f} s), then the policy", flush=True)
+
+        self.check_state()
+        if not self.robot.control_started:
+            raise CommanderStop("BACK on the gamepad", fault=False)
+        if self.ramp_step < self.ramp_steps:
+            self.ramp_step += 1
+            alpha = self.ramp_step / self.ramp_steps
+            q_des = (1.0 - alpha) * self.ramp_start_q + alpha * self.init_pos
+            self.robot.send_cmd(q_target_pos=q_des, target_kp=self.policy_kp, target_kd=self.policy_kd)
+            self.streaming = True
+            if self.ramp_step == self.ramp_steps:
+                self._start_agent()
+            return
+        self.policy_step()
+        if self.debug_step_count == 1:
+            print("policy running", flush=True)
+
+    def end_commander_run(self, stop):
+        """--commander: /stop_control if this run streamed to the ARMED bridge; the exit code."""
+        from std_srvs.srv import Trigger
+
+        self.timer.cancel()
+        print(
+            f"{'run ends' if stop.fault else 'stopped'}: {stop} after {self.debug_step_count} policy steps",
+            flush=True,
+        )
+        if self.streaming and (self.bridge_state or "").startswith("ARMED"):
+            future = self.robot.stop_control_client.call_async(Trigger.Request())
+            rclpy.spin_until_future_complete(self.node, future, timeout_sec=2.0)
+            reply = future.result()
+            print(f"stop_control: {reply.message if reply is not None else 'no reply in 2 s'}", flush=True)
+        return 1 if stop.fault else 0
 
     def policy_step(self):
         if self.policy_start_time is None:
@@ -299,7 +409,8 @@ class RobotController:
         self.robot.update_robot_state()
 
         if self.robot.joy_key is not None:
-            if self.robot.joy_key.lt and self.robot.joy_key.a and self.robot.key_count == 2:
+            # --commander starts the agent after its ramp; LT + A would reset it mid-walk
+            if not self.commander and self.robot.joy_key.lt and self.robot.joy_key.a and self.robot.key_count == 2:
                 if self.robot.control_started:
                     self._start_agent()
                 else:
@@ -332,12 +443,19 @@ if __name__ == "__main__":
     with cfg_file.open("r", encoding="utf-8") as f:
         policy_cfg = yaml.load(f.read(), Loader=yaml.FullLoader)
     node = rclpy.create_node("t1_lmj_walking_node")
-    controller = RobotController(node, policy_cfg)
+    controller = RobotController(node, policy_cfg, commander=args.commander, ramp_s=args.ramp_s)
+    if args.commander:  # after rclpy.init: replaces its SIGINT handler, which would shut the context down
+        for signum in (signal.SIGINT, signal.SIGTERM):
+            signal.signal(signum, lambda *_: controller.request_stop("stop requested"))
 
+    exit_code = 0
     try:
         rclpy.spin(node)
+    except CommanderStop as stop:
+        exit_code = controller.end_commander_run(stop)
     finally:
         controller.close_debug_log()
 
     node.destroy_node()
     rclpy.shutdown()
+    sys.exit(exit_code)

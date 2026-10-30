@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 import yaml
 
 
@@ -15,7 +16,7 @@ SPEC.loader.exec_module(lmj_policy)
 
 
 EXAMPLE_DIR = MODULE_PATH.parents[1]
-T1_CONFIG_PATH = EXAMPLE_DIR.parents[1] / "params" / "T1_config.yaml"
+T1_CONFIG_PATH = EXAMPLE_DIR.parents[2] / "bridge" / "robot_bridge" / "params" / "T1_config.yaml"
 RUN_NAME = "parajoints_slippery_ankle_noise_armmult_yawdrift_m0p2_1p2b"
 JOINT_WRAPPER_RUN_NAME = "joint_wrapper_tm4xonfx"
 SLIPPERY_FLOOR_KP50_RUN_NAME = "slippery_floor_kp50_jpiazpg2"
@@ -24,6 +25,8 @@ HFA93I45_PLUS_PUSH_RUN_NAME = "hfa93i45_plus_push_full"
 FACTS_CONTEXT_DISABLED_RUN_NAME = "v0_2_A0_context_disabled_full_dr_1p2B"
 MX_ID_VANILLA_PPO_RUN_NAME = "MX_ID_vanilla_PPO_ent002_lr1e-4"
 PURE_AXIS_YAWDRIFT_FEETROLL_RUN_NAME = "pure_axis_20p_yawdrift_m1_feetroll_m4_1p2b"
+# robot_web_commander workspace t1_locomotion: its policy choices
+COMMANDER_POLICY_RUN_NAMES = ("policy_B2_v1", "policy_t1_stand")
 
 
 def load_t1_joint_limits():
@@ -42,12 +45,12 @@ def load_t1_joint_limits():
 
 def load_example_module():
     rclpy_stub = types.ModuleType("rclpy")
-    robot_bridge_py_stub = types.ModuleType("robot_bridge_py")
-    robot_client_stub = types.ModuleType("robot_bridge_py.robot_client")
+    robot_bridge_stub = types.ModuleType("robot_bridge")
+    robot_client_stub = types.ModuleType("robot_bridge.robot_client")
     robot_client_stub.RobotClient = object
     sys.modules["rclpy"] = rclpy_stub
-    sys.modules["robot_bridge_py"] = robot_bridge_py_stub
-    sys.modules["robot_bridge_py.robot_client"] = robot_client_stub
+    sys.modules["robot_bridge"] = robot_bridge_stub
+    sys.modules["robot_bridge.robot_client"] = robot_client_stub
     sys.path.insert(0, str(EXAMPLE_DIR))
 
     module_path = EXAMPLE_DIR / "T1_lmj_walking_example.py"
@@ -525,14 +528,15 @@ def test_mx_id_vanilla_ppo_deployment_config_matches_80d_training_settings():
     }
 
 
-def test_pure_axis_yawdrift_feetroll_deployment_config_matches_training_settings():
-    cfg_path = EXAMPLE_DIR / "configs" / f"T1_lmj_walking_{PURE_AXIS_YAWDRIFT_FEETROLL_RUN_NAME}.yaml"
+@pytest.mark.parametrize("run_name", (PURE_AXIS_YAWDRIFT_FEETROLL_RUN_NAME, *COMMANDER_POLICY_RUN_NAMES))
+def test_pure_axis_yawdrift_feetroll_deployment_config_matches_training_settings(run_name):
+    cfg_path = EXAMPLE_DIR / "configs" / f"T1_lmj_walking_{run_name}.yaml"
 
     with cfg_path.open("r", encoding="utf-8") as f:
         cfg = yaml.load(f.read(), Loader=yaml.FullLoader)
 
-    assert cfg["policy"]["actor_path"] == f"models/{PURE_AXIS_YAWDRIFT_FEETROLL_RUN_NAME}_actor_81d.npz"
-    assert cfg["policy"]["source_checkpoint_path"] == f"models/{PURE_AXIS_YAWDRIFT_FEETROLL_RUN_NAME}.pkl"
+    assert cfg["policy"]["actor_path"] == f"models/{run_name}_actor_81d.npz"
+    assert cfg["policy"]["source_checkpoint_path"] == f"models/{run_name}.pkl"
     assert (EXAMPLE_DIR / cfg["policy"]["actor_path"]).is_file()
     assert (EXAMPLE_DIR / cfg["policy"]["source_checkpoint_path"]).is_file()
     assert cfg["policy"].get("include_height_in_obs", True) is True
@@ -590,6 +594,17 @@ def test_t1_lmj_example_accepts_config_argument_with_default():
 
     assert default_args.config == module.DEFAULT_CONFIG_FILE
     assert custom_args.config == "configs/custom.yaml"
+    assert default_args.commander is False
+    assert default_args.ramp_s == 2.0
+
+
+def test_t1_lmj_example_accepts_commander_mode():
+    module = load_example_module()
+
+    args = module.parse_args(["--config", "configs/custom.yaml", "--commander", "--ramp-s", "3"])
+
+    assert args.commander is True
+    assert args.ramp_s == 3.0
 
 
 def test_stick_axis_scaling_maps_full_deflection_to_command_limits():
@@ -644,3 +659,94 @@ def test_lmj_controller_maps_left_and_right_sticks_to_direct_velocity_commands()
 
     controller._set_commands_from_joystick(SimpleNamespace(lx=1.0, ly=1.0, rx=1.0))
     np.testing.assert_allclose([controller.vx_cmd, controller.vy_cmd, controller.vyaw_cmd], [-0.2, -0.2, -0.3])
+
+
+class FakeCommanderRobot:
+    def __init__(self):
+        self.time_count = 0
+        self.q_pos = np.zeros(23, dtype=np.float32)
+        self.control_start_time = None
+        self.control_started = False
+        self.joy_key = None
+        self.key_count = 0
+        self.sent = []
+
+    def update_robot_state(self):
+        self.control_started = self.control_start_time is not None
+
+    def send_cmd(self, q_target_pos, target_kp, target_kd):
+        self.sent.append(np.asarray(q_target_pos, dtype=np.float32).copy())
+
+
+def make_commander_controller(module, ramp_steps=3):
+    controller = module.RobotController.__new__(module.RobotController)
+    controller.commander = True
+    controller.robot = FakeCommanderRobot()
+    controller.node = SimpleNamespace(get_logger=lambda: SimpleNamespace(info=lambda *_: None, warn=lambda *_: None))
+    controller.policy = SimpleNamespace(reset=lambda: None)
+    controller.init_pos = np.linspace(-0.5, 0.5, 23, dtype=np.float32)
+    controller.policy_kp = np.ones(23, dtype=np.float32)
+    controller.policy_kd = np.ones(23, dtype=np.float32)
+    controller.agent_started = False
+    controller.bridge_state = None
+    controller.ramp_steps = ramp_steps
+    controller.ramp_step = 0
+    controller.ramp_start_q = None
+    controller.first_state_deadline = float("inf")
+    controller.last_state_count = None
+    controller.last_state_at = None
+    controller.stop_requested = None
+    controller.streaming = False
+    controller.debug_step_count = 0
+    return controller
+
+
+def test_commander_mode_waits_for_state_then_ramps_to_default_qpos_and_starts_the_agent():
+    module = load_example_module()
+    controller = make_commander_controller(module)
+
+    controller.commander_step()  # no /low_state, no /bridge_state yet: waits
+    assert controller.robot.sent == []
+
+    controller.robot.time_count = 1
+    controller.bridge_state = "ARMED"
+    for _ in range(3):
+        controller.commander_step()
+        controller.robot.time_count += 1
+
+    assert len(controller.robot.sent) == 3
+    np.testing.assert_allclose(controller.robot.sent[0], controller.init_pos / 3.0, atol=1.0e-6)
+    np.testing.assert_allclose(controller.robot.sent[-1], controller.init_pos, atol=1.0e-6)
+    assert controller.agent_started is True
+    assert controller.streaming is True
+
+
+def test_commander_mode_refuses_a_bridge_that_is_not_armed():
+    module = load_example_module()
+    controller = make_commander_controller(module)
+    controller.robot.time_count = 1
+    controller.bridge_state = "DISARMED"
+
+    with pytest.raises(module.CommanderStop, match="arm it first") as stop:
+        controller.commander_step()
+    assert stop.value.fault is True
+    assert controller.robot.sent == []
+
+
+def test_commander_mode_stops_without_fault_on_request_and_on_back():
+    module = load_example_module()
+    controller = make_commander_controller(module)
+    controller.robot.time_count = 1
+    controller.bridge_state = "ARMED"
+    controller.commander_step()
+
+    controller.robot.control_start_time = None  # RobotClient's BACK handler: /stop_control, then this
+    controller.robot.time_count += 1
+    with pytest.raises(module.CommanderStop) as stop:
+        controller.commander_step()
+    assert stop.value.fault is False
+
+    controller.request_stop("stop requested")
+    with pytest.raises(module.CommanderStop) as stop:
+        controller.commander_step()
+    assert stop.value.fault is False
