@@ -237,7 +237,8 @@ void sairol_bridge::T1Bridge::publishLowCommand_()
             cmd.tau = cmdParams_[i].tau_0 + cmdParams_[i].tau_1 * phase;
         }
         // Gate 4: the torque window, feedforward included; at kp 0 the measured q, never inf or NaN.
-        const bool parallel = receivedCmd_ && joint_info.if_parallel_joint;
+        // A parallel joint drops its tau below; under the bridge's ankle mapping it keeps it, as a serial joint.
+        const bool parallel = receivedCmd_ && joint_info.if_parallel_joint && !parallelAnkle_;
         cmd.q = gates::torqueWindow(cmd.q, currentState_.motor_state[i].q, currentState_.motor_state[i].dq,
                                     cmd.dq, cmd.kp, cmd.kd, parallel ? 0.0f : cmd.tau, joint_info.tau_limit);
 
@@ -247,8 +248,7 @@ void sairol_bridge::T1Bridge::publishLowCommand_()
         last_cmd.kd = cmd.kd;
         last_cmd.tau = cmd.tau;
 
-        // With the bridge's ankle mapping the serial command in cmd becomes crank commands after this loop.
-        if (parallel && !parallelAnkle_)
+        if (parallel)
         {
             cmd.tau = std::clamp((last_cmd.q - currentState_.motor_state[i].q) * cmd.kp,
                                  -joint_info.tau_limit, joint_info.tau_limit);
