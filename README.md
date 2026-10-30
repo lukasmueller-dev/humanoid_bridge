@@ -7,7 +7,8 @@ checks on command and state, and publishes motor commands at 1 kHz.
 ```
 bridge/           the bridge and its Python client, upstream-bound
   bridge_interface/   messages and services
-  robot_bridge/       C++ bridge, robot_bridge/ Python client, adapters
+  low_level_controller/  header-only plugin interface of the 1 kHz low-level controllers
+  robot_bridge/       C++ bridge, robot_bridge/ Python client, adapters, motor_pd and bridge_pd plugins
     examples/           reference clients per robot (not built or installed)
 robot_stacks/     per-robot deploy layers
   g1/                 g1_stack, g1_camera

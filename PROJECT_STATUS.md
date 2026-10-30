@@ -14,7 +14,8 @@ deploy layers stay independent of it.
 ## Architecture
 
 ```
-bridge/           upstream-bound: bridge_interface (msgs, srvs), robot_bridge (C++ + Python client)
+bridge/           upstream-bound: bridge_interface (msgs, srvs), robot_bridge (C++ + Python client),
+                  low_level_controller (plugin interface of the 1 kHz controllers)
 robot_stacks/     per-robot deploy layers; g1/ holds g1_stack and g1_camera; sim/robot_sim: the MuJoCo sim of every robot
 scripts/          environment setup, sourced not run
 thirdparty/       vendored unitree_ros2, booster_ros2_interface, aimdk_msgs
