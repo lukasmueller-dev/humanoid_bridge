@@ -1,6 +1,4 @@
-// Standalone test of include/t1_parallel_ankle.hpp (no ROS needed):
-//   c++ -std=c++17 -O2 -I robot_bridge/include robot_bridge/test/test_t1_parallel_ankle.cpp -o /tmp/test_t1_parallel_ankle
-//   /tmp/test_t1_parallel_ankle
+// Test of include/t1_parallel_ankle.hpp, no ROS. Run: build/robot_bridge/test_t1_parallel_ankle
 // Reference values come from loco-mujoco-t1 (branch parallel_act) parallel_act/ankle_jacobian.py, AnkleGeometry read
 // from booster_assets robots/T1/T1_23dof_parallel.xml; tau_m = J^-T tau_s is what run_parallel_policy.py's Ankle
 // class sends to the cranks for the serial PD (kp 50, kd 3) used in training.

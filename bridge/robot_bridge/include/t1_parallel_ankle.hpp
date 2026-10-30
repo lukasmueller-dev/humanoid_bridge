@@ -13,7 +13,7 @@
 // and J follows from the implicit function theorem in closed form.
 //
 // The geometry is T1_23dof_parallel.xml (booster_assets), identical to parallel_ankle.py's _GEOMETRY.
-// No ROS dependencies so that test/test_t1_parallel_ankle.cpp can build it standalone.
+// No ROS dependencies so that tests/test_t1_parallel_ankle.cpp can build it standalone.
 #pragma once
 
 #include <algorithm>
