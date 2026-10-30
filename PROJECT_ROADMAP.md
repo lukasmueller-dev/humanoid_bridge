@@ -57,11 +57,6 @@ Decided and fake-tested on `g1-web-interface` (`docs/psi0_gates.md`).
 - [ ] Run the post-PR #7 acceptance test on the gantry: `docs/estop.md`, "Gantry acceptance, after PR #7". Then switch the robot's bridge to that build.
   **Done when:** rows 1–8 pass, the results replace the table in `docs/estop.md`, and the robot runs the `main` build.
 
-### Safety limits
-
-- [ ] Override `dq_trip` per joint at bridge start from a second params file (`override.<joint>.<key>`, keys in one constant, cap 2 × `dq_limit`), and `robot-bringup.sh --override <file>`.
-  **Done when:** `tools/test.sh --docker` passes, with tests: a valid override applies and shows as `override.*`; each refusal case stops the start; `robot-bringup.sh --override` with a key outside `override.*` exits non-zero.
-
 ### Link loss
 
 - [ ] Jetson link watcher: a process on the Jetson freezes the robot (`hold`, `docs/estop.md`) when the link to the bridge on the lab PC drops, Ethernet or WiFi. It must act within 0.4 s: the motors go passive 0.4 s after `/lowcmd` stops (G0), so a link drop today drops a standing robot.
