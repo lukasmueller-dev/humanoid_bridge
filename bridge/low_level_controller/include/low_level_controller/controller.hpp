@@ -4,6 +4,9 @@
 #pragma once
 
 #include <array>
+#include <cstddef>
+#include <map>
+#include <string>
 #include <vector>
 
 namespace low_level_controller
@@ -41,10 +44,22 @@ namespace low_level_controller
         float tau{0};
     };
 
+    // controllers.<name>.<key> from the bridge config, read once at start. A number arrives as a list of one.
+    using Parameters = std::map<std::string, std::vector<double>>;
+
     class Controller
     {
     public:
         virtual ~Controller() = default;
+
+        // Once at bridge start, before any compute(). false: the bridge does not start, and logs error.
+        virtual bool configure(const Parameters &params, size_t num_joints, std::string &error)
+        {
+            (void)params;
+            (void)num_joints;
+            (void)error;
+            return true;
+        }
 
         // Each tick, on the control thread: no allocation, no blocking, no throw.
         // target: the interpolated, range- and speed-gated command; out: what the motors get, same size.

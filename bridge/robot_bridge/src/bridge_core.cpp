@@ -11,6 +11,39 @@ namespace sairol_bridge
     {
         // An empty RobotCmd.controller; Arm, Ready and every stop run it.
         const std::string MOTOR_PD = "motor_pd";
+
+        // controllers.<name>.* as plain numbers; false names the key that is not a number or a number list.
+        bool controllerParameters(rclcpp::Node &node, const std::string &name,
+                                  low_level_controller::Parameters &params, std::string &error)
+        {
+            std::map<std::string, rclcpp::Parameter> values;
+            node.get_node_parameters_interface()->get_parameters_by_prefix("controllers." + name, values);
+            for (const auto &[key, value] : values)
+            {
+                switch (value.get_type())
+                {
+                case rclcpp::ParameterType::PARAMETER_DOUBLE:
+                    params[key] = {value.as_double()};
+                    break;
+                case rclcpp::ParameterType::PARAMETER_INTEGER:
+                    params[key] = {static_cast<double>(value.as_int())};
+                    break;
+                case rclcpp::ParameterType::PARAMETER_DOUBLE_ARRAY:
+                    params[key] = value.as_double_array();
+                    break;
+                case rclcpp::ParameterType::PARAMETER_INTEGER_ARRAY:
+                    for (const int64_t number : value.as_integer_array())
+                    {
+                        params[key].push_back(static_cast<double>(number));
+                    }
+                    break;
+                default:
+                    error = "controllers." + name + "." + key + " is not a number or a list of numbers";
+                    return false;
+                }
+            }
+            return true;
+        }
     }
 
     BridgeCore::BridgeCore(rclcpp::Node::SharedPtr node)
@@ -373,15 +406,30 @@ namespace sairol_bridge
             {
                 continue;
             }
+            std::shared_ptr<low_level_controller::Controller> controller;
+            low_level_controller::Parameters params;
+            std::string error;
             try
             {
-                controllers_[name] = controllerLoader_->createSharedInstance(name);
+                controller = controllerLoader_->createSharedInstance(name);
+                if (!controllerParameters(*nh, name, params, error) ||
+                    !controller->configure(params, static_cast<size_t>(numJoint_), error))
+                {
+                    controller.reset();
+                }
             }
-            catch (const pluginlib::PluginlibException &e)
+            catch (const std::exception &e)   // pluginlib's, or the plugin's own
             {
-                RCLCPP_ERROR(nh->get_logger(), "Low-level controller %s does not load: %s", name.c_str(), e.what());
+                controller.reset();
+                error = e.what();
+            }
+            if (!controller)
+            {
+                RCLCPP_ERROR(nh->get_logger(), "Low-level controller %s does not load: %s", name.c_str(),
+                             error.empty() ? "configure() returned false" : error.c_str());
                 return false;
             }
+            controllers_[name] = controller;
             names += (names.empty() ? "" : ", ") + name;
         }
         RCLCPP_INFO(nh->get_logger(), "Low-level controllers allowed: %s", names.c_str());
