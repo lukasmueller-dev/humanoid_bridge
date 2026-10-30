@@ -10,32 +10,28 @@
 - **Repo:** /home/lukas-mueller/github/humanoid_bridge
 - **Branch:** `low-level-controllers`
 - **Worktree:** /home/lukas-mueller/github/humanoid_bridge/.claude/worktrees/low-level-controllers
-- **Last updated:** 2026-10-30 · check-in
+- **Last updated:** 2026-10-30 · job (milestones 2–4)
 
 ## State
 
-Milestone 1 of `SPEC.md` is done: `tools/test.sh --docker --rebuild` passes all 21 stages, `test_controllers` included.
+Milestone 2 of `SPEC.md` is coded, not ticked: its done-when is the `controllers` stage in `--docker`.
 
-- `bridge/low_level_controller/`: header-only interface, `Controller::compute(state, target, out)`.
-- `robot_bridge`: plugins `motor_pd`, `bridge_pd` (`src/controllers.cpp`, `controllers.xml`), gtest `test_controllers` in `tools/test.sh --cpp`.
-- `BridgeCore::trackingFrame_()`: the G1, T1, Go2 tick; `BridgeCore` loads `motor_pd` at start.
-- Two fixes from `main` ride this branch: `robot_client` float default (b0d8e7d), fakes exit with `os._exit` (f0bd25f).
+- `RobotCmd.controller`, `controllers_allowed`, the stream rule, `/low_level_controller`: `bridge_core.cpp`.
+- `bridge_pd` repaired on the tick: gate 2 seed and the parallel split (commit 6d520f8).
+- Stage: `tools/test.sh --controllers` (`run_fake_controllers_test.sh`, `drive_controllers.py`).
+- Host checks only: C++ syntax-checked against unpacked Humble headers, no ROS run.
 
 ## Next action
 
-1. Code milestones 2, 3 and 4 of `SPEC.md`, in order, one commit series per milestone.
-2. Repair `bridge_pd` on the T1 parallel joints in milestone 2 (see Gotchas).
-3. Run the host checks only (`tools/test.sh` without `--docker`). Run no Docker test; Lukas runs `tools/test.sh --docker` after the job.
-4. Tick no milestone: each done-when is a `--docker` stage. Do the end action of milestone 4, and name the open Docker gate in the PR body Verify line.
+1. Code milestone 3 of `SPEC.md`, then milestone 4's end action.
+2. Lukas: `tools/test.sh --docker` with the `controllers` stage.
 
 ## Blockers
 
-None. Lukas decided on 2026-10-30: the job codes milestones 2–4 without Docker, and Lukas runs the Docker gate after it.
+None.
 
 ## Gotchas (unpromoted)
 
-- `--docker` reuses the cached `humanoid-bridge-test:humble` image: after a `tools/Dockerfile.test` change, pass `--rebuild` (a stale image lacked scipy).
-
-- `bridge_pd` on a parallel joint (T1 ankles): `compute()` sets kp 0, then the parallel split in `trackingFrame_` sends tau = (q - q_meas)·0 = 0. Milestone 2 must keep the PD tau there.
-- `torque_control` is optional now; `true` still fails the load ("Torque control is not supported yet"), which `drive_config.py` checks.
+- `--docker` reuses the cached `humanoid-bridge-test:humble` image: after a `tools/Dockerfile.test` change, pass `--rebuild`.
+- `RobotCmd` changed on the wire: every `/robot_cmd` publisher (Jetson, commander) needs `bridge_interface` rebuilt.
 - H1, H1_2, X2 load `motor_pd` too (the `BridgeCore` constructor) and never call it.
