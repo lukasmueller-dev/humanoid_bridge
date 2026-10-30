@@ -6,7 +6,7 @@ from utils.arm_raise_state import ArmPoseMode, choose_lta_action
 from utils.policy import Policy
 from utils.startup_ramp import SmoothJointRamp
 import yaml
-from robot_bridge_py.robot_client import RobotClient
+from robot_bridge.robot_client import RobotClient
 
 
 class RobotController:   

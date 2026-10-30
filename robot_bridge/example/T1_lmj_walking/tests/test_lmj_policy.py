@@ -42,12 +42,12 @@ def load_t1_joint_limits():
 
 def load_example_module():
     rclpy_stub = types.ModuleType("rclpy")
-    robot_bridge_py_stub = types.ModuleType("robot_bridge_py")
-    robot_client_stub = types.ModuleType("robot_bridge_py.robot_client")
+    robot_bridge_stub = types.ModuleType("robot_bridge")
+    robot_client_stub = types.ModuleType("robot_bridge.robot_client")
     robot_client_stub.RobotClient = object
     sys.modules["rclpy"] = rclpy_stub
-    sys.modules["robot_bridge_py"] = robot_bridge_py_stub
-    sys.modules["robot_bridge_py.robot_client"] = robot_client_stub
+    sys.modules["robot_bridge"] = robot_bridge_stub
+    sys.modules["robot_bridge.robot_client"] = robot_client_stub
     sys.path.insert(0, str(EXAMPLE_DIR))
 
     module_path = EXAMPLE_DIR / "T1_lmj_walking_example.py"

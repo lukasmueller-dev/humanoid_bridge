@@ -61,12 +61,12 @@ def test_all_balance_board_configs_match_t1_joint_limits():
 
 def load_example_module(robot_client_cls=object):
     rclpy_stub = types.ModuleType("rclpy")
-    robot_bridge_py_stub = types.ModuleType("robot_bridge_py")
-    robot_client_stub = types.ModuleType("robot_bridge_py.robot_client")
+    robot_bridge_stub = types.ModuleType("robot_bridge")
+    robot_client_stub = types.ModuleType("robot_bridge.robot_client")
     robot_client_stub.RobotClient = robot_client_cls
     sys.modules["rclpy"] = rclpy_stub
-    sys.modules["robot_bridge_py"] = robot_bridge_py_stub
-    sys.modules["robot_bridge_py.robot_client"] = robot_client_stub
+    sys.modules["robot_bridge"] = robot_bridge_stub
+    sys.modules["robot_bridge.robot_client"] = robot_client_stub
     for module_name in list(sys.modules):
         if module_name == "utils" or module_name.startswith("utils."):
             sys.modules.pop(module_name)

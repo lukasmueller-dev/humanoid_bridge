@@ -8,7 +8,7 @@ from pathlib import Path
 import numpy as np
 import rclpy
 import yaml
-from robot_bridge_py.robot_client import RobotClient
+from robot_bridge.robot_client import RobotClient
 from utils.balance_board_policy import (
     BALANCE_BOARD_RAW_SLICE,
     GOAL_SLICE,

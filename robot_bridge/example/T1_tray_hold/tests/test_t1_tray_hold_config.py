@@ -88,15 +88,15 @@ class _FakePolicy:
 
 
 def load_tray_hold_controller_module():
-    robot_bridge_py_stub = types.ModuleType("robot_bridge_py")
-    robot_client_stub = types.ModuleType("robot_bridge_py.robot_client")
+    robot_bridge_stub = types.ModuleType("robot_bridge")
+    robot_client_stub = types.ModuleType("robot_bridge.robot_client")
     robot_client_stub.RobotClient = _FakeRobotClient
     policy_stub = types.ModuleType("utils.policy")
     policy_stub.Policy = _FakePolicy
     rclpy_stub = types.ModuleType("rclpy")
 
-    sys.modules["robot_bridge_py"] = robot_bridge_py_stub
-    sys.modules["robot_bridge_py.robot_client"] = robot_client_stub
+    sys.modules["robot_bridge"] = robot_bridge_stub
+    sys.modules["robot_bridge.robot_client"] = robot_client_stub
     sys.modules["utils.policy"] = policy_stub
     sys.modules["rclpy"] = rclpy_stub
     sys.path.insert(0, str(EXAMPLE_DIR))

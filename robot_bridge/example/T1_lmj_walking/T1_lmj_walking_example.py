@@ -9,7 +9,7 @@ from pathlib import Path
 import numpy as np
 import rclpy
 import yaml
-from robot_bridge_py.robot_client import RobotClient
+from robot_bridge.robot_client import RobotClient
 from utils.lmj_policy import JOINT_NAMES, LMJWalkingPolicy, normalize_actor_observation, projected_gravity_from_quat_wxyz
 
 
