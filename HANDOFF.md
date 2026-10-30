@@ -10,7 +10,7 @@
 - **Repo:** /home/lukas-mueller/github/humanoid_bridge
 - **Branch:** `low-level-controllers`
 - **Worktree:** /home/lukas-mueller/github/humanoid_bridge/.claude/worktrees/low-level-controllers
-- **Last updated:** 2026-10-30 · interactive session
+- **Last updated:** 2026-10-30 · check-in
 
 ## State
 
@@ -23,11 +23,14 @@ Milestone 1 of `SPEC.md` is done: `tools/test.sh --docker --rebuild` passes all 
 
 ## Next action
 
-1. Start milestone 2 of `SPEC.md`.
+1. Code milestones 2, 3 and 4 of `SPEC.md`, in order, one commit series per milestone.
+2. Repair `bridge_pd` on the T1 parallel joints in milestone 2 (see Gotchas).
+3. Run the host checks only (`tools/test.sh` without `--docker`). Run no Docker test; Lukas runs `tools/test.sh --docker` after the job.
+4. Tick no milestone: each done-when is a `--docker` stage. Do the end action of milestone 4, and name the open Docker gate in the PR body Verify line.
 
 ## Blockers
 
-A job sandbox denies `/var/run/docker.sock`: each milestone's `tools/test.sh --docker` runs only in a session with Docker access.
+None. Lukas decided on 2026-10-30: the job codes milestones 2–4 without Docker, and Lukas runs the Docker gate after it.
 
 ## Gotchas (unpromoted)
 
