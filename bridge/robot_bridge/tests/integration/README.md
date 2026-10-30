@@ -104,8 +104,8 @@ fake_g1 records `/lowcmd` at all.
 | `run_fake_hand_test.sh` | orchestrates the hand run |
 | `drive_hand_ready.py` | `/ready_position_control` twice: hands unarmed, then held closed by a client; each live hand opens to `hand_ready_q` and holds at config kp, never slack; `--silent <side>`: that hand gets no frame |
 | `run_fake_hand_ready_test.sh` | orchestrates the Ready run; `--silent left` runs `fake_dex3.py --silent left` |
-| `run_config_test.sh`, `drive_config.py` | `G1_bridge` on broken copies of `G1_config.yaml` (`ready_q` short or out of range, `idx` out of order, inverted limits): each must fail its parameter load. No fake robot |
-| `run_fake_controllers_test.sh`, `drive_controllers.py` | `G1_bridge` against `fake_g1.py`, `L_LEG_ANKLE_PITCH` made parallel: an unknown `controller` dropped, a `bridge_pd` stream (`kp = kd = 0`, PD as `tau`, the parallel joint too), `motor_pd` inside it dropped, hold after `/stop_control` is `motor_pd`; `/low_level_controller` at each step |
+| `run_config_test.sh`, `drive_config.py` | `G1_bridge` on broken copies of `G1_config.yaml` (`ready_q` short or out of range, `idx` out of order, inverted limits, a missing controller plugin, `example_controller` without `kd`): each must fail its parameter load. No fake robot |
+| `run_fake_controllers_test.sh`, `drive_controllers.py` | `G1_bridge` against `fake_g1.py`, `L_LEG_ANKLE_PITCH` made parallel: an unknown `controller` dropped, a `bridge_pd` stream (`kp = kd = 0`, PD as `tau`, the parallel joint too), `motor_pd` inside it dropped, hold after `/stop_control` is `motor_pd`, then an `example_controller` stream (`tau = −kd·dq`, kd from the config); `/low_level_controller` at each step |
 | `drive_no_estop_block.py` | after `drive_gates.py`, on a second bridge whose config lacks `estop:`: arming refused without the remote, accepted with it |
 
 ## What breaks it

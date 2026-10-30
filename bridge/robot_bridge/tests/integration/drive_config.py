@@ -50,6 +50,12 @@ def variants(params):
     def num_joint(p):
         p["num_joint"] = len(names) + 1
 
+    def no_plugin(p):
+        p["controllers_allowed"] = p["controllers_allowed"] + ["no_such_controller"]
+
+    def no_kd(p):
+        p["controllers_allowed"] = p["controllers_allowed"] + ["example_controller"]
+
     return [
         ("ready_q one short", "ready_q has 28 values, expected 29", short_ready),
         ("ready_q outside its joint range", f"ready_q[{R_ELBOW}]", ready_outside),
@@ -59,6 +65,8 @@ def variants(params):
         ("inverted gain range", "gain range is inverted", gain_range),
         ("torque_control true", "Torque control is not supported", torque_control),
         ("num_joint not the joint count", "joint_names has 29 joints, num_joint is 30", num_joint),
+        ("a missing controller plugin", "controller no_such_controller does not load", no_plugin),
+        ("example_controller without kd", "needs controllers.example_controller.kd", no_kd),
     ]
 
 

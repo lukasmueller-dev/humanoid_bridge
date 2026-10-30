@@ -1,7 +1,8 @@
 """Drives G1_bridge's controller selection against fake_g1.py: /lowcmd and /low_level_controller.
 
 Exit 1 on failure. run_fake_controllers_test.sh starts the fake and the bridge first, on a config
-that makes L_LEG_ANKLE_PITCH a parallel joint (the T1 ankles' tau split).
+that makes L_LEG_ANKLE_PITCH a parallel joint (the T1 ankles' tau split) and allows
+example_controller.
 """
 
 import argparse
@@ -11,7 +12,7 @@ import time
 import rclpy
 import yaml
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
-from std_msgs.msg import String
+from std_msgs.msg import Float32, String
 from unitree_hg.msg import LowCmd
 
 from robot_bridge.cmd_client import RobotCmdClient
@@ -21,6 +22,7 @@ L_HIP_PITCH, L_ANKLE_PITCH = 0, 4
 OFFSET = 0.05  # rad past the pose the fake holds: kp·OFFSET stays under tau_limit on both joints
 TOLERANCE = 0.05  # Nm
 STREAM_SECONDS = 0.5  # gate 2 ramps OFFSET in 10 ms
+DQ = 0.5  # rad/s, joint 0's measured speed for example_controller (/fake_g1/dq)
 
 
 def load_params(path):
@@ -30,6 +32,7 @@ def load_params(path):
     return {
         "kp": [float(params[n]["kp"]) for n in names],
         "kd": [float(params[n]["kd"]) for n in names],
+        "example_kd": float(params["controllers"]["example_controller"]["kd"]),
     }
 
 
@@ -48,6 +51,7 @@ class Driver:
             durability=DurabilityPolicy.TRANSIENT_LOCAL,
         )
         node.create_subscription(String, "/low_level_controller", self._on_controller, latched)
+        self.dq = node.create_publisher(Float32, "/fake_g1/dq", 10)
         self.frame = None  # the last /lowcmd's motors
         self.controller = None  # the last /low_level_controller
         self.failures = []
@@ -161,6 +165,32 @@ class Driver:
             and frame[L_HIP_PITCH].kp == self.params["kp"][L_HIP_PITCH],
             f"{self.controller}, {self.motor(frame, L_HIP_PITCH)}",
         )
+
+        # A new stream after arming again, with a colleague's plugin and its kd from the config.
+        reply = self.client.start_control(default_position=[start_q] * NUM_MOTORS, timeout_sec=30.0)
+        self.check("start_control again", reply.success, reply.message)
+        end = time.monotonic() + 5.0
+        while self.dq.get_subscription_count() == 0 and time.monotonic() < end:
+            self.spin(0.05)
+        self.dq.publish(Float32(data=DQ))
+        frame = self.stream(q, "example_controller")
+        want = -self.params["example_kd"] * DQ
+        self.check(
+            "/low_level_controller names example_controller",
+            self.controller == "example_controller",
+            f"got {self.controller}",
+        )
+        self.check(
+            f"example_controller: tau = -kd·dq = {want:.2f}, kp = kd = 0",
+            frame is not None
+            and abs(frame[L_HIP_PITCH].tau - want) < TOLERANCE
+            and frame[L_HIP_PITCH].kp == 0.0
+            and frame[L_HIP_PITCH].kd == 0.0,
+            self.motor(frame, L_HIP_PITCH),
+        )
+        self.dq.publish(Float32(data=0.0))
+        reply = self.client.stop_control()
+        self.check("stop_control after example_controller", reply.success, reply.message)
 
 
 def main():

@@ -27,7 +27,8 @@
 #          both hands (hands-ready), Ready with the left hand silent (hands-ready-one)
 #   config the real G1_bridge refuses broken copies of G1_config.yaml
 #   controllers  the real G1_bridge against fake_g1: RobotCmd.controller picks bridge_pd for a stream,
-#          an unknown name or a change inside the stream is dropped, hold after it is motor_pd
+#          an unknown name or a change inside the stream is dropped, hold after it is motor_pd;
+#          example_controller loads by name and gets its kd
 #   sim    opt-in (--sim), host only: the real G1_bridge against robot_sim (MuJoCo G1): arm,
 #          hold, /robot_cmd, remote damp; sim-link: link drop, reboot, g1-bringup.sh --sim release;
 #          sim-t1: T1_bridge against robot_sim --robot t1, through robot-bringup.sh --robot t1
@@ -193,7 +194,7 @@ run_in_docker() {
         "$image" bash -c '
             set -e
             . /opt/ros/humble/setup.bash
-            tools/build.sh --workspace /ws -- --packages-up-to robot_bridge
+            tools/build.sh --workspace /ws -- --packages-up-to robot_bridge example_controller
             . /ws/install/setup.bash
             exec tools/test.sh "$@"' bash "${inner[@]}"
 }
