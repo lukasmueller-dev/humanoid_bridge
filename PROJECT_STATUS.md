@@ -3,7 +3,7 @@
 > One per repo. The *current* picture: goal, architecture, decisions, open
 > questions. Finished work is removed; git history is the log.
 
-_Last updated: 2026-10-30 · low-level-controllers job_
+_Last updated: 2026-10-30 · safety-limits job_
 
 ## Goal
 
@@ -45,6 +45,7 @@ _One line each, dated, with a pointer (commit or PR)._
 - 2026-10-20: the bridge is UI-free; the G1 web page moved to `SiweiJu/g1_web_commander` (it was `bridge/robot_console`, robot-generic and upstream-bound: no longer); contract: the ROS graph, `bridge_interface` types, `robot_bridge.cmd_client` — removal commit on `g1-web-interface`
 - 2026-10-19: G1 remote keys come from `/lowstate.wireless_remote`, not `/wirelesscontroller`, which sends nothing in debug mode; e-stop combos `R1+R2` damp, `L1+R1` hold (swapped 2026-10-23, PR #32) — `docs/estop.md`
 - 2026-10-20: the bridge holds one robot envelope for every model (range clamp, speed limit, gains, speed trip); model-specific shaping lives in each model's adapter node — `docs/psi0_gates.md`
+- 2026-10-30: the speed trip is per joint: `dq_trip` trips on measured dq (absent = `dq_limit`), `dq_limit` only clamps commands; T1 and Go2 trip at max(`dq_limit`, 1.25 × model velocity), G1 unchanged — `docs/estop.md`
 - 2026-10-20: G1 arming needs the remote's header; a latch goes silent 1.2 s after `/lowstate` stops, so a restarted robot gets no old frames — `docs/estop.md`
 - 2026-10-22: upstream syncs land as merge commits, never rebase or squash, so upstream commit IDs stay and later syncs and upstream PRs stay simple — PR "Merge DFKI-SAIROL/humanoid_bridge main"
 - 2026-10-22: `BridgeCore::checkState_` calls upstream's virtual `checkStateFreshness_` for state loss; the X2 overrides it, the G1 path is unchanged — same PR
