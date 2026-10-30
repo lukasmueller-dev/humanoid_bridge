@@ -404,7 +404,8 @@ void sairol_bridge::T1Bridge::loadParallelAnkleParameters_()
     nh->get_parameter("parallel_ankle_max_estimate_error", parallelAnkleMaxEstimateError_);
     if (parallelAnkleCrankSign_.size() != 2)
     {
-        throw std::invalid_argument("parallel_ankle_crank_sign must have two entries (crank a, crank b)");
+        RCLCPP_FATAL(nh->get_logger(), "parallel_ankle_crank_sign must have two entries (crank a, crank b)");
+        throw ConfigError("parallel_ankle_crank_sign");
     }
     for (int side = 0; side < 2; ++side)
     {
@@ -412,7 +413,8 @@ void sairol_bridge::T1Bridge::loadParallelAnkleParameters_()
         {
             if (!joints_[kAnkleSerialIdx[side][j]].if_parallel_joint)
             {
-                throw std::invalid_argument("T1 ankle joints 15, 16, 21, 22 must have if_parallel_joint: true");
+                RCLCPP_FATAL(nh->get_logger(), "T1 ankle joints 15, 16, 21, 22 must have if_parallel_joint: true");
+                throw ConfigError("if_parallel_joint");
             }
         }
     }
