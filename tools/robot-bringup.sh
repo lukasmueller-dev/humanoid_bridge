@@ -55,6 +55,7 @@ usage() {
 Usage: tools/robot-bringup.sh [--robot g1|t1|go2] [options]
 
 G1: release /lowcmd, start G1_bridge, wait for it. T1: start T1_bridge, wait for it.
+Go2: stand down, release /lowcmd, start Go2_bridge, wait for it.
 Arms only if told to twice.
 
 Options:
@@ -62,7 +63,7 @@ Options:
   --iface <nic>          DDS interface (default $BRIDGE_IFACE or enp4s0)
   --workspace <ws>       colcon workspace that builds this clone (default $BRIDGE_WS or ~/bridge_ws_estop)
   --params <path>        bridge params file (default bridge/robot_bridge/params/<G1|T1|Go2>_config.yaml)
-  --no-release           G1: skip the /lowcmd release (already released, or a fake robot)
+  --no-release           G1, Go2: skip the /lowcmd release (already released, or a fake robot)
   --arm-from-measured    arm to the pose the robot currently holds
   --arm-from "<N nums>"  arm to an explicit pose (G1 29, T1 23, Go2 12), length-checked here
   --robot-is-clear       required for any --arm-*. Gantry, e-stop, safety gate first
@@ -118,11 +119,6 @@ case "$ROBOT" in
         RELEASE_ARGS=(--stand-down); ESTOP_HINT="R1+R2 damp, L1+R1 hold" ;;
     *) echo "--robot must be g1, t1 or go2, not '$ROBOT'" >&2; exit 2 ;;
 esac
-# TODO(real T1, real Go2): remove after each robot's first power-on (robot_web_commander PROJECT_ROADMAP.md).
-if [ "$SIM" = 0 ] && [ "$ROBOT" != g1 ]; then
-    echo "refused: the real $ROBOT is not tested with this bridge yet; use --sim (TODO: first power-on)" >&2
-    exit 2
-fi
 CONFIG_NAME="${ROBOT^^}"; [ "$ROBOT" = go2 ] && CONFIG_NAME=Go2
 [ -n "$PARAMS" ] || PARAMS="$REPO/bridge/robot_bridge/params/${CONFIG_NAME}_config.yaml"
 BRIDGES=(G1_bridge T1_bridge Go2_bridge)   # one robot per host: any of them counts

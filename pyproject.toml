@@ -11,12 +11,6 @@ extend-exclude = ["thirdparty", "examples", "*.md"]
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B"]
 
-[tool.ruff.lint.per-file-ignores]
-# E501: commented-out WirelessKey_H1_G1 blocks, kept as evidence for the pending
-# keymap fix. F841: service-call futures that are never awaited — a behaviour
-# question, not a lint nit. Both tracked in PROJECT_ROADMAP.md.
-"bridge/robot_bridge/robot_bridge/robot_client.py" = ["E501", "F841"]
-
 [tool.ruff.lint.isort]
 known-first-party = ["robot_bridge", "g1_stack", "g1_camera", "robot_sim"]
 

@@ -108,7 +108,7 @@ SPEC = RobotSpec(
 )
 
 
-class Wire:
+class Wire(unitree.Wire):
     """unitree_hg: LowState at the physics rate, LowCmd in, Dex3 at 100 Hz, the motion service."""
 
     STICKS = True  # tick writes node.sticks into wireless_remote
@@ -157,34 +157,10 @@ class Wire:
         """Lock held: the G1 follows /lowcmd in every mode."""
         return cmd
 
-    def set_remote(self, connected):
-        unitree.set_remote(self.state.wireless_remote, connected)
-
-    def press(self, names):
-        """Hold these buttons (names as the bridge YAML's combos); [] releases."""
-        unitree.set_keys(self.state.wireless_remote, unitree.key_mask(names))
-
-    def boot(self):
-        """End of a reboot, lock held."""
-        self.motion.boot()
-
     def tick(self, now):
-        """Lock held, link up: the sticks, and the motion service's frame when due."""
+        """Lock held, link up: the sticks, then the motion service's frame when due."""
         unitree.set_sticks(self.state.wireless_remote, self.node.sticks.read(now))
-        self.motion.send(now)
-
-    def publish(self, s):
-        for i in range(NUM_JOINT):
-            ms = self.state.motor_state[i]
-            ms.q, ms.dq = float(s["q"][i]), float(s["dq"][i])
-            ms.ddq, ms.tau_est = float(s["ddq"][i]), float(s["tau_est"][i])
-        imu = self.state.imu_state
-        imu.quaternion = s["quaternion"].astype(np.float32).tolist()
-        imu.rpy = s["rpy"].astype(np.float32).tolist()
-        imu.gyroscope = s["gyroscope"].astype(np.float32).tolist()
-        imu.accelerometer = s["accelerometer"].astype(np.float32).tolist()
-        self.state.tick = int(s["time"] * 1000)
-        self.publisher.publish(self.state)
+        super().tick(now)
 
     def publish_hands(self, states):
         for side, s in states.items():

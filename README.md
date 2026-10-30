@@ -11,6 +11,7 @@ bridge/           the bridge and its Python client, upstream-bound
     examples/           reference clients per robot (not built or installed)
 robot_stacks/     per-robot deploy layers
   g1/                 g1_stack, g1_camera
+  sim/                robot_sim: the MuJoCo sim of G1, T1 and Go2
   t1/                 placeholder; the T1 stack has not been written
 scripts/          environment setup, sourced not run
 tools/            helpers, run not sourced
@@ -20,7 +21,7 @@ thirdparty/       vendored unitree_ros2, booster_ros2_interface and aimdk_msgs (
 `bridge/` depends on nothing under `robot_stacks/`. That one-way rule is what
 lets either layer be split out with `git subtree split --prefix=<layer>`.
 
-Built targets are `G1_bridge`, `H1_bridge`, `H1_2_bridge`, `T1_bridge`,
+Built targets are `G1_bridge`, `H1_bridge`, `H1_2_bridge`, `Go2_bridge`, `T1_bridge`,
 `X2_bridge` (only with `-DBUILD_AGIBOT_X2=ON`) and `test_node` (only with `-DBUILD_TEST_NODE=ON`). Other sources under `src/` are upstream leftovers that no target
 builds.
 
@@ -85,7 +86,7 @@ Clone into a colcon workspace's `src/`, then:
 git config core.hooksPath .githooks   # once per clone: pre-push refuses direct pushes to main
 source /opt/ros/humble/setup.bash
 tools/install-build-deps.sh     # first time on a fresh host
-tools/build.sh                  # G1, H1, H1_2, T1
+tools/build.sh                  # G1, H1, H1_2, Go2, T1
 # AgiBot X2, into install_x2/ for scripts/setup_x2.sh:
 tools/build.sh -- --build-base build_x2 --install-base install_x2 \
     --cmake-args -DBUILD_BOOSTER_T1=OFF -DBUILD_AGIBOT_X2=ON
@@ -113,7 +114,7 @@ bridge, wait for it, arm.
 tools/g1-bringup.sh --dry-run                        # print the plan, run nothing
 tools/g1-bringup.sh --iface enp4s0                   # release + bridge, no arming
 tools/g1-bringup.sh --arm-from-measured --robot-is-clear
-tools/g1-bringup.sh --stop                           # every G1_bridge; SIGKILL if SIGINT hangs
+tools/g1-bringup.sh --stop                           # every robot bridge; SIGKILL if SIGINT hangs
 tools/robot-bringup.sh --robot t1                    # the T1: T1_bridge, no release; custom mode on arming
 tools/robot-bringup.sh --robot go2                   # the Go2: StandDown + release, Go2_bridge; Ready stands it up
 ```
@@ -167,7 +168,7 @@ uses; it calls the service. Service only: no code handles a key.
 | T1 | `LT + RT + Start` (client) | `Back` (client) | `LB` (client, not while in control) | `RB` (client, not while in control) |
 
 - `L2 + Up + Left` (G1, H1, H1_2) and `LT + Back` (T1): the client stops its own commands; no service call.
-- `T1_bridge` and `H1_bridge` have key handlers, but their subscriptions are commented out.
+- `H1_bridge` has a key handler, but its subscription is commented out. `T1_bridge` subscribes to the gamepad for its e-stop (`docs/estop.md`).
 - `R2 + A` (G1, H1) and `LT + A` (T1): the example starts its policy once control is on. Firmware combos: `docs/estop.md`.
 
 G1 e-stop, latched until `/estop_reset` (`docs/estop.md`): `R1 + R2` damp
@@ -185,9 +186,9 @@ ros2 service call /zero_position_control std_srvs/srv/Trigger {}
 ros2 service call /estop_damp std_srvs/srv/Trigger {}        # G1: latched, kp 0
 ros2 service call /estop_hold std_srvs/srv/Trigger {}        # G1: latched, holds the pose
 ros2 service call /estop_reset std_srvs/srv/Trigger {}       # refused while the cause lasts
-ros2 topic echo /bridge_state                                # G1 only
-ros2 topic echo /robot_link                                  # G1 only: OK, LOST, BACK, RESTARTED (docs/estop.md)
-ros2 topic echo /robot_state                                 # G1 only: bridge_interface/RobotState, names + q/dq/tau, IMU, remote by name
+ros2 topic echo /bridge_state                                # G1, T1, Go2
+ros2 topic echo /robot_link                                  # G1, T1, Go2: OK, LOST, BACK, RESTARTED (docs/estop.md)
+ros2 topic echo /robot_state                                 # G1, T1, Go2: bridge_interface/RobotState, names + q/dq/tau, IMU, remote by name
 ros2 topic echo /hand_state/left                             # G1 Dex3: bridge_interface/HandState
 ```
 

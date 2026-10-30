@@ -10,48 +10,13 @@ from scipy.spatial.transform import Rotation as R
 from std_srvs.srv import Trigger
 
 from robot_bridge.cmd_client import HAND_SIDES, HAND_TOPIC, NUM_HAND_JOINTS, pack_hand_cmd
+from robot_bridge.robot_tables import ROBOT_TABLES, KeyMap
 
 
 def rpy_to_quat(rpy):
     r = R.from_euler("xyz", rpy)
     quat = r.as_quat(scalar_first=True)  # return [w, x, y, z]
     return quat
-
-
-# class WirelessKey_H1_G1:
-#     KEY_R1     = 1 << 0
-#     KEY_L1     = 1 << 1
-#     KEY_START  = 1 << 2
-#     KEY_SELECT = 1 << 3
-#     KEY_R2     = 1 << 4
-#     KEY_L2     = 1 << 5
-#     KEY_A      = 1 << 8
-#     KEY_B      = 1 << 9
-#     KEY_X      = 1 << 10
-#     KEY_Y      = 1 << 11
-#     KEY_UP     = 1 << 12
-#     KEY_RIGHT  = 1 << 13
-#     KEY_DOWN   = 1 << 14
-#     KEY_LEFT   = 1 << 15
-
-
-class KeyMap:
-    R1 = 0
-    L1 = 1
-    start = 2
-    select = 3
-    R2 = 4
-    L2 = 5
-    F1 = 6
-    F2 = 7
-    A = 8
-    B = 9
-    X = 10
-    Y = 11
-    up = 12
-    right = 13
-    down = 14
-    left = 15
 
 
 class RemoteController:
@@ -170,87 +135,7 @@ class RobotClient:
             low_state_handler = self._low_state_handler_booster
             joy_handler = self._joy_handler_booster
 
-            self._default_pos = np.array(
-                [
-                    0.0,
-                    0.0,
-                    0.25,
-                    -1.4,
-                    0.0,
-                    -0.5,
-                    0.25,
-                    1.4,
-                    0.0,
-                    0.5,
-                    0.0,
-                    -0.1,
-                    0.0,
-                    0.0,
-                    0.2,
-                    -0.1,
-                    0.0,
-                    -0.1,
-                    0.0,
-                    0.0,
-                    0.2,
-                    -0.1,
-                    0.0,
-                ]
-            )
-            self._default_kp = np.array(
-                [
-                    5.0,
-                    5.0,
-                    40.0,
-                    50.0,
-                    20.0,
-                    10.0,
-                    40.0,
-                    50.0,
-                    20.0,
-                    10.0,
-                    100.0,
-                    350.0,
-                    350.0,
-                    180.0,
-                    350.0,
-                    300.0,
-                    300.0,
-                    350.0,
-                    350.0,
-                    180.0,
-                    350.0,
-                    300.0,
-                    300.0,
-                ]
-            )
-            self._default_kd = np.array(
-                [
-                    0.1,
-                    0.1,
-                    0.5,
-                    1.5,
-                    0.2,
-                    0.2,
-                    0.5,
-                    1.5,
-                    0.2,
-                    0.2,
-                    5.0,
-                    7.5,
-                    7.5,
-                    3.0,
-                    5.5,
-                    0.5,
-                    0.5,
-                    7.5,
-                    7.5,
-                    3.0,
-                    5.5,
-                    0.5,
-                    0.5,
-                ]
-            )
+            self._load_default_tables()
             self.key_count = 0
 
             self.joystick_subscription = self.node.create_subscription(
@@ -271,109 +156,9 @@ class RobotClient:
             from unitree_hg.msg import LowState
 
             state_topic_name = "/lowstate"
-            # joy_topic_name = '/wirelesscontroller'
             low_state_handler = self._low_state_handler_unitree
-            # joy_handler = self._joy_handler_unitree
 
-            self._default_pos = np.array(
-                [
-                    -0.1,
-                    0.0,
-                    0.0,
-                    0.3,
-                    -0.2,
-                    0.0,
-                    -0.1,
-                    0.0,
-                    0.0,
-                    0.3,
-                    -0.2,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                ]
-            )
-
-            self._default_kp = np.array(
-                [
-                    100,
-                    100,
-                    100,
-                    150,
-                    40,
-                    40,
-                    100,
-                    100,
-                    100,
-                    150,
-                    40,
-                    40,
-                    200,
-                    200,
-                    200,
-                    100,
-                    100,
-                    50,
-                    50,
-                    20,
-                    20,
-                    20,
-                    100,
-                    100,
-                    50,
-                    50,
-                    20,
-                    20,
-                    20,
-                ]
-            )
-
-            self._default_kd = np.array(
-                [
-                    6,
-                    6,
-                    6,
-                    4,
-                    2,
-                    2,
-                    6,
-                    6,
-                    6,
-                    4,
-                    2,
-                    2,
-                    1,
-                    1,
-                    1,
-                    2,
-                    2,
-                    2,
-                    2,
-                    1,
-                    1,
-                    1,
-                    2,
-                    2,
-                    2,
-                    2,
-                    1,
-                    1,
-                    1,
-                ]
-            )
+            self._load_default_tables()
 
             self.remote_controller = RemoteController()
             print(
@@ -387,63 +172,9 @@ class RobotClient:
             from unitree_go.msg import WirelessController as JoyMsg
 
             state_topic_name = "/lowstate"
-            # joy_topic_name = '/wirelesscontroller'
             low_state_handler = self._low_state_handler_unitree
-            # joy_handler = self._joy_handler_unitree
 
-            self._default_pos = np.array(
-                [
-                    0.0,
-                    -0.1,
-                    0.3,
-                    0.0,
-                    -0.1,
-                    0.3,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    -0.2,
-                    -0.2,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                ]
-            )
-
-            self._default_kp = np.array(
-                [
-                    150,
-                    150,
-                    200,
-                    150,
-                    150,
-                    200,
-                    300,
-                    150,
-                    150,
-                    0,
-                    40,
-                    40,
-                    100,
-                    100,
-                    50,
-                    50,
-                    100,
-                    100,
-                    50,
-                    50,
-                ]
-            )
-
-            self._default_kd = np.array(
-                [2, 2, 4, 2, 2, 4, 3, 2, 2, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]
-            )
+            self._load_default_tables()
 
             self.remote_controller = RemoteController()
             print(
@@ -457,105 +188,9 @@ class RobotClient:
             from unitree_hg.msg import LowState
 
             state_topic_name = "/lowstate"
-            # joy_topic_name = '/wirelesscontroller'
             low_state_handler = self._low_state_handler_unitree
-            # joy_handler = self._joy_handler_unitree
 
-            self._default_pos = np.array(
-                [
-                    0.0,
-                    -0.2,
-                    0.0,
-                    0.5,
-                    -0.3,
-                    0.0,
-                    0.0,
-                    -0.2,
-                    0.0,
-                    0.5,
-                    -0.3,
-                    0.0,
-                    0.0,
-                    0.28,
-                    0.0,
-                    0.0,
-                    0.52,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.28,
-                    0.0,
-                    0.0,
-                    0.52,
-                    0.0,
-                    0.0,
-                    0.0,
-                ]
-            )
-
-            self._default_kp = np.array(
-                [
-                    200,
-                    200,
-                    200,
-                    300,
-                    80,
-                    40,
-                    100,
-                    100,
-                    100,
-                    150,
-                    60,
-                    60,
-                    300,
-                    100,
-                    100,
-                    50,
-                    50,
-                    20,
-                    20,
-                    20,
-                    100,
-                    100,
-                    50,
-                    50,
-                    20,
-                    20,
-                    20,
-                ]
-            )
-
-            self._default_kd = np.array(
-                [
-                    2.5,
-                    2.5,
-                    2.5,
-                    4,
-                    2,
-                    2,
-                    2,
-                    2,
-                    2,
-                    4,
-                    2,
-                    2,
-                    3,
-                    2,
-                    2,
-                    2,
-                    2,
-                    1,
-                    1,
-                    1,
-                    2,
-                    2,
-                    2,
-                    2,
-                    1,
-                    1,
-                    1,
-                ]
-            )
+            self._load_default_tables()
 
             self.remote_controller = RemoteController()
             print(
@@ -575,111 +210,7 @@ class RobotClient:
 
             self._angular_acceleration = np.zeros(3, dtype=np.float32)
 
-            # Offline reference values; keep aligned with X2_config.yaml
-            self._default_pos = np.array(
-                [
-                    -0.05,
-                    0.0,
-                    0.0,
-                    0.1,
-                    -0.05,
-                    0.0,
-                    -0.05,
-                    0.0,
-                    0.0,
-                    0.1,
-                    -0.05,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.4,
-                    0.0,
-                    0.0,
-                    -1.2,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.4,
-                    0.0,
-                    0.0,
-                    -1.2,
-                    0.0,
-                    0.0,
-                    0.0,
-                    0.0,
-                ]
-            )[: self.num_dof]
-
-            self._default_kp = np.array(
-                [
-                    40.0,
-                    40.0,
-                    30.0,
-                    80.0,
-                    40.0,
-                    20.0,
-                    40.0,
-                    40.0,
-                    30.0,
-                    80.0,
-                    40.0,
-                    20.0,
-                    150.0,
-                    300.0,
-                    300.0,
-                    30.0,
-                    20.0,
-                    20.0,
-                    50.0,
-                    50.0,
-                    20.0,
-                    20.0,
-                    30.0,
-                    20.0,
-                    20.0,
-                    50.0,
-                    50.0,
-                    20.0,
-                    20.0,
-                    20.0,
-                ]
-            )[: self.num_dof]
-
-            self._default_kd = np.array(
-                [
-                    4.0,
-                    4.0,
-                    3.0,
-                    8.0,
-                    4.0,
-                    2.0,
-                    4.0,
-                    4.0,
-                    3.0,
-                    8.0,
-                    4.0,
-                    2.0,
-                    3.0,
-                    3.0,
-                    3.0,
-                    1.0,
-                    1.0,
-                    1.0,
-                    1.0,
-                    1.0,
-                    1.0,
-                    1.0,
-                    1.0,
-                    1.0,
-                    1.0,
-                    1.0,
-                    1.0,
-                    1.0,
-                    1.0,
-                    1.0,
-                ]
-            )[: self.num_dof]
+            self._load_default_tables(self.num_dof)
 
             self._default_duration = 1.5
 
@@ -715,11 +246,15 @@ class RobotClient:
                 qos_profile_sensor_data,
             )
 
+        for name in ("_default_pos", "_default_kp", "_default_kd"):
+            length = len(getattr(self, name))
+            if length != num_dof:
+                raise ValueError(f"{self.robot_type} {name[1:]} has length {length}, not {num_dof}")
+
         if self.robot_type != "X2":
             self.low_state_subscription = self.node.create_subscription(
                 LowState, state_topic_name, low_state_handler, 1
             )
-        # self.joystick_subscription = self.node.create_subscription(JoyMsg, joy_topic_name, joy_handler, 1)
         self.low_cmd_publisher = self.node.create_publisher(RobotCmd, "/robot_cmd", 1)
 
         self.start_control_client = self.node.create_client(SetDefaultPosition, "/start_control")
@@ -753,6 +288,12 @@ class RobotClient:
             self.joystick_subscription = self.node.create_subscription(
                 Joy, "/joy", self._joy_handler_x2, qos_profile_sensor_data
             )
+
+    def _load_default_tables(self, num_joints=None):
+        table = ROBOT_TABLES[self.robot_type]
+        self._default_pos = np.array(table["default_pos"])[:num_joints]
+        self._default_kp = np.array(table["default_kp"])[:num_joints]
+        self._default_kd = np.array(table["default_kd"])[:num_joints]
 
     @property
     def q_pos(self):
@@ -808,7 +349,7 @@ class RobotClient:
             if self.remote_controller.is_exact_combo(buttons, [KeyMap.L2, KeyMap.start]):
                 self.node.get_logger().info("Starting control...")
                 if not self.control_started:
-                    future = self.init_control()
+                    self.init_control()
                     self.control_start_time = time_now + self._default_duration
                 return
             elif self.remote_controller.is_exact_combo(
@@ -1021,7 +562,7 @@ class RobotClient:
         ):  # start: LT + RT + START
             self.node.get_logger().info("Starting control...")
             if not self.control_started:
-                future = self.init_control()
+                self.init_control()
                 self.control_start_time = time_now + self._default_duration
             return
         elif joy_msg.lb and self.key_count == 1:  # ready position: LB
@@ -1046,7 +587,7 @@ class RobotClient:
             return
         elif joy_msg.back and self.key_count == 1:  # stop: BACK
             self.node.get_logger().info("Stopping control...")
-            future = self.stop_control()
+            self.stop_control()
             self.control_start_time = None
             return
         elif joy_msg.lt and joy_msg.back and self.key_count == 2:  # emergency stop: LT + BACK
@@ -1054,41 +595,6 @@ class RobotClient:
         else:
             # Set key only for unknown key combinations
             self.joy_key = joy_msg
-
-    # def _joy_handler_unitree(self, joy_msg):
-    #     key = joy_msg.keys
-    #     time_now = time.time()
-
-    #     if (key & (WirelessKey_H1_G1.KEY_L2 | WirelessKey_H1_G1.KEY_START)) == (WirelessKey_H1_G1.KEY_L2 | WirelessKey_H1_G1.KEY_START):
-    #         self.node.get_logger().info("Starting control...")
-    #         if not self.control_started:
-    #             future = self.init_control()
-    #             self.control_start_time = time_now + self._default_duration
-    #         return
-    #     elif (key & (WirelessKey_H1_G1.KEY_L2 | WirelessKey_H1_G1.KEY_UP | WirelessKey_H1_G1.KEY_LEFT)) == (WirelessKey_H1_G1.KEY_L2 | WirelessKey_H1_G1.KEY_UP | WirelessKey_H1_G1.KEY_LEFT):
-    #         self.node.get_logger().info("Stopping control...")
-    #         future = self.stop_control()
-    #         self.control_start_time = None
-    #         return
-    #     elif key & WirelessKey_H1_G1.KEY_L1:
-    #         self.node.get_logger().info("Ready position control...")
-    #         if not self.control_started:
-    #             self.goto_default_position()
-    #             self.control_start_time = None
-    #         else:
-    #             self.node.get_logger().warn("Control already started, please stop the control first by pressing BACK.")
-    #         return
-    #     elif key & WirelessKey_H1_G1.KEY_R1:
-    #         self.node.get_logger().info("Zero position control...")
-    #         if not self.control_started:
-    #             self.goto_zero_position()
-    #             self.control_start_time = None
-    #         else:
-    #             self.node.get_logger().warn("Control already started, please stop the control first by pressing BACK.")
-    #         return
-    #     else:
-    #         # Set key only for unknown key combinations
-    #         self.joy_key = joy_msg
 
     def send_cmd(
         self, q_target_pos=None, q_target_vel=None, target_tau=None, target_kp=None, target_kd=None
@@ -1121,6 +627,10 @@ class RobotClient:
     def init_control(self, default_pos=None):
         """
         Start the control loop by calling the init_control service.
+
+        X2 returns the pending future; its done-callback handles the response.
+        The Unitree and Booster joystick handlers drop the result (fire-and-forget):
+        awaiting inside a subscription callback blocks the executor that delivers the response.
         """
         if default_pos is None:
             default_pos = self._default_pos
@@ -1136,7 +646,8 @@ class RobotClient:
         if len(positions) != self.num_dof:
             # The bridge refuses a wrong length; an empty list arms to its ready_q.
             self.node.get_logger().warn(
-                f"default_pos has {len(positions)} values, not {self.num_dof}: arming to the bridge's ready_q"
+                f"default_pos has {len(positions)} values, not {self.num_dof}: "
+                "arming to the bridge's ready_q"
             )
             positions = []
         request = SetDefaultPosition.Request()
@@ -1150,6 +661,10 @@ class RobotClient:
     def stop_control(self):
         """
         Stop the control loop by calling the stop_control service.
+
+        X2 returns the pending future; its done-callback handles the response.
+        The Unitree and Booster joystick handlers drop the result (fire-and-forget):
+        awaiting inside a subscription callback blocks the executor that delivers the response.
         """
         if self.robot_type == "X2" and not self.stop_control_client.service_is_ready():
             raise RuntimeError("stop_control_client service is unavailable.")
@@ -1255,7 +770,8 @@ class RobotClient:
 
     def goto_default_position(self):
         """
-        Send robot to default position by calling the ready_position_control service; on a G1, Dex3 hands open too.
+        Send robot to default position by calling the ready_position_control service.
+        On a G1, Dex3 hands open too.
         """
         if self.robot_type == "X2" and not self.ready_position_client.service_is_ready():
             raise RuntimeError("ready_position_client service is unavailable.")

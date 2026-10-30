@@ -133,7 +133,7 @@ G1_MJCF=<assets>/g1_description/g1_29dof_with_hand.xml tools/test.sh --sim   # R
 tools/test.sh --hands --stale-after 3.9 --hot-after 3.2
 ```
 
-The hand stage runs three times: plain; the left hand's state stops at
+`run_fake_hand_test.sh` runs three times: plain; the left hand's state stops at
 `--stale-after`; it reports over temperature at `--hot-after` (both default
 3.5 s). Both count from the first `/dex3/left/cmd`, which is
 `start_hand_control`, so 3.0 to 4.0 lands mid-stream.

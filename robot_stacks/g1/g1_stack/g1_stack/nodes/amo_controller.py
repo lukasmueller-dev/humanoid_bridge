@@ -36,7 +36,7 @@ from g1_stack.amo.torque import MODES
 NODE_NAME = "amo_bridge"
 READY = "AMO -> /robot_cmd"  # the lab waits for this line
 GOAL_TIMEOUT = 0.5  # s
-STATE_TIMEOUT = 0.1  # s: older /lowstate sends nothing; the bridge's cmd_timeout holds
+STATE_TIMEOUT = 0.1  # s: older /lowstate sends nothing (cmd_timeout holds), then resets AMO
 ARM_RAMP_S = 2.0  # measured arms -> default arms, before the first goal
 ARMS = slice(15, 29)
 
@@ -233,8 +233,9 @@ def run_loop(controller, state, goals, stop, clock=time.monotonic, sleep=time.sl
                 out(f"/lowstate older than {STATE_TIMEOUT} s: sending nothing")
             stale = True
         else:
-            if stale:
-                out("/lowstate back")
+            if stale:  # the history and last action predate the gap
+                controller.amo.reset()
+                out("/lowstate back: AMO state reset")
             stale = False
             controller.tick(current)
         next_at += DT

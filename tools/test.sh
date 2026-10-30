@@ -11,8 +11,8 @@
 # or older than the newest file under bridge/.
 #
 #   unit   pure Python: clients, adapters, goal order, observation, camera, tools/tests
-#   cpp    gtests test_estop, test_gates, test_crc, test_booster: e-stop latch, stop frames, remote keys,
-#          robot link, target gates, the /lowcmd CRC against Unitree's SDK
+#   cpp    gtests test_estop, test_gates, test_crc, test_booster, test_go2: e-stop latch, stop frames, remote keys,
+#          robot link, target gates, the /lowcmd CRC against Unitree's SDK, the Go2 frame
 #   wire   the real G1_bridge against a fake robot, body path
 #   estop  the real G1_bridge's e-stop against a fake robot
 #   link   /robot_link: a fake robot drops its link and reboots, armed and disarmed
@@ -68,7 +68,7 @@ Exit 0: every requested stage passed; 1: a stage failed; 2: a stage was skipped 
 
 Options:
   --unit                pure Python tests only; needs no ROS
-  --cpp                 gtests test_estop, test_gates and test_crc only; needs a built workspace
+  --cpp                 gtests test_estop, test_gates, test_crc, test_booster and test_go2 only; needs a built workspace
   --wire                body-path integration test only
   --estop               e-stop integration test only
   --link                robot link (drop, reboot) integration test only

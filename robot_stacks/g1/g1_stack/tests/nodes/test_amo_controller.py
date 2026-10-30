@@ -8,7 +8,7 @@ from types import SimpleNamespace
 import numpy as np
 
 from g1_stack.amo import goal
-from g1_stack.amo.policy import DEFAULT_DOF_POS, DT, STAND, Command
+from g1_stack.amo.policy import DEFAULT_DOF_POS, DT, HISTORY_LEN, NUM_LOWER, STAND, Amo, Command
 from g1_stack.nodes import amo_controller as ac
 
 
@@ -16,6 +16,10 @@ class FakeAmo:
     def __init__(self):
         self.commands = []
         self.yaw_resets = 0
+        self.resets = 0
+
+    def reset(self):
+        self.resets += 1
 
     def reset_yaw(self):
         self.yaw_resets += 1
@@ -186,8 +190,40 @@ def test_run_loop_skips_ticks_without_fresh_state():
     t = [0.0]
     ac.run_loop(ctl, feed, goals, stop, clock=lambda: t[0], sleep=sleep, out=lines.append)
     assert len(ctl.client.cmds) == 2
-    assert lines == [f"/lowstate older than {ac.STATE_TIMEOUT} s: sending nothing", "/lowstate back"]
+    assert lines == [f"/lowstate older than {ac.STATE_TIMEOUT} s: sending nothing",
+                     "/lowstate back: AMO state reset"]
+    assert ctl.amo.resets == 1
     assert sleeps == [DT, 2 * DT, 3 * DT, 4 * DT]
+
+
+def test_lowstate_gap_resets_amos_history_and_last_action():
+    clock, snaps, stop = Clock(), [], threading.Event()
+    amo = Amo(lambda obs, extra: np.full(NUM_LOWER, 0.5), lambda x: np.zeros(NUM_LOWER))
+    ctl = ac.Controller(amo, lambda q: np.full(29, 0.5), FakeClient(), clock=clock,
+                        out=lambda _: None)
+    state = ac.LatestState(clock=clock)
+    motors = [SimpleNamespace(q=0.0, dq=0.0) for _ in range(35)]
+    imu = SimpleNamespace(quaternion=[1.0, 0.0, 0.0, 0.0], gyroscope=[0.0, 0.0, 0.0])
+    lowstate = SimpleNamespace(motor_state=motors, imu_state=imu)
+    sleeps = []
+
+    def out(line):  # the state AMO holds when run_loop reports the gap and its end
+        snaps.append((line, sum(h.any() for h in amo._hist), bool(amo._last_action.any())))
+
+    def sleep(delay):
+        sleeps.append(delay)
+        clock.t += delay
+        if not 12 <= len(sleeps) < 20:  # 8 ticks (0.16 s) without /lowstate
+            state.on_lowstate(lowstate)
+        if len(sleeps) == 23:
+            stop.set()
+
+    state.on_lowstate(lowstate)
+    ac.run_loop(ctl, state, SimpleNamespace(latest=lambda: None), stop, clock=clock, sleep=sleep,
+                out=out)
+    assert snaps == [
+        (f"/lowstate older than {ac.STATE_TIMEOUT} s: sending nothing", HISTORY_LEN, True),
+        ("/lowstate back: AMO state reset", 0, False)]
 
 
 def test_hold_resends_the_last_targets_with_hold_position():

@@ -3,14 +3,9 @@
 > One per repo. Planned work only, one item per task. Finished items are
 > deleted; git history is the log.
 
-_Last updated: 2026-10-24 · turing_
+_Last updated: 2026-10-28 · codebase-health job_
 
 ## Items
-
-### Handover
-
-- [ ] Delete `docs/handover-audit.md`: its plan (P0–P2) is done.
-  **Done when:** the file is gone and `PROJECT_STATUS.md` no longer points at it.
 
 ### Hand path
 
@@ -49,12 +44,12 @@ Decided and fake-tested on `g1-web-interface` (`docs/psi0_gates.md`).
 
 ### GEAR on the robot
 
-- [ ] GEAR's robot mode sends waist pitch (motor 14) kd 5 − 10 = −5 (`decoupled_wbc` `configs.py:64-66`, in the pinned SIMPLE image); `adapters/gear_wbc.py` forwards it and the bridge clips it to 0 (`bridge_core.cpp:697-703`). **Done when:** the intended robot kd is known and `/robot_cmd` carries it for motor 14, checked with `ros2 topic echo /robot_cmd`.
+- [ ] GEAR's robot mode sends waist pitch (motor 14) kd 5 − 10 = −5 (`decoupled_wbc` `configs.py:64-66`, in the pinned SIMPLE image); `adapters/gear_wbc.py` forwards it and the bridge clips it to 0 (`BridgeCore::checkMotorCmd_`). **Done when:** the intended robot kd is known and `/robot_cmd` carries it for motor 14, checked with `ros2 topic echo /robot_cmd`.
 - [ ] GEAR waits forever for Dex3 state on a G1 without hands: `with_hands` defaults to True (`configs.py:108`); neither `g1_stack/nodes/gear_controller.py` nor the commander workspace passes `--no-with-hands`, and robot-mode `calibrate_hands` blocks with no timeout. **Done when:** a hand-less G1 run reaches "GEAR -> /robot_cmd at 50 Hz".
 
 - [ ] Dex3 finger gains: GEAR's hand sender (`decoupled_wbc` `command_sender.py:130-133`, forwarded by `adapters/gear_hands.py`) sends kp 2/1, kd 0.5/0.2; SIMPLE trains and evaluates with kp 5/2.5, kd 1 (`G1Sonic.apply_action`). A bridge try of psi0 `g1-xmovepick` (g1-pick-smoke ep 0) failed the grasp with GEAR's gains and succeeded in-process. **Done when:** the gains the real Dex3 needs are measured on the robot and the sim or the sender matches them.
-- [ ] Stale controller state after a `/lowstate` gap: GEAR waits in `observe()` with no timeout and resumes with its old history; `amo_controller` stops sending after 0.1 s but resumes with its old `_hist`/`_last_action`; the psi0 loop node keeps the last `rt/lowstate` sample with no age check (`humanoid-locoman-vla`). The commander's Arm gate covers it until then.
-  **Done when:** each controller exits or resets its policy state after a gap, and a `fake_g1 /fake_g1/pause` test shows it.
+- [ ] Stale controller state after a `/lowstate` gap: GEAR waits in `observe()` with no timeout and resumes with its old history; the psi0 loop node keeps the last `rt/lowstate` sample with no age check (`humanoid-locoman-vla`). `amo_controller` resets its AMO state when `/lowstate` returns. The commander's Arm gate covers GEAR and psi0 until then.
+  **Done when:** GEAR and the psi0 loop node each exit or reset their policy state after a gap, and a `fake_g1 /fake_g1/pause` test shows it.
 - [ ] Robot rehearsal on the real-robot branch, after both items above: the full G1 path (workspace `psi0` with a real-robot checkpoint → `psi0_gear_loop` → GEAR robot mode → G1_bridge) against `robot_sim` instead of the G1. Needs `robot_sim` to publish `rt/secondary_imu` and answer the motion switcher ("no mode"), the workspace's camera host and DDS interface from the commander's mode, and the multicast patch on `lo` for the loop node. **Done when:** a rehearsal from the page reaches GEAR's loop and moves `robot_sim` through the loop node.
 
 ### Gantry acceptance
@@ -75,12 +70,10 @@ Decided and fake-tested on `g1-web-interface` (`docs/psi0_gates.md`).
 
 ### Upstream fixes — one branch each
 
-- [ ] `fix/g1-default-pos-29`: G1 `_default_pos` is 27 long while kp/kd are 29 (`robot_client.py`). **Done when:** all three are 29 and a length check fails loudly.
 - [ ] `fix/config-keymaps`: the keymap headers in `params/*.yaml` are corrected here: each key names its handler, `robot_client.py` or the bridge. Still to send upstream. **Done when:** the PR is open.
 - [ ] `feat/g1-finish-control-release`: e-stop latch built on `g1-web-interface` (`docs/estop.md`), fake-tested only. **Done when:** gantry tests G0–G6 in `docs/estop.md` pass and the branch is merged.
 
 ### Cleanups
 
-- [ ] Decide whether the service-call futures in `robot_client.py` should be awaited. Two are assigned and dropped (`init_control`, `stop_control`), currently ruff-suppressed as `F841`. **Done when:** the calls either await or explicitly document fire-and-forget, and the suppression is gone.
-- [ ] Split `robot_client.py` (~600 lines): per-robot `default_pos`/kp/kd tables and `KeyMap` out of the client body. **Done when:** the tables are data in their own module and the ruff `E501` suppression for its commented-out keymap blocks is gone.
 - [ ] `--interface sim` does not reach the bridge: MuJoCo listens on `rt/lowcmd`, which the bridge owns. **Done when:** a sim run drives the same client path as hardware, or the limitation is documented as permanent.
+- [ ] Dedup the test-driver helpers: 14 `drive_*.py` define their own `check(name, ok, detail)`, and several repeat `spin`/`wait` and the `main()` boilerplate. Move them to one shared module per integration directory (`bridge/robot_bridge/tests/integration/`, `robot_stacks/sim/robot_sim/tests/integration/`). **Done when:** `grep -l 'def check(' bridge/robot_bridge/tests/integration/drive_*.py robot_stacks/sim/robot_sim/tests/integration/drive_*.py` prints nothing and `tools/test.sh --docker` passes.
