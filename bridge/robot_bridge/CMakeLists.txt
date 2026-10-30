@@ -28,9 +28,17 @@ find_package(rosidl_default_runtime REQUIRED)
 find_package(unitree_go REQUIRED)
 find_package(unitree_hg REQUIRED)
 find_package(unitree_api REQUIRED)
+find_package(pluginlib REQUIRED)
+find_package(low_level_controller REQUIRED)
 
 
 include_directories(include include/common)
+
+# motor_pd and bridge_pd: the default low-level controllers, plugins as a colleague's are (controllers.xml).
+add_library(robot_bridge_controllers SHARED src/controllers.cpp)
+ament_target_dependencies(robot_bridge_controllers pluginlib low_level_controller)
+pluginlib_export_plugin_description_file(low_level_controller controllers.xml)
+install(TARGETS robot_bridge_controllers LIBRARY DESTINATION lib)
 
 # ==============================================================Unitree H1 and G1=============================================================
 
@@ -345,6 +353,9 @@ if(BUILD_TESTING)
   ament_add_gtest(test_crc tests/test_crc.cpp src/common/motor_crc_hg.cpp)
   target_include_directories(test_crc PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/include/common)
   ament_target_dependencies(test_crc rclcpp unitree_hg)
+  # motor_pd and bridge_pd loaded by name, as the bridge does: needs the installed workspace sourced.
+  ament_add_gtest(test_controllers tests/test_controllers.cpp)
+  ament_target_dependencies(test_controllers pluginlib low_level_controller)
 endif()
 
 ament_package()
