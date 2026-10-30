@@ -572,25 +572,24 @@ namespace sairol_bridge
         }
 
         // The first accepted /robot_cmd starts the stream and fixes its controller until a stop.
+        // One mutex_ hold: no tick runs the stream's controller on another command's target.
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (!controlStarted_ || arming_)
         {
-            std::lock_guard<std::mutex> lock(mutex_);
-            if (!controlStarted_)
-            {
-                return;   // a stop came in since the check above: no stream
-            }
-            if (!stream_.empty() && controller != stream_)
-            {
-                RCLCPP_WARN_THROTTLE(nh->get_logger(), steadyClock_, 1000,
-                                     "Controller '%s' inside a '%s' stream: /robot_cmd dropped; "
-                                     "/stop_control first", controller.c_str(), stream_.c_str());
-                return;
-            }
-            stream_ = controller;
-            useController_(controller);   // again after Ready, which runs motor_pd
+            return;   // stopped since the check above, or still arming: no stream
         }
+        if (!stream_.empty() && controller != stream_)
+        {
+            RCLCPP_WARN_THROTTLE(nh->get_logger(), steadyClock_, 1000,
+                                 "Controller '%s' inside a '%s' stream: /robot_cmd dropped; "
+                                 "/stop_control first", controller.c_str(), stream_.c_str());
+            return;
+        }
+        stream_ = controller;
         lowCommandDesired_.motor_cmd = message->motor_cmd;
         receivedCmd_ = true;
-        calculateInterpolationParams_(duration, interpolation_order, hold_position);
+        interpolationParams_(duration, interpolation_order, hold_position);
+        useController_(controller);   // again after Ready, which runs motor_pd
     }
 
     void BridgeCore::zeroPositionControl_()
@@ -769,7 +768,12 @@ namespace sairol_bridge
                                                    float_t interpolation_order,
                                                    bool hold_position)
     {
-        std::unique_lock<std::mutex> lock(mutex_);
+        std::lock_guard<std::mutex> lock(mutex_);
+        interpolationParams_(duration, interpolation_order, hold_position);
+    }
+
+    void BridgeCore::interpolationParams_(float_t duration, float_t interpolation_order, bool hold_position)
+    {
         cmdInterpOrder_ = interpolation_order;
         if (0.0 <= cmdInterpOrder_ && cmdInterpOrder_ < 1.0)
         {
@@ -986,6 +990,13 @@ namespace sairol_bridge
     bool BridgeCore::armControl_(bridge_interface::msg::RobotCmd default_cmd, std::string &why)
     {
         uint64_t generation = 0;
+        // initControl_ sets controlStarted_ before its arm ramp: a /robot_cmd until the end starts no stream.
+        arming_ = true;
+        struct EndArming
+        {
+            std::atomic<bool> &arming;
+            ~EndArming() { arming = false; }
+        } end_arming{arming_};
         // Before the latch: after a restart /estop_reset is refused too, so "reset first" would mislead.
         if (!linkAllowsArming_(why))
         {
@@ -1029,7 +1040,6 @@ namespace sairol_bridge
             return false;
         }
         syncLatchFlags_();
-        endStream_();   // a /robot_cmd during initControl_ does not start the stream: Arm runs motor_pd
         publishBridgeState_(latch_.describe(controlStarted_));
         clearLink_();
         return true;
@@ -1250,11 +1260,12 @@ namespace sairol_bridge
             return;
         }
         {
+            // One mutex_ hold: motor_pd never runs the stream's target, nor the stream's controller this pose.
             std::lock_guard<std::mutex> lock(mutex_);
+            setPose_(q);
+            interpolationParams_(duration_, 1, true);
             useController_(MOTOR_PD);   // the stream goes on: its next /robot_cmd switches back
         }
-        setPose_(q);
-        calculateInterpolationParams_(duration_, 1, true);
         RCLCPP_INFO(nh->get_logger(), "%s position control activated", name.c_str());
         response->success = true;
         response->message = name + " position control activated";

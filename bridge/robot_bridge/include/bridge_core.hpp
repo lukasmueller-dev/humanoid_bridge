@@ -67,6 +67,8 @@ namespace sairol_bridge
         void calculateInterpolationParams_(float_t duration,
                                            float_t interpolation_order,
                                            bool hold_position = false);
+        // mutex_ held: calculateInterpolationParams_ for a caller that changes more in the same hold.
+        void interpolationParams_(float_t duration, float_t interpolation_order, bool hold_position);
 
         void robotCmdCallBack_(bridge_interface::msg::RobotCmd::SharedPtr message);
 
@@ -193,6 +195,7 @@ namespace sairol_bridge
         std::shared_ptr<low_level_controller::Controller> controller_;   // the tick's; mutex_
         std::string controllerName_;   // mutex_
         std::string stream_;   // mutex_: the stream's controller, empty when no stream runs
+        std::atomic<bool> arming_{false};   // armControl_ runs: a /robot_cmd starts no stream
         rclcpp::Publisher<std_msgs::msg::String>::SharedPtr controllerPublisher_;   // /low_level_controller
         low_level_controller::State controllerState_;   // control thread only, sized once
         std::vector<low_level_controller::MotorCommand> target_, frame_;   // control thread only, sized once
