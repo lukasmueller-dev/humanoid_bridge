@@ -41,6 +41,9 @@ def variants(params):
     def tau_limit(p):
         p[names[3]]["tau_limit"] = -1.0
 
+    def dq_trip(p):
+        p[names[3]]["dq_trip"] = 0.0
+
     def gain_range(p):
         p["upper_limbs_kp_max"] = p["upper_limbs_kp_min"] - 1.0
 
@@ -62,6 +65,7 @@ def variants(params):
         ("idx not its place in joint_names", "they must match", idx_order),
         ("q_max below q_min", "needs q_min <= q_max", q_range),
         ("negative tau_limit", "needs q_min <= q_max", tau_limit),
+        ("dq_trip of zero", "dq_trip must be finite and > 0", dq_trip),
         ("inverted gain range", "gain range is inverted", gain_range),
         ("torque_control true", "Torque control is not supported", torque_control),
         ("num_joint not the joint count", "joint_names has 29 joints, num_joint is 30", num_joint),

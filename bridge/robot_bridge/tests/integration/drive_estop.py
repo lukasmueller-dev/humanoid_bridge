@@ -37,6 +37,7 @@ def load_params(path):
         "damp_kd": float(params["estop"]["damp_kd"]),
         "ready_q": [float(v) for v in params["ready_q"]],
         "dq_limit": [float(params[n]["dq_limit"]) for n in names],
+        "dq_trip": [float(params[n].get("dq_trip", params[n]["dq_limit"])) for n in names],
         "parallel": [bool(params[n].get("if_parallel_joint", False)) for n in names],
     }
 
@@ -55,6 +56,7 @@ class Driver:
         self.pause = node.create_publisher(Bool, "/fake_g1/pause", 10)
         self.nan_q = node.create_publisher(Bool, "/fake_g1/nan_q", 10)
         self.dq = node.create_publisher(Float32, "/fake_g1/dq", 10)
+        self.dq1 = node.create_publisher(Float32, "/fake_g1/dq1", 10)
         self.nan_imu = node.create_publisher(Bool, "/fake_g1/nan_imu", 10)
         # Up before the bridge starts: the bridge waits until it is gone.
         self.blocker = node.create_publisher(LowCmd, "/lowcmd", 10)
@@ -479,8 +481,13 @@ class Driver:
         self.check_recording()
 
     def bad_state(self, damp_kp, damp_kd):
-        """Bad robot data while ARMED latches damp state_invalid; reset once it is gone."""
+        """Bad robot data while ARMED latches damp state_invalid; reset once it is gone.
+
+        Joint 0 has no dq_trip: it trips at dq_limit. Joint 1 has one (run_fake_estop_test.sh).
+        """
         limit = self.params["dq_limit"][0]
+        limit1, trip1 = self.params["dq_limit"][1], self.params["dq_trip"][1]
+        self.check("joint 1 has a dq_trip above its dq_limit", trip1 > limit1, f"{trip1} vs {limit1}")
         self.check("start_control at 0.2", self.start(0.2).success)
         self.spin(RAMP_SECONDS)
         self.check_state("ARMED", "ARMED")
@@ -489,9 +496,15 @@ class Driver:
         under = self.state == "ARMED"
         self.check("joint 0 at 0.9 dq_limit stays ARMED", under, f"state '{self.state}'")
         self.dq.publish(Float32(data=0.0))
+        self.dq1.publish(Float32(data=0.5 * (limit1 + trip1)))
+        self.spin(0.3)
+        between = self.state == "ARMED"
+        self.check("joint 1 between dq_limit and dq_trip stays ARMED", between, f"state '{self.state}'")
+        self.dq1.publish(Float32(data=0.0))
         faults = (
             ("NaN q", self.nan_q, Bool(data=True), Bool(data=False)),
             ("joint 0 at 1.1 dq_limit", self.dq, Float32(data=1.1 * limit), Float32(data=0.0)),
+            ("joint 1 at 1.1 dq_trip", self.dq1, Float32(data=1.1 * trip1), Float32(data=0.0)),
             ("NaN IMU roll", self.nan_imu, Bool(data=True), Bool(data=False)),
         )
         for i, (name, publisher, on, off) in enumerate(faults):

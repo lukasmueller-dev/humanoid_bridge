@@ -17,6 +17,18 @@ trap cleanup EXIT
 
 require_ros
 
+# G1_config.yaml has no dq_trip: a copy gives joint 1 twice its dq_limit; joint 0 keeps the dq_limit trip.
+python3 - "$PARAMS" "$OUT/estop_config.yaml" <<'PY'
+import sys
+import yaml
+config = yaml.safe_load(open(sys.argv[1]))
+params = config["robot_bridge"]["ros__parameters"]
+joint = params[params["joint_names"][1]]
+joint["dq_trip"] = 2 * joint["dq_limit"]
+yaml.safe_dump(config, open(sys.argv[2], "w"))
+PY
+PARAMS="$OUT/estop_config.yaml"
+
 python3 "$HERE/fake_g1.py" "$OUT/lowcmd.json" > "$OUT/fake.log" 2>&1 &
 FAKE_PID=$!; disown "$FAKE_PID"  # no 'Killed' notice when cleanup kills it
 sleep 2
