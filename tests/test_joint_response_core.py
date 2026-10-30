@@ -6,6 +6,7 @@ import numpy as np
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = REPO_ROOT / "scripts" / "real" / "joint_response_core.py"
+T1_DEPLOYMENT_CONFIG = REPO_ROOT / "bridge/robot_bridge/examples/t1/configs/T1.yaml"
 
 
 def load_core_module():
@@ -157,7 +158,7 @@ def test_apply_dotted_overrides_rejects_unknown_nested_key():
 def test_default_start_pose_matches_t1_prepare_pose():
     core = load_core_module()
     cfg = core.default_config()
-    t1_cfg = core.load_yaml(REPO_ROOT / "robot_bridge" / "example" / "T1" / "configs" / "T1.yaml")
+    t1_cfg = core.load_yaml(T1_DEPLOYMENT_CONFIG)
 
     start_q, start_kp, start_kd, _ = core.load_start_vectors(cfg, REPO_ROOT)
 
@@ -169,7 +170,7 @@ def test_default_start_pose_matches_t1_prepare_pose():
 def test_default_experiment_baseline_uses_prepare_pose_but_common_command_gains():
     core = load_core_module()
     cfg = core.default_config()
-    t1_cfg = core.load_yaml(REPO_ROOT / "robot_bridge" / "example" / "T1" / "configs" / "T1.yaml")
+    t1_cfg = core.load_yaml(T1_DEPLOYMENT_CONFIG)
 
     nominal_q, command_kp, command_kd, _ = core.load_deployment_vectors(cfg, REPO_ROOT)
 
@@ -184,7 +185,7 @@ def test_selected_joint_gain_overrides_only_selected_joint():
     cfg["experiment"]["selected_joint"] = "right_ankle_roll"
     cfg["experiment"]["selected_joint_kp"] = 42.0
     cfg["experiment"]["selected_joint_kd"] = 1.25
-    t1_cfg = core.load_yaml(REPO_ROOT / "robot_bridge" / "example" / "T1" / "configs" / "T1.yaml")
+    t1_cfg = core.load_yaml(T1_DEPLOYMENT_CONFIG)
 
     _, command_kp, command_kd, _ = core.load_deployment_vectors(cfg, REPO_ROOT)
 

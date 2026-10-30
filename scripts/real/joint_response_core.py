@@ -82,7 +82,7 @@ def default_config():
             "command_gains_name": "common",
             "command_stiffness": None,
             "command_damping": None,
-            "deployment_config_path": "robot_bridge/example/T1/configs/T1.yaml",
+            "deployment_config_path": "bridge/robot_bridge/examples/t1/configs/T1.yaml",
         },
         "experiment": {
             "selected_joint": "left_ankle_pitch",
@@ -103,7 +103,7 @@ def default_config():
         "safety": {
             "use_joint_limits": True,
             "joint_limit_margin": 0.05,
-            "joint_limits_config_path": "robot_bridge/params/T1_config.yaml",
+            "joint_limits_config_path": "bridge/robot_bridge/params/T1_config.yaml",
             "abort_on_large_tracking_error": True,
             "max_tracking_error": 0.5,
             "abort_on_large_velocity": True,
