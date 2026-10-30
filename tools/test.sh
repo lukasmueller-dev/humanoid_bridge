@@ -96,7 +96,7 @@ Options:
   --docker              build and run the stages in a ROS 2 Humble container
                         (tools/Dockerfile.test), network off; workspace in $HB_TEST_WS
                         (default ~/.cache/humanoid_bridge/test_ws-<cksum of this clone's path>)
-  --rebuild             with --docker: rebuild the image first
+  --rebuild             with --docker: rebuild the image first; needed after a tools/Dockerfile.test change
   --allow-skip          a skipped stage does not fail the run (exit 0, not 2)
   -h, --help            this text
 

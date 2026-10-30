@@ -1,7 +1,8 @@
 # Low-level controllers
 
 The bridge's 1 kHz tick runs one low-level controller, a `pluginlib` plugin. A policy picks it per
-`/robot_cmd` stream by name. G1, T1, Go2; H1, H1_2 and X2 run `motor_pd` only.
+`/robot_cmd` stream by name, on the G1, T1 and Go2. H1, H1_2 and X2 keep their own loop: they
+load `motor_pd`, never call it, and drop any other name.
 
 | Name | Package | The motor gets |
 |---|---|---|
@@ -31,7 +32,7 @@ controllers:
   my_controller: {kd: 2.0, gains: [1.0, 2.0]}   # numbers or number lists; read at start only
 ```
 
-Every allowed name loads at bridge start. A name that does not load stops the start.
+Every allowed name loads at bridge start, never in the tick. A name that does not load stops the start.
 
 ## Write your own
 
@@ -53,8 +54,9 @@ Rename the package, the class and `name` in `plugins.xml`. That `name` is what a
 | `compute(state, target, out)` | each tick, control thread | no allocation, no blocking, no throw. `out` has `target`'s size |
 
 - `state`: per joint `q`, `dq`, `tau_est` in config joint order; the IMU (quaternion w x y z, gyroscope, accelerometer, rpy).
-- `target`: the interpolated command, after gate 1 (joint range) and gate 2 (target speed), `docs/psi0_gates.md`.
-- After `compute()` the bridge clamps `tau` to `tau_limit` and bounds `q` by the torque window (gate 4). At `kp` 0 it sends `q_meas`.
+- The tick: interpolation → gates 1–2 → `compute()` → `tau_limit` clamp → gate 4 → the robot's frame (`docs/psi0_gates.md`).
+- `target`: the interpolated command after gate 1 (joint range) and gate 2 (target speed). Gate 2 ramps from the last target, not from `out`.
+- Gate 4 bounds `q` by the torque window. At `kp` 0 the bridge sends `q_meas`.
 - A parallel joint (T1 ankles) at `kp > 0`: the bridge moves the P part into `tau` and drops the command's `tau`.
 
 ### 3. Build and allow
@@ -80,3 +82,4 @@ tools/test.sh --controllers             # the bridge's stage: bridge_pd and exam
 - `Controller '<name>' inside a '<other>' stream: /robot_cmd dropped`: `/stop_control`, `/start_control`, then the new name.
 - A client built before `RobotCmd.controller` sends the old type: rebuild `bridge_interface` on every machine that publishes `/robot_cmd`.
 - `compute()` allocates or blocks: the tick misses its 1 ms.
+- `Torque control is not supported yet`: `torque_control: true` in the config. Send `controller: bridge_pd` instead.
