@@ -57,6 +57,11 @@ Decided and fake-tested on `g1-web-interface` (`docs/psi0_gates.md`).
 - [ ] Run the post-PR #7 acceptance test on the gantry: `docs/estop.md`, "Gantry acceptance, after PR #7". Then switch the robot's bridge to that build.
   **Done when:** rows 1–8 pass, the results replace the table in `docs/estop.md`, and the robot runs the `main` build.
 
+### Safety limits
+
+- [ ] Split the measured-speed trip from the commanded-speed clamp: optional `<joint>.dq_trip` (absent = `dq_limit`), raised on the T1 and Go2.
+  **Done when:** `tools/test.sh --docker` passes, with a test: a measured dq between `dq_limit` and `dq_trip` does not latch, one above `dq_trip` latches `state_invalid`, and a config without `dq_trip` trips at `dq_limit` as before.
+
 ### Link loss
 
 - [ ] Jetson link watcher: a process on the Jetson freezes the robot (`hold`, `docs/estop.md`) when the link to the bridge on the lab PC drops, Ethernet or WiFi. It must act within 0.4 s: the motors go passive 0.4 s after `/lowcmd` stops (G0), so a link drop today drops a standing robot.
