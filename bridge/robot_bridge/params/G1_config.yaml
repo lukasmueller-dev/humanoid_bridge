@@ -14,8 +14,10 @@ robot_bridge:
     control_dt: 0.001
     empty_joint_index: -1
     num_joint: 29
-    torque_control: false
     imu_rpy_threshold: 1.0 #radians
+
+    # docs/low-level-controllers.md: the names a /robot_cmd may pick; motor_pd always.
+    controllers_allowed: ["motor_pd", "bridge_pd"]
 
     # docs/estop.md. Operator e-stops have a fixed mode; these set the rest.
     estop:

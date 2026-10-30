@@ -99,7 +99,7 @@ class RobotClient:
         robot_type,
         num_dof,
         control_frequency,
-        interpolation_order=0,
+        interpolation_order=0.0,
         enable_joystick=False,
     ) -> None:
         self.node: Node = node

@@ -12,7 +12,7 @@ source /opt/ros/humble/setup.bash && tools/build.sh
 source <workspace>/install/setup.bash
 ```
 
-No ROS on the host: `tools/test.sh --docker [--wire|--estop|--link|--state|--t1|--go2|--gates|--hands|--config]`
+No ROS on the host: `tools/test.sh --docker [--wire|--estop|--link|--state|--t1|--go2|--gates|--hands|--config|--controllers]`
 builds and runs them in a container.
 
 `robot_bridge`'s `package.xml` depends on `booster_interface` unconditionally,
@@ -47,7 +47,7 @@ bridge echoed mode_machine   PASS  5 wanted 5
 timeout latches hold         PASS  kp[0]=100.0 q[0]=0.0100
 ```
 
-E-stop, `/robot_state`, T1, Go2, target gates, broken configs; each driver ends `all checks passed`:
+E-stop, `/robot_state`, T1, Go2, target gates, broken configs, controllers; each driver ends `all checks passed`:
 
 ```bash
 tools/test.sh --estop      # docs/estop.md
@@ -57,6 +57,7 @@ tools/test.sh --t1         # T1_bridge against fake_t1.py
 tools/test.sh --go2        # Go2_bridge against fake_go2.py
 tools/test.sh --gates      # docs/psi0_gates.md
 tools/test.sh --config
+tools/test.sh --controllers  # docs/low-level-controllers.md
 ```
 
 ## 3. The G1 hand path
@@ -103,7 +104,8 @@ fake_g1 records `/lowcmd` at all.
 | `run_fake_hand_test.sh` | orchestrates the hand run |
 | `drive_hand_ready.py` | `/ready_position_control` twice: hands unarmed, then held closed by a client; each live hand opens to `hand_ready_q` and holds at config kp, never slack; `--silent <side>`: that hand gets no frame |
 | `run_fake_hand_ready_test.sh` | orchestrates the Ready run; `--silent left` runs `fake_dex3.py --silent left` |
-| `run_config_test.sh`, `drive_config.py` | `G1_bridge` on broken copies of `G1_config.yaml` (`ready_q` short or out of range, `idx` out of order, inverted limits): each must fail its parameter load. No fake robot |
+| `run_config_test.sh`, `drive_config.py` | `G1_bridge` on broken copies of `G1_config.yaml` (`ready_q` short or out of range, `idx` out of order, inverted limits, a missing controller plugin, `example_controller` without `kd`): each must fail its parameter load. No fake robot |
+| `run_fake_controllers_test.sh`, `drive_controllers.py` | `G1_bridge` against `fake_g1.py`, `L_LEG_ANKLE_PITCH` made parallel: an unknown `controller` dropped, a `bridge_pd` stream (`kp = kd = 0`, PD as `tau`, the parallel joint too), `motor_pd` inside it dropped, hold after `/stop_control` is `motor_pd`, then an `example_controller` stream (`tau = −kd·dq`, kd from the config), then `motor_pd` with the parallel ankle at kp 0 (its feedforward tau as is); `/low_level_controller` at each step |
 | `drive_no_estop_block.py` | after `drive_gates.py`, on a second bridge whose config lacks `estop:`: arming refused without the remote, accepted with it |
 
 ## What breaks it

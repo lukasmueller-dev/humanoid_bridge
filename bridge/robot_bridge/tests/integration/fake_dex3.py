@@ -17,8 +17,8 @@ tracked and the run reports "left last commanded at never".
 
 import argparse
 import json
+import os
 import signal
-import sys
 import time
 
 import rclpy
@@ -125,7 +125,8 @@ def main():
     rclpy.init()
     node = FakeDex3(args.out, stale_after=args.stale_after, hot_after=args.hot_after,
                     silent=args.silent)
-    signal.signal(signal.SIGTERM, lambda *_: (node.dump(), sys.exit(0)))
+    # os._exit: a SystemExit raised inside an rclpy __del__ is swallowed and the fake spins on.
+    signal.signal(signal.SIGTERM, lambda *_: (node.dump(), os._exit(0)))
     try:
         rclpy.spin(node)
     except KeyboardInterrupt:
