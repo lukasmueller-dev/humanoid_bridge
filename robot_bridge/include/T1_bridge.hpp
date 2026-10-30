@@ -5,7 +5,9 @@
 #include <chrono>
 #include <thread>
 #include <algorithm>
+#include <array>
 #include "bridge_core.hpp"
+#include "t1_parallel_ankle.hpp"
 #include "sensor_msgs/msg/joy.hpp"
 #include "booster_interface/srv/rpc_service.hpp"
 #include "booster_interface/msg/low_state.hpp"
@@ -51,8 +53,30 @@ private:
     void stopControlServiceCB_(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
                                std::shared_ptr<std_srvs::srv::Trigger::Response> response) override;
     void finishControl_() override;
+    void loadParallelAnkleParameters_();
 
-    rclcpp::Subscription<booster_interface::msg::LowState>::SharedPtr lowStateSubscriber_;  
+    // Parallel ankle mapping (t1_parallel_ankle.hpp): when enabled, the bridge sends CMD_TYPE_PARALLEL and turns the
+    // serial ankle commands (pitch, roll) into crank-motor commands itself instead of the Booster firmware.
+    struct AnkleMapping
+    {
+        t1_parallel_ankle::Vec2 q_m{0.0, 0.0}, dq_m{0.0, 0.0};  // crank state, XML convention
+        t1_parallel_ankle::Vec2 q_s_firmware{0.0, 0.0};         // motor_state_serial, for the consistency check
+        t1_parallel_ankle::CrankCommand crank;
+        double estimate_error{0.0};
+        bool ok{false};
+    };
+    int crankSlot_(int side, int crank) const;
+    bool mapAnklesToCranks_(booster_interface::msg::LowCmd &cmd, std::array<AnkleMapping, 2> &mapping) const;
+
+    static constexpr int kAnkleSerialIdx[2][2] = {{15, 16}, {21, 22}}; // [side][pitch, roll]; the two crank motors in parallel mode
+    bool parallelAnkle_{false};
+    bool parallelAnkleSwapCranks_{false};          // the pitch slot of motor_state_parallel is crank b, not crank a
+    std::vector<double> parallelAnkleCrankSign_{1.0, 1.0}; // XML crank angle = sign * motor angle, per crank (a, b)
+    double parallelAnkleCrankTauLimit_{t1_parallel_ankle::kCrankTorqueMax};
+    double parallelAnkleMaxEstimateError_{0.05};   // stop if |f^-1(q_m) - firmware serial q| exceeds this [rad]
+    std::vector<booster_interface::msg::MotorState> parallelState_;
+
+    rclcpp::Subscription<booster_interface::msg::LowState>::SharedPtr lowStateSubscriber_;
     rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr remoteControlSubscriber_;
     rclcpp::Publisher<booster_interface::msg::LowCmd>::SharedPtr lowCommandPublisher_;
     rclcpp::Client<booster_interface::srv::RpcService>::SharedPtr client_;

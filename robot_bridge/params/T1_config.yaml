@@ -16,6 +16,18 @@ robot_bridge:
     torque_control: false
     imu_rpy_threshold: 1.0 #radians
 
+    # Parallel ankle mapping (include/t1_parallel_ankle.hpp, port of loco-mujoco-t1 parallel_act).
+    # false: CMD_TYPE_SERIAL, the Booster firmware maps the ankle pitch/roll commands to the crank motors.
+    # true:  CMD_TYPE_PARALLEL, the bridge does it: q_s = f^-1(crank angles), and the serial PD
+    #        tau_s = kp (q - q_s) + kd (dq - dq_s) + tau is sent to the cranks as tau_m = J^-T tau_s
+    #        (diagonal crank damping in the motor kd, the rest as torque).
+    # Verify the crank order/sign on the robot first: scripts/real/t1_check_parallel_ankle_mapping.py
+    parallel_ankle_mapping: false
+    parallel_ankle_swap_cranks: false        # true if the pitch slot of motor_state_parallel is crank b
+    parallel_ankle_crank_sign: [1.0, 1.0]    # XML crank angle = sign * motor angle (crank a, crank b); floats
+    parallel_ankle_crank_tau_limit: 43.0     # [Nm] per crank motor (E4315 peak, forcerange in T1_23dof_parallel.xml)
+    parallel_ankle_max_estimate_error: 0.05  # [rad] stop if f^-1(crank angles) and the firmware's serial ankle state disagree
+
     upper_limbs_kp_min: 0.0
     upper_limbs_kp_max: 1000.0
     upper_limbs_kd_min: 0.0
