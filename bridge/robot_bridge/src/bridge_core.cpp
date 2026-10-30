@@ -7,6 +7,12 @@ using std::placeholders::_2;
 
 namespace sairol_bridge
 {
+    namespace
+    {
+        // An empty RobotCmd.controller; Arm, Ready and every stop run it.
+        const std::string MOTOR_PD = "motor_pd";
+    }
+
     BridgeCore::BridgeCore(rclcpp::Node::SharedPtr node)
     {
         nh = node;
@@ -25,22 +31,16 @@ namespace sairol_bridge
         cmdParams_.resize(numJoint_);
         holdQ_.assign(numJoint_, 0.0f);
 
-        // The tick's low-level controller, a plugin as a colleague's is (controllers.xml). None: no start.
-        try
-        {
-            controllerLoader_ = std::make_unique<pluginlib::ClassLoader<low_level_controller::Controller>>(
-                "low_level_controller", "low_level_controller::Controller");
-            controller_ = controllerLoader_->createSharedInstance("motor_pd");
-        }
-        catch (const pluginlib::PluginlibException &e)
-        {
-            RCLCPP_FATAL(nh->get_logger(), "Low-level controller motor_pd does not load: %s", e.what());
-            throw ConfigError("low-level controller motor_pd does not load");
-        }
         controllerState_.joints.resize(numJoint_);
         target_.resize(numJoint_);
         frame_.resize(numJoint_);
-        RCLCPP_INFO(nh->get_logger(), "Low-level controller: motor_pd");
+        // Transient-local: a late subscriber still gets the active controller.
+        controllerPublisher_ = nh->create_publisher<std_msgs::msg::String>(
+            "/low_level_controller", rclcpp::QoS(1).reliable().transient_local());
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            useController_(MOTOR_PD);
+        }
 
         desiredSubscriber_ = nh->create_subscription<bridge_interface::msg::RobotCmd>(
             "/robot_cmd", 1, std::bind(&BridgeCore::robotCmdCallBack_, this, _1));
@@ -348,7 +348,64 @@ namespace sairol_bridge
             RCLCPP_ERROR(nh->get_logger(), "A gain range is inverted: every *_max must be >= its *_min");
             return false;
         }
-        return loadEstopParameters_();
+        return loadControllers_() && loadEstopParameters_();
+    }
+
+    bool BridgeCore::loadControllers_()
+    {
+        std::vector<std::string> allowed;
+        nh->get_parameter("controllers_allowed", allowed);
+        allowed.insert(allowed.begin(), MOTOR_PD);
+        try
+        {
+            controllerLoader_ = std::make_unique<pluginlib::ClassLoader<low_level_controller::Controller>>(
+                "low_level_controller", "low_level_controller::Controller");
+        }
+        catch (const pluginlib::PluginlibException &e)
+        {
+            RCLCPP_ERROR(nh->get_logger(), "No low-level controller loads: %s", e.what());
+            return false;
+        }
+        std::string names;
+        for (const auto &name : allowed)
+        {
+            if (controllers_.count(name) != 0)
+            {
+                continue;
+            }
+            try
+            {
+                controllers_[name] = controllerLoader_->createSharedInstance(name);
+            }
+            catch (const pluginlib::PluginlibException &e)
+            {
+                RCLCPP_ERROR(nh->get_logger(), "Low-level controller %s does not load: %s", name.c_str(), e.what());
+                return false;
+            }
+            names += (names.empty() ? "" : ", ") + name;
+        }
+        RCLCPP_INFO(nh->get_logger(), "Low-level controllers allowed: %s", names.c_str());
+        return true;
+    }
+
+    void BridgeCore::useController_(const std::string &name)
+    {
+        if (name == controllerName_)
+        {
+            return;
+        }
+        controller_ = controllers_.at(name);
+        controllerName_ = name;
+        std_msgs::msg::String message;
+        message.data = name;
+        controllerPublisher_->publish(message);
+        RCLCPP_INFO(nh->get_logger(), "Low-level controller: %s", name.c_str());
+    }
+
+    void BridgeCore::endStream_()
+    {
+        stream_.clear();
+        useController_(MOTOR_PD);
     }
 
     bool BridgeCore::loadEstopParameters_()
@@ -450,17 +507,42 @@ namespace sairol_bridge
             return;
         }
 
-        if (checkCommand_(message))
-        {   
-            lowCommandDesired_.motor_cmd = message->motor_cmd;
-            receivedCmd_ = true;
-            calculateInterpolationParams_(duration, interpolation_order, hold_position);
+        // Empty: motor_pd, so a client from before the field works unchanged.
+        const std::string controller = message->controller.empty() ? MOTOR_PD : message->controller;
+        if (controllers_.count(controller) == 0)
+        {
+            RCLCPP_WARN_THROTTLE(nh->get_logger(), steadyClock_, 1000,
+                                 "Controller '%s' is not in controllers_allowed: /robot_cmd dropped",
+                                 controller.c_str());
+            return;
         }
-        else
+
+        if (!checkCommand_(message))
         {
             RCLCPP_ERROR(nh->get_logger(), "Command check failed. Please inspect the command message.");
             return;
         }
+
+        // The first accepted /robot_cmd starts the stream and fixes its controller until a stop.
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (!controlStarted_)
+            {
+                return;   // a stop came in since the check above: no stream
+            }
+            if (!stream_.empty() && controller != stream_)
+            {
+                RCLCPP_WARN_THROTTLE(nh->get_logger(), steadyClock_, 1000,
+                                     "Controller '%s' inside a '%s' stream: /robot_cmd dropped; "
+                                     "/stop_control first", controller.c_str(), stream_.c_str());
+                return;
+            }
+            stream_ = controller;
+            useController_(controller);   // again after Ready, which runs motor_pd
+        }
+        lowCommandDesired_.motor_cmd = message->motor_cmd;
+        receivedCmd_ = true;
+        calculateInterpolationParams_(duration, interpolation_order, hold_position);
     }
 
     void BridgeCore::zeroPositionControl_()
@@ -808,6 +890,7 @@ namespace sairol_bridge
         {
             std::lock_guard<std::mutex> lock(mutex_);
             const bool was_tracking = controlStarted_.exchange(false);
+            endStream_();
             transition = latch_.trigger(cause, was_tracking);
             if (transition.snapshot)
             {
@@ -898,6 +981,7 @@ namespace sairol_bridge
             return false;
         }
         syncLatchFlags_();
+        endStream_();   // a /robot_cmd during initControl_ does not start the stream: Arm runs motor_pd
         publishBridgeState_(latch_.describe(controlStarted_));
         clearLink_();
         return true;
@@ -1116,6 +1200,10 @@ namespace sairol_bridge
             response->success = false;
             response->message = why;
             return;
+        }
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            useController_(MOTOR_PD);   // the stream goes on: its next /robot_cmd switches back
         }
         setPose_(q);
         calculateInterpolationParams_(duration_, 1, true);

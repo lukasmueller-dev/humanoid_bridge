@@ -13,6 +13,9 @@ robot_bridge:
     num_joint: 23
     imu_rpy_threshold: 1.0 #radians
 
+    # docs/low-level-controllers.md: the names a /robot_cmd may pick; motor_pd always.
+    controllers_allowed: ["motor_pd", "bridge_pd"]
+
     # docs/estop.md. Operator e-stops have a fixed mode; these set the rest.
     estop:
       damp_kd: 5.0                      # float: an integer here fails the load

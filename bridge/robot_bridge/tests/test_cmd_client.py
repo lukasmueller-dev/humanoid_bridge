@@ -57,6 +57,11 @@ def test_header_defaults_are_linear_not_holding():
     cmd = pack_robot_cmd(*arrays())
     assert cmd.interpolation_order == 1.0  # a forgotten order ramps over `duration`, not a step
     assert cmd.hold_position is False
+    assert cmd.controller == ""  # the bridge reads empty as motor_pd
+
+
+def test_controller_is_carried_through():
+    assert pack_robot_cmd(*arrays(), controller="bridge_pd").controller == "bridge_pd"
 
 
 def test_numpy_input_is_accepted():
@@ -91,6 +96,7 @@ def test_wire_contract_is_pinned():
         "hold_position": "boolean",
         "duration": "double",
         "motor_cmd": "sequence<bridge_interface/MotorCmd>",
+        "controller": "string",
     }
 
 
