@@ -321,6 +321,14 @@ namespace sairol_bridge
                                  name.c_str());
                     return false;
                 }
+                // Optional: the trip on measured dq; absent = dq_limit.
+                joint_info.dq_trip = joint_info.dq_limit;
+                if (nh->get_parameter(name + ".dq_trip", joint_info.dq_trip) &&
+                    !(std::isfinite(joint_info.dq_trip) && joint_info.dq_trip > 0))
+                {
+                    RCLCPP_ERROR(nh->get_logger(), "%s: dq_trip must be finite and > 0", name.c_str());
+                    return false;
+                }
                 joints_.push_back(joint_info);
                 jointNames_.push_back(name);
             }
@@ -884,11 +892,11 @@ namespace sairol_bridge
 
             const auto &joint = joints_[i];
 
-            if (std::abs(motor.dq) > joint.dq_limit)
+            if (std::abs(motor.dq) > joint.dq_trip)
             {
                 RCLCPP_ERROR_THROTTLE(nh->get_logger(), clock, 1000,
-                                      "Joint [%lu] dq (%.3f) exceeds limit (%.3f).",
-                                      i, motor.dq, joint.dq_limit);
+                                      "Joint [%lu] dq (%.3f) exceeds dq_trip (%.3f).",
+                                      i, motor.dq, joint.dq_trip);
                 return estop::Cause::StateInvalid;
             }
         }
