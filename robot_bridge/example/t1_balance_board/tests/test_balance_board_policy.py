@@ -53,6 +53,8 @@ def load_t1_joint_limits():
 
 def test_all_balance_board_configs_match_t1_joint_limits():
     expected_lower, expected_upper = load_t1_joint_limits()
+    # HeadPitch (idx 1) targets stay 0.82; the bridge allows 0.96 for a limp head (4cd581a).
+    expected_upper[1] = 0.82
 
     for cfg_path in sorted((EXAMPLE_DIR / "configs").glob("*.yaml")):
         with cfg_path.open("r", encoding="utf-8") as f:
