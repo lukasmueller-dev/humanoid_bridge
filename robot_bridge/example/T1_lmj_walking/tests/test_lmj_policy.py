@@ -660,3 +660,22 @@ def test_lmj_controller_maps_left_and_right_sticks_to_direct_velocity_commands()
 
     controller._set_commands_from_joystick(SimpleNamespace(lx=1.0, ly=1.0, rx=1.0))
     np.testing.assert_allclose([controller.vx_cmd, controller.vy_cmd, controller.vyaw_cmd], [-0.2, -0.2, -0.3])
+
+
+def test_lmj_stick_click_zeroes_commands_without_policy_reset():
+    module = load_example_module()
+    controller = module.RobotController.__new__(module.RobotController)
+    controller.robot = SimpleNamespace(
+        update_robot_state=lambda: None,
+        joy_key=SimpleNamespace(lt=False, a=False, ls=True, rs=False),
+        key_count=1,
+        control_started=True,
+    )
+    controller.agent_started = True
+    controller.policy = SimpleNamespace(reset=lambda: pytest.fail("policy reset mid-gait"))
+    controller.vx_cmd, controller.vy_cmd, controller.vyaw_cmd = 0.3, 0.2, 0.3
+
+    controller.check_state()
+
+    assert [controller.vx_cmd, controller.vy_cmd, controller.vyaw_cmd] == [0.0, 0.0, 0.0]
+    assert controller.agent_started

@@ -270,7 +270,6 @@ class RobotController:
         self.vx_cmd = 0.0
         self.vy_cmd = 0.0
         self.vyaw_cmd = 0.0
-        self.policy.reset()
 
     def _clip_commands(self):
         self.vx_cmd = float(np.clip(self.vx_cmd, self.vx_min, self.vx_max))
