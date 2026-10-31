@@ -2,6 +2,7 @@ import argparse
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import List
 
 import numpy as np
 
@@ -13,7 +14,7 @@ DEFAULT_DEBUG_GLOB = "balance_board_debug_*.jsonl"
 @dataclass
 class ParsedDebugLog:
     metadata: dict
-    steps: list[dict]
+    steps: List[dict]
     times: np.ndarray
     qpos: np.ndarray
     q_des: np.ndarray

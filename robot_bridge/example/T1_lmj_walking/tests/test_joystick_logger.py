@@ -52,6 +52,7 @@ def test_summarize_joystick_axes_reports_range_and_direction():
 
 
 def test_plot_joystick_log_writes_png(tmp_path):
+    pytest.importorskip("matplotlib")
     module = load_module()
     samples = [
         {"elapsed_time": 0.0, "lx": -1.0, "ly": 0.0, "rx": 0.0, "ry": -0.5},

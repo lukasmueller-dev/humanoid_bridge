@@ -15,6 +15,6 @@ select = ["E", "F", "W", "I", "UP", "B"]
 known-first-party = ["robot_bridge", "g1_stack", "g1_camera", "robot_sim"]
 
 [tool.pytest.ini_options]
-testpaths = ["bridge", "robot_stacks", "tools"]
+testpaths = ["bridge", "robot_stacks", "tools", "tests", "robot_bridge/example"]
 # examples/: reference code; examples/x2/joint_test.py matches *_test.py and imports scipy.
 norecursedirs = ["thirdparty", "build", "install", "log", "examples"]

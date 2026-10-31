@@ -5,6 +5,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 import yaml
 
 
@@ -16,6 +17,8 @@ SPEC.loader.exec_module(lmj_policy)
 
 EXAMPLE_DIR = MODULE_PATH.parents[1]
 T1_CONFIG_PATH = EXAMPLE_DIR.parents[2] / "bridge" / "robot_bridge" / "params" / "T1_config.yaml"
+MODELS_DIR = EXAMPLE_DIR / "models"
+needs_models = pytest.mark.skipif(not MODELS_DIR.is_dir(), reason=f"no {MODELS_DIR}: untracked")
 RUN_NAME = "parajoints_slippery_ankle_noise_armmult_yawdrift_m0p2_1p2b"
 JOINT_WRAPPER_RUN_NAME = "joint_wrapper_tm4xonfx"
 SLIPPERY_FLOOR_KP50_RUN_NAME = "slippery_floor_kp50_jpiazpg2"
@@ -48,6 +51,9 @@ def load_example_module():
     sys.modules["rclpy"] = rclpy_stub
     sys.modules["robot_bridge"] = robot_bridge_stub
     sys.modules["robot_bridge.robot_client"] = robot_client_stub
+    for module_name in list(sys.modules):
+        if module_name == "utils" or module_name.startswith("utils."):
+            sys.modules.pop(module_name)
     sys.path.insert(0, str(EXAMPLE_DIR))
 
     module_path = EXAMPLE_DIR / "T1_lmj_walking_example.py"
@@ -320,6 +326,7 @@ def test_lmj_walking_policy_can_lock_configured_joints_to_default(monkeypatch):
     np.testing.assert_allclose(policy.last_action, actor_action)
 
 
+@needs_models
 def test_parajoints_deployment_config_selects_run_model_and_ankle_gains():
     cfg_path = EXAMPLE_DIR / "configs" / f"T1_lmj_walking_{RUN_NAME}.yaml"
 
@@ -336,6 +343,7 @@ def test_parajoints_deployment_config_selects_run_model_and_ankle_gains():
     assert cfg["common"]["damping"][21:23] == [3.0, 3.0]
 
 
+@needs_models
 def test_joint_wrapper_deployment_config_selects_run_model_and_ankle_gains():
     cfg_path = EXAMPLE_DIR / "configs" / f"T1_lmj_walking_{JOINT_WRAPPER_RUN_NAME}.yaml"
 
@@ -352,6 +360,7 @@ def test_joint_wrapper_deployment_config_selects_run_model_and_ankle_gains():
     assert cfg["common"]["damping"][21:23] == [3.0, 3.0]
 
 
+@needs_models
 def test_slippery_floor_kp50_deployment_config_selects_run_model_and_symmetric_ankle_gains():
     cfg_path = EXAMPLE_DIR / "configs" / f"T1_lmj_walking_{SLIPPERY_FLOOR_KP50_RUN_NAME}.yaml"
 
@@ -368,6 +377,7 @@ def test_slippery_floor_kp50_deployment_config_selects_run_model_and_symmetric_a
     assert cfg["common"]["damping"][21:23] == [1.0, 1.0]
 
 
+@needs_models
 def test_symankle_yawdrift_deployment_config_selects_run_model_and_matched_ankle_gains():
     cfg_path = EXAMPLE_DIR / "configs" / f"T1_lmj_walking_{SYMANKLE_YAWDRIFT_RUN_NAME}.yaml"
 
@@ -384,6 +394,7 @@ def test_symankle_yawdrift_deployment_config_selects_run_model_and_matched_ankle
     assert cfg["common"]["damping"][21:23] == [3.0, 3.0]
 
 
+@needs_models
 def test_hfa93i45_plus_push_full_deployment_config_matches_training_control_settings():
     cfg_path = EXAMPLE_DIR / "configs" / f"T1_lmj_walking_{HFA93I45_PLUS_PUSH_RUN_NAME}.yaml"
 
@@ -429,6 +440,7 @@ def test_hfa93i45_plus_push_full_deployment_config_matches_training_control_sett
     }
 
 
+@needs_models
 def test_facts_context_disabled_deployment_config_matches_80d_training_settings():
     cfg_path = EXAMPLE_DIR / "configs" / f"T1_lmj_walking_{FACTS_CONTEXT_DISABLED_RUN_NAME}.yaml"
 
@@ -477,6 +489,7 @@ def test_facts_context_disabled_deployment_config_matches_80d_training_settings(
     }
 
 
+@needs_models
 def test_mx_id_vanilla_ppo_deployment_config_matches_80d_training_settings():
     cfg_path = EXAMPLE_DIR / "configs" / f"T1_lmj_walking_{MX_ID_VANILLA_PPO_RUN_NAME}.yaml"
 
@@ -525,6 +538,7 @@ def test_mx_id_vanilla_ppo_deployment_config_matches_80d_training_settings():
     }
 
 
+@needs_models
 def test_pure_axis_yawdrift_feetroll_deployment_config_matches_training_settings():
     cfg_path = EXAMPLE_DIR / "configs" / f"T1_lmj_walking_{PURE_AXIS_YAWDRIFT_FEETROLL_RUN_NAME}.yaml"
 

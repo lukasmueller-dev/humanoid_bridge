@@ -95,6 +95,9 @@ def load_tray_hold_controller_module():
     policy_stub.Policy = _FakePolicy
     rclpy_stub = types.ModuleType("rclpy")
 
+    for module_name in list(sys.modules):
+        if module_name == "utils" or module_name.startswith("utils."):
+            sys.modules.pop(module_name)
     sys.modules["robot_bridge"] = robot_bridge_stub
     sys.modules["robot_bridge.robot_client"] = robot_client_stub
     sys.modules["utils.policy"] = policy_stub

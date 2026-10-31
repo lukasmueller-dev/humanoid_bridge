@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 
 MODULE_PATH = Path(__file__).resolve().parents[1] / "plot_debug_log.py"
@@ -68,6 +69,7 @@ def test_parse_debug_log_extracts_metadata_and_policy_steps(tmp_path):
 
 
 def test_plot_debug_log_writes_expected_pngs(tmp_path):
+    pytest.importorskip("matplotlib")
     log_path = tmp_path / "balance_board_debug_test.jsonl"
     rows = [
         {"event": "metadata", "joint_names": [f"joint_{index}" for index in range(23)]},

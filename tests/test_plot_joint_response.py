@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -72,6 +73,7 @@ def write_fake_step_log(run_dir):
 
 
 def test_plot_joint_response_writes_figures_and_step_metrics(tmp_path):
+    pytest.importorskip("matplotlib")
     plot_joint_response = load_plot_module()
     run_dir = tmp_path / "20260527_t1_left_ankle_pitch_step"
     write_fake_step_log(run_dir)

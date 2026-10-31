@@ -5,6 +5,7 @@ import types
 from pathlib import Path
 
 import numpy as np
+import pytest
 import yaml
 
 
@@ -16,6 +17,8 @@ SPEC.loader.exec_module(balance_board_policy)
 
 EXAMPLE_DIR = MODULE_PATH.parents[1]
 T1_CONFIG_PATH = EXAMPLE_DIR.parents[2] / "bridge" / "robot_bridge" / "params" / "T1_config.yaml"
+MODELS_DIR = EXAMPLE_DIR / "models"
+needs_models = pytest.mark.skipif(not MODELS_DIR.is_dir(), reason=f"no {MODELS_DIR}: untracked")
 RUN_NAME = "balance_board_r14_easyDR_20260525_223940_CEST"
 QV823LI5_RUN_NAME = "bb_r15_11_conservative_ppo_numsteps100"
 NO_POLICY_PREDICTION_RUN_NAME = (
@@ -165,6 +168,7 @@ def test_build_full_observation_uses_training_191d_layout():
     np.testing.assert_allclose(obs[185:191], np.array([0.0, 0.0, 0.0, 0.755, 0.0, 0.0], dtype=np.float32))
 
 
+@needs_models
 def test_actor_artifact_selects_policy_prediction_and_goal_observations():
     actor_path = EXAMPLE_DIR / "models" / f"{RUN_NAME}_actor_97d.npz"
 
@@ -177,6 +181,7 @@ def test_actor_artifact_selects_policy_prediction_and_goal_observations():
     np.testing.assert_array_equal(actor_indices[91:97], np.arange(185, 191))
 
 
+@needs_models
 def test_predictor_artifact_matches_balance_board_history_decoder_shapes():
     predictor_path = EXAMPLE_DIR / "models" / f"{RUN_NAME}_predictor.npz"
 
@@ -234,6 +239,7 @@ def test_balance_board_predictor_can_feed_selected_decoder_observation():
     np.testing.assert_allclose(debug["decoder_observation"], obs[policy_indices])
 
 
+@needs_models
 def test_qv823li5_actor_and_predictor_artifacts_match_training_groups():
     actor_path = EXAMPLE_DIR / "models" / f"{QV823LI5_RUN_NAME}_actor_97d.npz"
     predictor_path = EXAMPLE_DIR / "models" / f"{QV823LI5_RUN_NAME}_predictor.npz"
@@ -259,6 +265,7 @@ def test_qv823li5_actor_and_predictor_artifacts_match_training_groups():
         assert predictor_data["decoder_kernel_2"].shape == (256, 16)
 
 
+@needs_models
 def test_qv823li5_config_smoke_uses_policy_decoder_observation():
     cfg_path = EXAMPLE_DIR / "configs" / f"t1_balance_board_{QV823LI5_RUN_NAME}.yaml"
     with cfg_path.open("r", encoding="utf-8") as f:
@@ -292,6 +299,7 @@ def test_qv823li5_config_smoke_uses_policy_decoder_observation():
     assert np.all(q_des <= policy.target_qpos_upper)
 
 
+@needs_models
 def test_balance_board_policy_can_keep_prediction_slots_zero_for_actor():
     cfg_path = EXAMPLE_DIR / "configs" / f"t1_balance_board_{QV823LI5_RUN_NAME}.yaml"
     with cfg_path.open("r", encoding="utf-8") as f:
@@ -317,6 +325,7 @@ def test_balance_board_policy_can_keep_prediction_slots_zero_for_actor():
     np.testing.assert_allclose(debug["actor_observation"][75:91], np.zeros(16, dtype=np.float32))
 
 
+@needs_models
 def test_no_policy_prediction_config_keeps_actor_prediction_slots_zero():
     cfg_path = EXAMPLE_DIR / "configs" / f"t1_balance_board_{NO_POLICY_PREDICTION_RUN_NAME}.yaml"
     with cfg_path.open("r", encoding="utf-8") as f:
@@ -359,6 +368,7 @@ def test_no_policy_prediction_config_keeps_actor_prediction_slots_zero():
     assert policy.last_debug["decoder_prediction"].shape == (16,)
 
 
+@needs_models
 def test_balance_board_config_matches_training_control_settings():
     cfg_path = EXAMPLE_DIR / "configs" / "t1_balance_board.yaml"
 
@@ -407,6 +417,7 @@ def test_balance_board_config_matches_training_control_settings():
     assert cfg["debug"]["first_step_probe_enabled"] is False
 
 
+@needs_models
 def test_balance_board_policy_smoke_updates_prediction_and_clips_targets():
     cfg_path = EXAMPLE_DIR / "configs" / "t1_balance_board.yaml"
     with cfg_path.open("r", encoding="utf-8") as f:
@@ -429,6 +440,7 @@ def test_balance_board_policy_smoke_updates_prediction_and_clips_targets():
     assert np.all(q_des <= policy.target_qpos_upper)
 
 
+@needs_models
 def test_balance_board_policy_initializes_history_with_nominal_flat_board_observation():
     cfg_path = EXAMPLE_DIR / "configs" / "t1_balance_board.yaml"
     with cfg_path.open("r", encoding="utf-8") as f:
@@ -455,6 +467,7 @@ def test_balance_board_policy_initializes_history_with_nominal_flat_board_observ
     np.testing.assert_allclose(policy.last_debug["balance_board_observation"], NOMINAL_FLAT_BOARD_OBS)
 
 
+@needs_models
 def test_balance_board_policy_exposes_decoder_debug_snapshot_after_inference():
     cfg_path = EXAMPLE_DIR / "configs" / "t1_balance_board.yaml"
     with cfg_path.open("r", encoding="utf-8") as f:
@@ -494,6 +507,7 @@ def test_t1_balance_board_example_accepts_config_argument_with_default():
     assert custom_args.config == "configs/custom.yaml"
 
 
+@needs_models
 def test_t1_balance_board_controller_debug_log_contains_observation_and_decoder_fields():
     module = load_example_module(robot_client_cls=FakeRobotClient)
     cfg_path = EXAMPLE_DIR / "configs" / "t1_balance_board.yaml"
@@ -533,6 +547,7 @@ def test_t1_balance_board_controller_debug_log_contains_observation_and_decoder_
     assert controller.robot.last_cmd is not None
 
 
+@needs_models
 def test_t1_balance_board_controller_blends_first_policy_command_from_current_pose():
     module = load_example_module(robot_client_cls=FakeRobotClient)
     cfg_path = EXAMPLE_DIR / "configs" / "t1_balance_board.yaml"
@@ -568,6 +583,7 @@ def test_t1_balance_board_controller_blends_first_policy_command_from_current_po
     assert len(step["control"]["policy_q_des"]) == 23
 
 
+@needs_models
 def test_t1_balance_board_first_step_probe_logs_initial_inference_without_sending_command():
     module = load_example_module(robot_client_cls=FakeRobotClient)
     cfg_path = EXAMPLE_DIR / "configs" / "t1_balance_board.yaml"
