@@ -679,3 +679,31 @@ def test_lmj_stick_click_zeroes_commands_without_policy_reset():
 
     assert [controller.vx_cmd, controller.vy_cmd, controller.vyaw_cmd] == [0.0, 0.0, 0.0]
     assert controller.agent_started
+
+
+def test_lmj_policy_step_without_debug_log_sends_command_and_skips_second_forward_pass():
+    module = load_example_module()
+    controller = module.RobotController.__new__(module.RobotController)
+    sent = []
+    controller.robot = SimpleNamespace(
+        q_pos=np.zeros(23),
+        q_vel=np.zeros(23),
+        quat=[1.0, 0.0, 0.0, 0.0],
+        angular_velocity=np.zeros(3),
+        send_cmd=lambda **kwargs: sent.append(kwargs),
+    )
+    controller.policy = SimpleNamespace(
+        last_action=np.zeros(23, dtype=np.float32),
+        inference=lambda **kwargs: np.ones(23, dtype=np.float32),
+    )
+    controller._actor_forward_raw_from_normalized = lambda obs: pytest.fail("second forward pass")
+    controller.debug_log = None
+    controller.policy_start_time = None
+    controller.last_policy_time = None
+    controller.vx_cmd, controller.vy_cmd, controller.vyaw_cmd = 0.0, 0.0, 0.0
+    controller.policy_kp = controller.policy_kd = np.zeros(23, dtype=np.float32)
+
+    controller.policy_step()
+
+    assert len(sent) == 1
+    np.testing.assert_array_equal(sent[0]["q_target_pos"], np.ones(23, dtype=np.float32))

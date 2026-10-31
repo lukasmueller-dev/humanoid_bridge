@@ -85,14 +85,16 @@ class RobotController:
         self.vyaw_cmd = 0.0
         self.debug_step_count = 0
         self.last_policy_time = None
-        debug_dir = Path(__file__).resolve().parent / "debug_logs"
-        debug_dir.mkdir(parents=True, exist_ok=True)
-        model_name = "".join(
-            char if char.isalnum() or char in ("-", "_") else "_" for char in self.policy.actor_path.stem
-        )
-        debug_path = debug_dir / f"lmj_debug_{model_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jsonl"
-        self.debug_log = debug_path.open("w", encoding="utf-8")
-        self._write_debug_metadata()
+        self.debug_log = None
+        if bool(cfg.get("debug", {}).get("enabled", True)):
+            debug_dir = Path(__file__).resolve().parent / "debug_logs"
+            debug_dir.mkdir(parents=True, exist_ok=True)
+            model_name = "".join(
+                char if char.isalnum() or char in ("-", "_") else "_" for char in self.policy.actor_path.stem
+            )
+            debug_path = debug_dir / f"lmj_debug_{model_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.jsonl"
+            self.debug_log = debug_path.open("w", encoding="utf-8")
+            self._write_debug_metadata()
         print(
             "Please press\n"
             "\t \"LT + RT + START\" to start bridge control,\n"
@@ -131,6 +133,10 @@ class RobotController:
             vy=self.vy_cmd,
             vyaw=self.vyaw_cmd,
         )
+        self.robot.send_cmd(q_target_pos=q_des, target_kp=self.policy_kp, target_kd=self.policy_kd)
+        self.last_policy_time = time_now
+        if self.debug_log is None:
+            return
         obs_81 = self.policy.last_observation.copy()
         norm_obs_81 = normalize_actor_observation(obs_81, self.policy.actor.mean, self.policy.actor.var)
         raw_action_preclip = self._actor_forward_raw_from_normalized(norm_obs_81)
@@ -183,9 +189,6 @@ class RobotController:
             + "\n"
         )
         self.debug_log.flush()
-        self.last_policy_time = time_now
-
-        self.robot.send_cmd(q_target_pos=q_des, target_kp=self.policy_kp, target_kd=self.policy_kd)
 
     def _write_debug_metadata(self):
         actor_indices = []
@@ -253,7 +256,7 @@ class RobotController:
         return digest.hexdigest()
 
     def close_debug_log(self):
-        if not self.debug_log.closed:
+        if self.debug_log is not None and not self.debug_log.closed:
             self.debug_log.close()
 
     def _start_agent(self):

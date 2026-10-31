@@ -27,3 +27,4 @@ Safety notes:
 - The configured command limits are intentionally conservative.
 - The bridge still applies its own torque and safety checks, including special handling for parallel ankle joints.
 - Sim2sim debugging showed that the policy is sensitive to dynamics around the ankles and reflected inertia. Treat first hardware tests as low-speed validation.
+- Each policy step writes a JSON record to `debug_logs/` (about 1.7 GB per hour at 50 Hz). Turn it off with `debug: {enabled: false}` in the config.
