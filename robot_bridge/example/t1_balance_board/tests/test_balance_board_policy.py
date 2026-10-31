@@ -15,7 +15,7 @@ SPEC.loader.exec_module(balance_board_policy)
 
 
 EXAMPLE_DIR = MODULE_PATH.parents[1]
-T1_CONFIG_PATH = EXAMPLE_DIR.parents[1] / "params" / "T1_config.yaml"
+T1_CONFIG_PATH = EXAMPLE_DIR.parents[2] / "bridge" / "robot_bridge" / "params" / "T1_config.yaml"
 RUN_NAME = "balance_board_r14_easyDR_20260525_223940_CEST"
 QV823LI5_RUN_NAME = "bb_r15_11_conservative_ppo_numsteps100"
 NO_POLICY_PREDICTION_RUN_NAME = (

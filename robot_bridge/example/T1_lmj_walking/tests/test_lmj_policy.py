@@ -15,7 +15,7 @@ SPEC.loader.exec_module(lmj_policy)
 
 
 EXAMPLE_DIR = MODULE_PATH.parents[1]
-T1_CONFIG_PATH = EXAMPLE_DIR.parents[1] / "params" / "T1_config.yaml"
+T1_CONFIG_PATH = EXAMPLE_DIR.parents[2] / "bridge" / "robot_bridge" / "params" / "T1_config.yaml"
 RUN_NAME = "parajoints_slippery_ankle_noise_armmult_yawdrift_m0p2_1p2b"
 JOINT_WRAPPER_RUN_NAME = "joint_wrapper_tm4xonfx"
 SLIPPERY_FLOOR_KP50_RUN_NAME = "slippery_floor_kp50_jpiazpg2"
