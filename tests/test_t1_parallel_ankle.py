@@ -64,3 +64,15 @@ def test_check_script_recovers_planted_swap_and_sign():
     assert results[0]["swap"] is swap and results[0]["sign"] == sign
     assert results[0]["worst"] < 1e-8
     assert results[1]["worst"] > 0.05
+
+
+def test_t1_config_parallel_is_t1_config_with_the_mapping_on():
+    yaml = pytest.importorskip("yaml")
+    params = REPO_ROOT / "bridge" / "robot_bridge" / "params"
+    base = yaml.safe_load((params / "T1_config.yaml").read_text())["robot_bridge"]["ros__parameters"]
+    parallel = yaml.safe_load((params / "T1_config_parallel.yaml").read_text())["robot_bridge"]["ros__parameters"]
+
+    assert base["parallel_ankle_mapping"] is False
+    assert parallel.pop("parallel_ankle_mapping") is True
+    base.pop("parallel_ankle_mapping")
+    assert parallel == base
