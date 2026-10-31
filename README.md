@@ -119,6 +119,7 @@ tools/g1-bringup.sh --arm-from-measured --robot-is-clear
 tools/g1-bringup.sh --stop                           # every robot bridge; SIGKILL if SIGINT hangs
 tools/robot-bringup.sh --robot t1                    # the T1: T1_bridge, no release; custom mode on arming
 tools/robot-bringup.sh --robot go2                   # the Go2: StandDown + release, Go2_bridge; Ready stands it up
+tools/robot-bringup.sh --robot t1 --override trip.yaml  # a second params file: dq_trip per joint (docs/estop.md, Overrides)
 ```
 
 It sources ROS and `setup_unitree.sh` itself. The release runs on

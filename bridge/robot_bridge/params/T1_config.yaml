@@ -2,6 +2,8 @@
 # e-stop damp: RB + RT    e-stop hold: LB + RB    (set under estop:)
 # arming needs the gamepad (a message within 0.5 s; estop.require_remote)
 # robot_client.py (the examples' client) reads its own keys: LT + START, LT + A, BACK
+# dq_trip: the trip on measured |dq|, 1.25 x the T1_23dof.urdf velocity; dq_limit only clamps commands.
+# No key = dq_limit (Ankle_Pitch: 1.25 x 12.57 is below its dq_limit 18.8).
 
 
 robot_bridge:
@@ -71,6 +73,7 @@ robot_bridge:
       q_min: -1.012
       q_max: 1.012
       dq_limit: 12.56
+      dq_trip: 52.36
       tau_limit: 7.0
       kp: 5.0
       kd: 0.1
@@ -82,6 +85,7 @@ robot_bridge:
       q_min: -0.314
       q_max: 0.96    # booster_assets T1_23dof: a limp head rests at its stop, which Arm must accept
       dq_limit: 12.56
+      dq_trip: 52.36
       tau_limit: 7.0      
       kp: 5.0
       kd: 0.1
@@ -93,6 +97,7 @@ robot_bridge:
       q_min: -3.281
       q_max: 1.187
       dq_limit: 18.84
+      dq_trip: 21.99
       tau_limit: 18.0      
       kp: 40.0
       kd: 0.5
@@ -104,6 +109,7 @@ robot_bridge:
       q_min: -1.640
       q_max: 1.536
       dq_limit: 18.84
+      dq_trip: 21.99
       tau_limit: 18.0      
       kp: 50.0
       kd: 1.5
@@ -115,6 +121,7 @@ robot_bridge:
       q_min: -2.234
       q_max: 2.234
       dq_limit: 18.84
+      dq_trip: 21.99
       tau_limit: 18.0      
       kp: 20.0
       kd: 0.2
@@ -126,6 +133,7 @@ robot_bridge:
       q_min: -2.094
       q_max: 0.035
       dq_limit: 18.84
+      dq_trip: 21.99
       tau_limit: 18.0
       kp: 10.0
       kd: 0.2
@@ -137,6 +145,7 @@ robot_bridge:
       q_min: -3.281
       q_max: 1.187
       dq_limit: 18.84
+      dq_trip: 21.99
       tau_limit: 18.0      
       kp: 40.0
       kd: 0.5
@@ -148,6 +157,7 @@ robot_bridge:
       q_min: -1.536
       q_max: 1.640
       dq_limit: 18.84
+      dq_trip: 21.99
       tau_limit: 18.0
       kp: 50.0
       kd: 1.5
@@ -159,6 +169,7 @@ robot_bridge:
       q_min: -2.234
       q_max: 2.234
       dq_limit: 18.84
+      dq_trip: 21.99
       tau_limit: 18.0
       kp: 20.0
       kd: 0.2
@@ -170,6 +181,7 @@ robot_bridge:
       q_min: 0.000
       q_max: 2.094
       dq_limit: 18.84
+      dq_trip: 21.99
       tau_limit: 18.0
       kp: 10.0
       kd: 0.2 
@@ -181,6 +193,7 @@ robot_bridge:
       q_min: -1.012
       q_max: 1.012
       dq_limit: 10.88
+      dq_trip: 18.32
       tau_limit: 25.0      
       kp: 100.0
       kd: 5.0
@@ -192,6 +205,7 @@ robot_bridge:
       q_min: -2.059
       q_max: 2.059
       dq_limit: 12.5
+      dq_trip: 19.11
       tau_limit: 45.0      
       kp: 350.0
       kd: 7.5
@@ -203,6 +217,7 @@ robot_bridge:
       q_min: -0.366
       q_max: 1.536
       dq_limit: 10.9
+      dq_trip: 18.32
       tau_limit: 25.0      
       kp: 350.0
       kd: 7.5
@@ -214,6 +229,7 @@ robot_bridge:
       q_min: -1.012
       q_max: 1.012
       dq_limit: 10.9
+      dq_trip: 18.32
       tau_limit: 25.0      
       kp: 180.0
       kd: 3.0
@@ -225,6 +241,7 @@ robot_bridge:
       q_min: 0.000
       q_max: 2.146
       dq_limit: 11.7
+      dq_trip: 18.45
       tau_limit: 60.0
       kp: 350.0
       kd: 5.5
@@ -252,6 +269,7 @@ robot_bridge:
       q_max: 0.44
 
       dq_limit: 12.4
+      dq_trip: 15.71
       tau_limit: 15.0      
       kp: 200.0
       kd: 5.0
@@ -263,6 +281,7 @@ robot_bridge:
       q_min: -2.059
       q_max: 2.059
       dq_limit: 12.5
+      dq_trip: 19.11
       tau_limit: 45.0     
       kp: 350.0
       kd: 7.5
@@ -274,6 +293,7 @@ robot_bridge:
       q_min: -1.57
       q_max: 0.2
       dq_limit: 10.9  
+      dq_trip: 18.32
       tau_limit: 25.0
       kp: 350.0
       kd: 7.5
@@ -285,6 +305,7 @@ robot_bridge:
       q_min: -1.0
       q_max: 1.0
       dq_limit: 10.9
+      dq_trip: 18.32
       tau_limit: 25.0      
       kp: 180.0
       kd: 3.0
@@ -296,6 +317,7 @@ robot_bridge:
       q_min: 0.0
       q_max: 2.15
       dq_limit: 11.7
+      dq_trip: 18.45
       tau_limit: 60.0  
       kp: 350.0
       kd: 5.5
@@ -322,6 +344,7 @@ robot_bridge:
       q_max: 0.45
 
       dq_limit: 12.4
+      dq_trip: 15.71
       tau_limit: 24.0  
       kp: 200.0
       kd: 5.0

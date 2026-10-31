@@ -22,11 +22,17 @@ python3 "$HERE/fake_go2.py" > "$OUT/fake.log" 2>&1 &
 FAKE_PID=$!; disown "$FAKE_PID"
 sleep 2
 
+# FR_hip: dq_limit 30.1, dq_trip 37.63; an override file lowers the trip (docs/estop.md, Overrides).
+printf 'robot_bridge:\n  ros__parameters:\n    override:\n      FR_hip:\n        dq_trip: 30.0\n' > "$OUT/override.yaml"
+
 setsid ros2 run robot_bridge Go2_bridge --ros-args -r __node:=robot_bridge \
-    --params-file "$GO2_PARAMS" > "$OUT/bridge.log" 2>&1 &
+    --params-file "$GO2_PARAMS" --params-file "$OUT/override.yaml" > "$OUT/bridge.log" 2>&1 &
 BRIDGE_PID=$!; disown "$BRIDGE_PID"
 sleep 4
 if ! grep -q "Go2 type:" "$OUT/bridge.log"; then
     echo "bridge did not come up:"; tail -20 "$OUT/bridge.log"; exit 1
+fi
+if ! grep -q "Override FR_hip.dq_trip: 37.630 -> 30.000" "$OUT/bridge.log"; then
+    echo "the override did not reach the Go2 bridge:"; tail -20 "$OUT/bridge.log"; exit 1
 fi
 or_tail "$OUT/bridge.log" python3 "$HERE/drive_go2.py" "$GO2_PARAMS"

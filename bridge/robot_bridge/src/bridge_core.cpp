@@ -12,6 +12,10 @@ namespace sairol_bridge
         // An empty RobotCmd.controller; Arm, Ready and every stop run it.
         const std::string MOTOR_PD = "motor_pd";
 
+        // The keys an override.<joint>.<key> parameter may set, each with the Joint field it replaces.
+        // Never read from a params file: a new key needs a bridge PR (docs/estop.md, Overrides).
+        const std::map<std::string, float_t Joint::*> OVERRIDE_KEYS{{"dq_trip", &Joint::dq_trip}};
+
         // controllers.<name>.* as plain numbers; false names the key that is not a number or a number list.
         bool controllerParameters(rclcpp::Node &node, const std::string &name,
                                   low_level_controller::Parameters &params, std::string &error)
@@ -321,6 +325,14 @@ namespace sairol_bridge
                                  name.c_str());
                     return false;
                 }
+                // Optional: the trip on measured dq; absent = dq_limit.
+                joint_info.dq_trip = joint_info.dq_limit;
+                if (nh->get_parameter(name + ".dq_trip", joint_info.dq_trip) &&
+                    !(std::isfinite(joint_info.dq_trip) && joint_info.dq_trip > 0))
+                {
+                    RCLCPP_ERROR(nh->get_logger(), "%s: dq_trip must be finite and > 0", name.c_str());
+                    return false;
+                }
                 joints_.push_back(joint_info);
                 jointNames_.push_back(name);
             }
@@ -381,7 +393,87 @@ namespace sairol_bridge
             RCLCPP_ERROR(nh->get_logger(), "A gain range is inverted: every *_max must be >= its *_min");
             return false;
         }
-        return loadControllers_() && loadEstopParameters_();
+        return loadOverrides_() && loadControllers_() && loadEstopParameters_();
+    }
+
+    bool BridgeCore::loadOverrides_()
+    {
+        std::string allowed;
+        std::vector<std::string> keys;
+        for (const auto &entry : OVERRIDE_KEYS)
+        {
+            allowed += (allowed.empty() ? "" : ", ") + entry.first;
+            keys.push_back(entry.first);
+        }
+        // For readers (ros2 param dump). Set, not declared: a reloaded dump brings its own override_keys, and the constant wins.
+        nh->set_parameter(rclcpp::Parameter("override_keys", keys));
+
+        struct Change
+        {
+            size_t joint;
+            std::string key;
+            float_t Joint::*field;
+            float_t value;
+        };
+        std::vector<Change> changes;
+        std::map<std::string, rclcpp::Parameter> values;
+        nh->get_node_parameters_interface()->get_parameters_by_prefix("override", values);
+        for (const auto &[name, parameter] : values)   // name: <joint>.<key>
+        {
+            const size_t dot = name.find('.');
+            const std::string joint = dot == std::string::npos ? "" : name.substr(0, dot);
+            const std::string key = name.substr(dot == std::string::npos ? 0 : dot + 1);
+            const auto field = OVERRIDE_KEYS.find(key);
+            if (field == OVERRIDE_KEYS.end())
+            {
+                RCLCPP_ERROR(nh->get_logger(), "override.%s: '%s' is not an override key (%s)",
+                             name.c_str(), key.c_str(), allowed.c_str());
+                return false;
+            }
+            const auto at = std::find(jointNames_.begin(), jointNames_.end(), joint);
+            if (at == jointNames_.end())
+            {
+                RCLCPP_ERROR(nh->get_logger(), "override.%s: no joint '%s'", name.c_str(), joint.c_str());
+                return false;
+            }
+            double number = std::numeric_limits<double>::quiet_NaN();
+            if (parameter.get_type() == rclcpp::ParameterType::PARAMETER_DOUBLE)
+            {
+                number = parameter.as_double();
+            }
+            else if (parameter.get_type() == rclcpp::ParameterType::PARAMETER_INTEGER)
+            {
+                number = static_cast<double>(parameter.as_int());
+            }
+            // Clamped: a double past float's range converts to float with undefined behaviour.
+            constexpr double FLOAT_MAX = std::numeric_limits<float_t>::max();
+            const float_t value = static_cast<float_t>(std::clamp(number, -FLOAT_MAX, FLOAT_MAX));
+            if (!std::isfinite(number) || !(value > 0))
+            {
+                RCLCPP_ERROR(nh->get_logger(), "override.%s: needs a finite number > 0", name.c_str());
+                return false;
+            }
+            const size_t index = static_cast<size_t>(at - jointNames_.begin());
+            const float_t base = joints_[index].*(field->second);
+            // Compared as float, as dq_limit is stored: 2 x it written out in decimal passes.
+            // A value no higher than the base is always fine: a T1 or Go2 base trip can be over the cap.
+            if (value > 2 * joints_[index].dq_limit && value > base)
+            {
+                RCLCPP_ERROR(nh->get_logger(), "override.%s: %.3f is above 2 x dq_limit (%.3f) and the base (%.3f)",
+                             name.c_str(), number, 2 * joints_[index].dq_limit, base);
+                return false;
+            }
+            changes.push_back({index, key, field->second, value});
+        }
+        // After the checks: a refused start applies and logs none.
+        for (const auto &change : changes)
+        {
+            float_t &target = joints_[change.joint].*change.field;
+            RCLCPP_WARN(nh->get_logger(), "Override %s.%s: %.3f -> %.3f",
+                        jointNames_[change.joint].c_str(), change.key.c_str(), target, change.value);
+            target = change.value;
+        }
+        return true;
     }
 
     bool BridgeCore::loadControllers_()
@@ -885,11 +977,11 @@ namespace sairol_bridge
 
             const auto &joint = joints_[i];
 
-            if (std::abs(motor.dq) > joint.dq_limit)
+            if (std::abs(motor.dq) > joint.dq_trip)
             {
                 RCLCPP_ERROR_THROTTLE(nh->get_logger(), clock, 1000,
-                                      "Joint [%lu] dq (%.3f) exceeds limit (%.3f).",
-                                      i, motor.dq, joint.dq_limit);
+                                      "Joint [%lu] dq (%.3f) exceeds dq_trip (%.3f).",
+                                      i, motor.dq, joint.dq_trip);
                 return estop::Cause::StateInvalid;
             }
         }

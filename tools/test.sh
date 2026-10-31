@@ -25,7 +25,7 @@
 #   hands  the real G1_bridge against fake Dex3 hands, five runs: plain, the left hand's
 #          state stops (hands-stale), the left hand overheats (hands-hot), Ready opens
 #          both hands (hands-ready), Ready with the left hand silent (hands-ready-one)
-#   config the real G1_bridge refuses broken copies of G1_config.yaml
+#   config the real G1_bridge refuses broken copies of G1_config.yaml and bad override files
 #   controllers  the real G1_bridge against fake_g1: RobotCmd.controller picks bridge_pd for a stream,
 #          an unknown name or a change inside the stream is dropped, hold after it is motor_pd;
 #          example_controller loads by name and gets its kd

@@ -3,7 +3,7 @@
 > One per repo. Planned work only, one item per task. Finished items are
 > deleted; git history is the log.
 
-_Last updated: 2026-10-28 · codebase-health job_
+_Last updated: 2026-10-30 · safety-limits job_
 
 ## Items
 

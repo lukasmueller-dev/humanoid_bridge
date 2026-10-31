@@ -3,7 +3,7 @@
 Test inputs: /fake_g1/keys (UInt16, remote key mask), /fake_g1/roll (Float32, rad),
 /fake_g1/remote (Bool, remote header on/off), /fake_g1/pause (Bool, stop /lowstate).
 Bad robot data, joint 0 / roll: /fake_g1/nan_q (Bool), /fake_g1/dq (Float32, rad/s),
-/fake_g1/nan_imu (Bool). /fake_g1/freeze (Bool): stop tracking, q holds (a lagging robot).
+/fake_g1/nan_imu (Bool). /fake_g1/dq1: dq of joint 1. /fake_g1/freeze (Bool): stop tracking, q holds (a lagging robot).
 /fake_g1/pause is a link drop: LowState.tick moves on. /fake_g1/reboot (Float32, s): no /lowstate
 for s, then tick from 0 and a motion service holding /lowcmd (never sends); /fake_g1/release (Bool) drops it.
 """
@@ -46,6 +46,7 @@ class FakeG1(Node):
         self.create_subscription(Bool, "/fake_g1/pause", self._on_pause, 10)
         self.create_subscription(Bool, "/fake_g1/nan_q", self._on_nan_q, 10)
         self.create_subscription(Float32, "/fake_g1/dq", self._on_dq, 10)
+        self.create_subscription(Float32, "/fake_g1/dq1", self._on_dq1, 10)
         self.create_subscription(Bool, "/fake_g1/nan_imu", self._on_nan_imu, 10)
         self.create_subscription(Bool, "/fake_g1/freeze", self._on_freeze, 10)
         self.create_subscription(Float32, "/fake_g1/reboot", self._on_reboot, 10)
@@ -56,6 +57,7 @@ class FakeG1(Node):
         self.paused = False
         self.nan_q = False
         self.dq0 = 0.0
+        self.dq1 = 0.0
         self.roll = 0.0
         self.nan_imu = False
 
@@ -94,6 +96,7 @@ class FakeG1(Node):
         if self.nan_q:
             self.state.motor_state[0].q = math.nan
         self.state.motor_state[0].dq = self.dq0
+        self.state.motor_state[1].dq = self.dq1
         self.state.imu_state.rpy = [math.nan if self.nan_imu else self.roll, 0.0, 0.0]
         self.state.tick = int((time.monotonic() - self.booted) * 1000)
         self.publisher.publish(self.state)
@@ -110,6 +113,9 @@ class FakeG1(Node):
 
     def _on_dq(self, msg):
         self.dq0 = float(msg.data)
+
+    def _on_dq1(self, msg):
+        self.dq1 = float(msg.data)
 
     def _on_nan_imu(self, msg):
         self.nan_imu = bool(msg.data)

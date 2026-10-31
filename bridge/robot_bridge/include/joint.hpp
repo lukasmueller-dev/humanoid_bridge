@@ -11,7 +11,8 @@ namespace sairol_bridge
         int idx;
         float_t q_min{0};
         float_t q_max{0};
-        float_t dq_limit{0};
+        float_t dq_limit{0};   // clamp on the commanded dq
+        float_t dq_trip{0};    // measured |dq| above this latches state_invalid; absent in config = dq_limit
         float_t tau_limit{0};
         float_t kp{0};
         float_t kd{0};
