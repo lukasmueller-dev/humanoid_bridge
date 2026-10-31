@@ -75,5 +75,7 @@ Decided and fake-tested on `g1-web-interface` (`docs/psi0_gates.md`).
 
 ### Cleanups
 
+- [ ] Untrack the 112 binary files `t1-parallel-ankle` adds (221 MB: `logs/`, example `debug_logs/` and `models/`); keep them on disk.
+  **Done when:** `git ls-files` shows none of the 112 paths, the files stay on disk, and `tools/test.sh` (host stages) passes.
 - [ ] `--interface sim` does not reach the bridge: MuJoCo listens on `rt/lowcmd`, which the bridge owns. **Done when:** a sim run drives the same client path as hardware, or the limitation is documented as permanent.
 - [ ] Dedup the test-driver helpers: 14 `drive_*.py` define their own `check(name, ok, detail)`, and several repeat `spin`/`wait` and the `main()` boilerplate. Move them to one shared module per integration directory (`bridge/robot_bridge/tests/integration/`, `robot_stacks/sim/robot_sim/tests/integration/`). **Done when:** `grep -l 'def check(' bridge/robot_bridge/tests/integration/drive_*.py robot_stacks/sim/robot_sim/tests/integration/drive_*.py` prints nothing and `tools/test.sh --docker` passes.
