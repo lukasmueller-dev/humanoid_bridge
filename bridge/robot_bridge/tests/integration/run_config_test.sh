@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Starts G1_bridge on broken copies of G1_config.yaml: each must refuse to load. No hardware. Exit 1 on failure.
+# Starts G1_bridge on broken copies of G1_config.yaml and on override files: each bad one must refuse to load. No hardware. Exit 1 on failure.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

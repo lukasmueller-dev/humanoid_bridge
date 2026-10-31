@@ -27,16 +27,24 @@ GRACE = 0.05  # /lowcmd and /bridge_state are separate topics: order at a change
 HOLDING = "driver: holding /lowcmd"
 
 
-def load_params(path):
+def load_params(path, override_path=None):
     with open(path) as handle:
         params = yaml.safe_load(handle)["robot_bridge"]["ros__parameters"]
     names = params["joint_names"]
+    trip = [float(params[n].get("dq_trip", params[n]["dq_limit"])) for n in names]
+    override = {}
+    if override_path:
+        with open(override_path) as handle:
+            override = yaml.safe_load(handle)["robot_bridge"]["ros__parameters"]["override"]
     return {
+        "joint_names": names,
         "kp": [float(params[n]["kp"]) for n in names],
         "kd": [float(params[n]["kd"]) for n in names],
         "damp_kd": float(params["estop"]["damp_kd"]),
         "ready_q": [float(v) for v in params["ready_q"]],
         "dq_limit": [float(params[n]["dq_limit"]) for n in names],
+        "dq_trip_base": trip,  # the config's
+        "dq_trip": [float(override.get(n, {}).get("dq_trip", t)) for n, t in zip(names, trip)],
         "parallel": [bool(params[n].get("if_parallel_joint", False)) for n in names],
     }
 
@@ -55,6 +63,7 @@ class Driver:
         self.pause = node.create_publisher(Bool, "/fake_g1/pause", 10)
         self.nan_q = node.create_publisher(Bool, "/fake_g1/nan_q", 10)
         self.dq = node.create_publisher(Float32, "/fake_g1/dq", 10)
+        self.dq1 = node.create_publisher(Float32, "/fake_g1/dq1", 10)
         self.nan_imu = node.create_publisher(Bool, "/fake_g1/nan_imu", 10)
         # Up before the bridge starts: the bridge waits until it is gone.
         self.blocker = node.create_publisher(LowCmd, "/lowcmd", 10)
@@ -246,6 +255,7 @@ class Driver:
         now = self.client._call(get, GetParameters.Request(names=[key]), 10.0).values[0]
         kept = now.double_value == self.params["kp"][0]
         self.check(f"{key} unchanged", kept, str(now.double_value))
+        self.override_visible(get)
 
         # Arming needs the remote (estop.require_remote); fake_g1 sends its header by default.
         count = self.count
@@ -478,9 +488,30 @@ class Driver:
         self.bad_state(damp_kp, damp_kd)
         self.check_recording()
 
+    def override_visible(self, get):
+        """override_keys, and override.<joint>.dq_trip beside the base <joint>.dq_trip."""
+        joint = self.params["joint_names"][1]
+
+        def read(name):
+            return self.client._call(get, GetParameters.Request(names=[name]), 10.0).values[0]
+
+        keys = list(read("override_keys").string_array_value)
+        self.check("override_keys is dq_trip", keys == ["dq_trip"], str(keys))
+        shown = read(f"override.{joint}.dq_trip").double_value
+        self.check("override.<joint>.dq_trip shown", shown == self.params["dq_trip"][1], str(shown))
+        base = read(f"{joint}.dq_trip").double_value
+        self.check("<joint>.dq_trip is the base", base == self.params["dq_trip_base"][1], str(base))
+
     def bad_state(self, damp_kp, damp_kd):
-        """Bad robot data while ARMED latches damp state_invalid; reset once it is gone."""
+        """Bad robot data while ARMED latches damp state_invalid; reset once it is gone.
+
+        Joint 0 has no dq_trip: it trips at dq_limit. Joint 1 has one (run_fake_estop_test.sh):
+        2 x dq_limit in the config, 1.5 x in the override file. 1.1 x the override is below the
+        config's, so latching there proves the override applies.
+        """
         limit = self.params["dq_limit"][0]
+        limit1, trip1 = self.params["dq_limit"][1], self.params["dq_trip"][1]
+        self.check("joint 1 has a dq_trip above its dq_limit", trip1 > limit1, f"{trip1} vs {limit1}")
         self.check("start_control at 0.2", self.start(0.2).success)
         self.spin(RAMP_SECONDS)
         self.check_state("ARMED", "ARMED")
@@ -489,9 +520,15 @@ class Driver:
         under = self.state == "ARMED"
         self.check("joint 0 at 0.9 dq_limit stays ARMED", under, f"state '{self.state}'")
         self.dq.publish(Float32(data=0.0))
+        self.dq1.publish(Float32(data=0.5 * (limit1 + trip1)))
+        self.spin(0.3)
+        between = self.state == "ARMED"
+        self.check("joint 1 between dq_limit and dq_trip stays ARMED", between, f"state '{self.state}'")
+        self.dq1.publish(Float32(data=0.0))
         faults = (
             ("NaN q", self.nan_q, Bool(data=True), Bool(data=False)),
             ("joint 0 at 1.1 dq_limit", self.dq, Float32(data=1.1 * limit), Float32(data=0.0)),
+            ("joint 1 at 1.1 dq_trip", self.dq1, Float32(data=1.1 * trip1), Float32(data=0.0)),
             ("NaN IMU roll", self.nan_imu, Bool(data=True), Bool(data=False)),
         )
         for i, (name, publisher, on, off) in enumerate(faults):
@@ -541,11 +578,12 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("params", help="the G1_config.yaml the bridge runs with")
     parser.add_argument("bridge_log", help="the bridge's log, read for its /lowcmd check")
+    parser.add_argument("--override", help="the second params file the bridge runs with")
     args = parser.parse_args()
 
     rclpy.init()
     node = rclpy.create_node("estop_driver")
-    driver = Driver(node, load_params(args.params), args.bridge_log)
+    driver = Driver(node, load_params(args.params, args.override), args.bridge_log)
     print(HOLDING, flush=True)  # run_fake_estop_test.sh starts the bridge on this line
     try:
         driver.run()
