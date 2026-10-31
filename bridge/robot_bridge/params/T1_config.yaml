@@ -18,6 +18,18 @@ robot_bridge:
     # docs/low-level-controllers.md: the names a /robot_cmd may pick; motor_pd always.
     controllers_allowed: ["motor_pd", "bridge_pd"]
 
+    # Parallel ankle mapping (bridge/robot_bridge/include/t1_parallel_ankle.hpp, port of loco-mujoco-t1 parallel_act).
+    # false: CMD_TYPE_SERIAL, the Booster firmware maps the ankle pitch/roll commands to the crank motors.
+    # true:  CMD_TYPE_PARALLEL, the bridge does it: q_s = f^-1(crank angles), and the serial PD
+    #        tau_s = kp (q - q_s) + kd (dq - dq_s) + tau is sent to the cranks as tau_m = J^-T tau_s
+    #        (diagonal crank damping in the motor kd, the rest as torque).
+    # Verify the crank order/sign on the robot first: scripts/real/t1_check_parallel_ankle_mapping.py
+    parallel_ankle_mapping: false
+    parallel_ankle_swap_cranks: false        # true if the pitch slot of motor_state_parallel is crank b
+    parallel_ankle_crank_sign: [1.0, 1.0]    # XML crank angle = sign * motor angle (crank a, crank b); floats
+    parallel_ankle_crank_tau_limit: 43.0     # [Nm] per crank motor (E4315 peak, forcerange in T1_23dof_parallel.xml)
+    parallel_ankle_max_estimate_error: 0.05  # [rad] stop if f^-1(crank angles) and the firmware's serial ankle state disagree
+
     # docs/estop.md. Operator e-stops have a fixed mode; these set the rest.
     estop:
       damp_kd: 5.0                      # float: an integer here fails the load
@@ -239,10 +251,9 @@ robot_bridge:
     Left_Ankle_Pitch:
       idx: 15
 
-      # q_min: -0.87
-      # q_max: 0.35
-      q_min: -0.401
-      q_max: 0.855
+      q_min: -0.87
+      q_max: 0.35
+
 
       dq_limit: 18.8
       tau_limit: 24.0      
@@ -254,10 +265,8 @@ robot_bridge:
     Left_Ankle_Roll:
       idx: 16
 
-      # q_min: -0.44
-      # q_max: 0.44
-      q_min: -0.419
-      q_max: 0.785
+      q_min: -0.44
+      q_max: 0.44
 
       dq_limit: 12.4
       dq_trip: 15.71
@@ -281,8 +290,8 @@ robot_bridge:
 
     RightHipRoll:
       idx: 18   
-      q_min: -1.536
-      q_max: 0.366
+      q_min: -1.57
+      q_max: 0.2
       dq_limit: 10.9  
       dq_trip: 18.32
       tau_limit: 25.0
@@ -293,8 +302,8 @@ robot_bridge:
 
     RightHipYaw:
       idx: 19
-      q_min: -1.012
-      q_max: 1.012
+      q_min: -1.0
+      q_max: 1.0
       dq_limit: 10.9
       dq_trip: 18.32
       tau_limit: 25.0      
@@ -305,8 +314,8 @@ robot_bridge:
 
     RightKnee:
       idx: 20
-      q_min: -0.192
-      q_max: 2.146
+      q_min: 0.0
+      q_max: 2.15
       dq_limit: 11.7
       dq_trip: 18.45
       tau_limit: 60.0  
@@ -318,10 +327,8 @@ robot_bridge:
     Right_Ankle_Pitch:
       idx: 21
 
-      # q_min: -0.87
-      # q_max: 0.35
-      q_min: -0.401
-      q_max: 0.855
+      q_min: -0.87
+      q_max: 0.35
 
       dq_limit: 18.8
       tau_limit: 24.0      
@@ -333,10 +340,8 @@ robot_bridge:
     Right_Ankle_Roll:
       idx: 22
 
-      # q_min: -0.44      
-      # q_max: 0.44
-      q_min: -0.419      
-      q_max: 0.785
+      q_min: -0.45     
+      q_max: 0.45
 
       dq_limit: 12.4
       dq_trip: 15.71

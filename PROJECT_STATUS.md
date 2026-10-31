@@ -3,7 +3,7 @@
 > One per repo. The *current* picture: goal, architecture, decisions, open
 > questions. Finished work is removed; git history is the log.
 
-_Last updated: 2026-10-30 · safety-limits job_
+_Last updated: 2026-10-31 · t1-parallel-ankle untrack job_
 
 ## Goal
 
@@ -66,6 +66,8 @@ _One line each, dated, with a pointer (commit or PR)._
 - 2026-10-22: the G1 sim is an own MuJoCo node `g1_sim` on mjlab `g1.xml`, not GEAR's `base_sim` (needs rclpy the SIMPLE image lacks, no remote header, `mode_machine` 0, other model) — `robot_stacks/sim/robot_sim/README.md`
 - 2026-10-30: the 1 kHz tick runs a `pluginlib` low-level controller a policy picks per `/robot_cmd` stream (`RobotCmd.controller`, gated by `controllers_allowed`); `motor_pd` and `bridge_pd` ship, colleagues add plugins — `docs/low-level-controllers.md`, PR from `low-level-controllers`
 - 2026-09-09: `examples/` sits inside `robot_bridge`, the package it demonstrates, so a subtree split of `bridge/` carries it; excluded from lint as vendored upstream code — same commit
+- 2026-10-31: `logs/` and the T1 examples' `debug_logs/` and `models/` stay out of git (`.gitignore`); a fresh clone lacks the T1 policies; Lukas's copies: `~/Desktop/humanoid_bridge-t1-parallel-ankle-binaries/` — commit "chore(git): untrack the branch's logs, debug logs and models"
+- 2026-10-31: T1 leg limits in `T1_config.yaml` are Siwei's measured stops (6806406), not main's: ankle pitch -0.87..0.35, where main's 0.855 lies 0.5 rad past the measured stop — commit "docs(status): record the measured T1 leg limits"
 
 ## Roadmap
 

@@ -27,7 +27,6 @@ class RobotController:
         self.vx_cmd = 0.0
         self.vy_cmd = 0.0
         self.vyaw_cmd = 0.0
-        print("Please press\n\t \"LT + START\" to start control, \n\t \"LT + A\" to start inferrence, \n\t \"BACK\" to stop control, \n\t \"LB\" for ready position, \n\t \"RB\" for zero position, \n\t \"LT + BACK\" for emergency stop.")
 
     def step(self):
         self.check_state()
@@ -93,6 +92,7 @@ class RobotController:
 
         if self.robot.joy_key is not None:
             if self.robot.joy_key.lt and self.robot.joy_key.a and self.robot.key_count == 2:  # start: LT + A
+                print("LT + A detected: starting agent (if control is started).")
                 if self.robot.control_started:
                     self.agent_started = True
                     self.vx_cmd = 0.0

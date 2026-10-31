@@ -360,6 +360,9 @@ if(BUILD_TESTING)
   # The Booster mode switch without the SDK; tools/check-booster-sdk.py checks the values against it.
   ament_add_gtest(test_booster tests/test_booster.cpp)
   target_include_directories(test_booster PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  # The T1 parallel ankle kinematics against loco-mujoco-t1's values; its own main, no gtest.
+  add_executable(test_t1_parallel_ankle tests/test_t1_parallel_ankle.cpp)
+  add_test(NAME test_t1_parallel_ankle COMMAND test_t1_parallel_ankle)
   # The Go2 frame (header, level flag, stopped slots, CRC against Unitree's SDK) and its stop frames.
   ament_add_gtest(test_go2 tests/test_go2.cpp src/go2_frame.cpp src/estop.cpp src/common/motor_crc.cpp)
   target_include_directories(test_go2 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/include/common)

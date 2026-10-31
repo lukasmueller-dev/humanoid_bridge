@@ -1,0 +1,69 @@
+common:
+  dt: 0.002
+  stiffness: [
+    40.0, 40.0,
+    40.0, 40.0, 40.0, 40.0,
+    40.0, 40.0, 40.0, 40.0,
+    200.0,
+    200.0, 200.0, 200.0, 200.0, 50.0, 50.0,
+    200.0, 200.0, 200.0, 200.0, 50.0, 50.0
+  ]
+  damping: [
+    2.0, 2.0,
+    2.0, 2.0, 2.0, 2.0,
+    2.0, 2.0, 2.0, 2.0,
+    5.0,
+    5.0, 5.0, 5.0, 5.0, 3.0, 3.0,
+    5.0, 5.0, 5.0, 5.0, 3.0, 3.0
+  ]
+  default_qpos: [
+    0.0, 0.0,
+    0.2, -1.35, 0.0, -0.5,
+    0.2, 1.35, 0.0, 0.5,
+    0.0,
+    -0.2, 0.12, 0.0, 0.4, -0.25, -0.08,
+    -0.2, -0.12, 0.0, 0.4, -0.25, 0.08
+  ]
+
+policy:
+  actor_path: "models/bb_r15_11_conservative_ppo_numsteps100_actor_97d.npz"
+  predictor_path: "models/bb_r15_11_conservative_ppo_numsteps100_predictor.npz"
+  source_checkpoint_path: "models/bb_r15_11_conservative_ppo_numsteps100.pkl"
+  num_actions: 23
+  num_observations: 97
+  full_observation_dim: 191
+  history_length: 10
+  goal_height: 0.755
+
+  control:
+    action_scale: 1.0
+    clip_actions: 1.0
+    decimation: 10
+    startup_blend_duration: 2.0
+    target_qpos_lower: [
+      -1.012, -0.314,
+      -3.281, -1.64, -2.234, -2.094,
+      -3.281, -1.536, -2.234, 0.000,
+      -1.012,
+      -2.059, -0.366, -1.012, 0.000, -0.87, -0.44,
+      -2.059, -1.57, -1.0, 0.000, -0.87, -0.45
+    ]
+    target_qpos_upper: [
+      1.012, 0.82,
+      1.187, 1.536, 2.234, 0.035,
+      1.187, 1.64, 2.234, 2.094,
+      1.012,
+      2.059, 1.536, 1.012, 2.146, 0.35, 0.44,
+      2.059, 0.2, 1.0, 2.15, 0.35, 0.45
+    ]
+
+balance_board:
+  raw_observation_source: "nominal_flat"
+  note: "No real board state estimator is available yet; use the nominal flat reset board observation from training."
+
+debug:
+  enabled: true
+  first_step_probe_enabled: false
+
+mech:
+  parallel_mech_indexes: [15, 16, 21, 22]

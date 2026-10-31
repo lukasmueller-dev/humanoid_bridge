@@ -823,7 +823,8 @@ namespace sairol_bridge
             const auto &joint_info = joints_[i];
             const auto &motor = currentState_.motor_state[i];
             // A parallel joint sends its P part as tau below and drops the command's tau, so its window leaves it out.
-            const bool parallel = receivedCmd_ && joint_info.if_parallel_joint;
+            // A robot that maps its parallel joints itself gets them here as serial joints.
+            const bool parallel = receivedCmd_ && joint_info.if_parallel_joint && !robotMapsParallelJoints_;
 
             // Gate 2 and the next ramp start from the target, not the frame: bridge_pd's has kp 0 and q_meas.
             // Gate 4 on it as on a motor_pd frame, which is the target: motor_pd's lastCommand_ stays bit for bit.

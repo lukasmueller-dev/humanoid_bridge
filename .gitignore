@@ -7,6 +7,9 @@ install/
 
 # Logs
 log/
+/logs/
+/robot_bridge/example/*/debug_logs/
+/robot_bridge/example/*/models/
 
 # ROS-specific files
 *.bag
