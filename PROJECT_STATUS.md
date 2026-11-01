@@ -3,7 +3,7 @@
 > One per repo. The *current* picture: goal, architecture, decisions, open
 > questions. Finished work is removed; git history is the log.
 
-_Last updated: 2026-10-30 · safety-limits job_
+_Last updated: 2026-11-01 · limp-control job_
 
 ## Goal
 
@@ -65,6 +65,7 @@ _One line each, dated, with a pointer (commit or PR)._
 - 2026-10-24: Ready (`/ready_position_control`) also ramps each Dex3 hand with fresh state to `hand_ready_q` (open) and holds it; a hand failure never blocks the body; arming stays body-only — `docs/hands_path.md`, PR from `feat-hands-ready-pos`
 - 2026-10-22: the G1 sim is an own MuJoCo node `g1_sim` on mjlab `g1.xml`, not GEAR's `base_sim` (needs rclpy the SIMPLE image lacks, no remote header, `mode_machine` 0, other model) — `robot_stacks/sim/robot_sim/README.md`
 - 2026-10-30: the 1 kHz tick runs a `pluginlib` low-level controller a policy picks per `/robot_cmd` stream (`RobotCmd.controller`, gated by `controllers_allowed`); `motor_pd` and `bridge_pd` ship, colleagues add plugins — `docs/low-level-controllers.md`, PR from `low-level-controllers`
+- 2026-11-01: `/limp_control` arms G1, T1, Go2 into kp, kd, tau 0 (ramp over `duration`), e-stop active; `/robot_cmd` is dropped in limp, `start_control`, Ready or Zero leave it; not on H1, H1_2 (their frame divides by kp) — `docs/estop.md` § States, PR from `limp-control`
 - 2026-09-09: `examples/` sits inside `robot_bridge`, the package it demonstrates, so a subtree split of `bridge/` carries it; excluded from lint as vendored upstream code — same commit
 
 ## Roadmap
