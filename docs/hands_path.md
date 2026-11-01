@@ -28,7 +28,8 @@ bridge_interface/msg/HandCmd.msg
 No `interpolation_order`: hands always ramp linearly from the last published
 frame. The body's order-0 low-pass buys nothing at 100 Hz.
 
-Hand state is consumed by the bridge for its own guards and not republished.
+Hand state is consumed by the bridge for its own guards and republished as
+`/hand_state/<left|right>` (`bridge_interface/HandState`).
 `g1_stack` keeps reading `rt/dex3/*/state` on raw DDS; both subscribers coexist.
 
 ## Joint order
