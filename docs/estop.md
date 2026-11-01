@@ -1,6 +1,6 @@
 # G1 e-stop
 
-Status: implemented on `g1-web-interface`; unit, fake and gantry tests pass (gantry 2026-10-19; G6-IMU not run).
+Status: implemented on `main`; unit, fake and gantry tests pass (gantry 2026-10-19; G6-IMU not run).
 Closes roadmap `feat/g1-finish-control-release`.
 
 ## Before this change
