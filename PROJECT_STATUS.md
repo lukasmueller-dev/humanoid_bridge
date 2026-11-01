@@ -3,7 +3,7 @@
 > One per repo. The *current* picture: goal, architecture, decisions, open
 > questions. Finished work is removed; git history is the log.
 
-_Last updated: 2026-11-01 · t1-ankle-core job_
+_Last updated: 2026-11-01 · sim-t1-parallel-ankle job_
 
 ## Goal
 
@@ -70,6 +70,7 @@ _One line each, dated, with a pointer (commit or PR)._
 - 2026-09-09: `examples/` sits inside `robot_bridge`, the package it demonstrates, so a subtree split of `bridge/` carries it; excluded from lint as vendored upstream code — same commit
 - 2026-11-01: T1 leg limits in `T1_config.yaml` are Siwei's measured stops, not the old ones: ankle pitch -0.87..0.35, where the old 0.855 lies 0.5 rad past the measured stop — `6806406` on `t1-parallel-ankle` (#61)
 - 2026-11-01: `main` takes only the T1 ankle mapping; the T1 examples move to robots_web_commander `workspaces/scratch/` (#59), the joint-response tools stay on `t1-parallel-ankle` (#61, closed without a merge) until Siwei decides — PR from `t1-ankle-core`
+- 2026-11-01: the T1 ankle kinematics twin lives in `robot_sim/t1_parallel_ankle.py` (the sim needs it, `scripts/real/` is not installed); the check script imports it from there. The sim shares the bridge's formula: it cannot check the real crank order or sign — PR from `sim-t1-parallel-ankle`
 
 ## Roadmap
 
