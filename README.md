@@ -104,7 +104,7 @@ stale package tree.
 your cabling; a wrong one fails silently.
 
 ```bash
-BRIDGE_IFACE=<nic> source scripts/setup_unitree.sh   # G1, H1, H1_2
+BRIDGE_IFACE=<nic> source scripts/setup_unitree.sh   # G1, H1, H1_2, Go2
 source scripts/setup_booster.sh                      # T1
 source scripts/setup_x2.sh                           # X2 (Fast DDS)
 ```
