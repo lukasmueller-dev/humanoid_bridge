@@ -5,14 +5,13 @@ Exit 1 on failure. run_sim_amo_test.sh starts the sim, the bridge and the contro
 
 import time
 
-import numpy as np
+from g1_stack.amo.goal import GoalPublisher, make_goal
+from g1_stack.amo.policy import DEFAULT_DOF_POS, quat_to_euler
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from sim_harness import Checks, ros_node
 from std_msgs.msg import Bool, String
 from unitree_hg.msg import LowState
 
-from g1_stack.amo.goal import GoalPublisher, make_goal
-from g1_stack.amo.policy import DEFAULT_DOF_POS, quat_to_euler
 from robot_bridge.cmd_client import RobotCmdClient
 
 NUM_MOTORS = 29

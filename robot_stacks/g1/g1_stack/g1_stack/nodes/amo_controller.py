@@ -249,10 +249,10 @@ def run_loop(controller, state, goals, stop, clock=time.monotonic, sleep=time.sl
 def main(argv=None):
     args = parse_args(argv)
     import rclpy
-    from robot_bridge.cmd_client import RobotCmdClient
     from unitree_hg.msg import LowState
 
     from g1_stack.amo.torque import Gravity
+    from robot_bridge.cmd_client import RobotCmdClient
 
     amo = amo_policy.load(args.amo_dir, args.device)
     gravity = Gravity(args.urdf, args.tau_ff)

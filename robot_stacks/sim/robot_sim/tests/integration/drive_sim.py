@@ -18,8 +18,8 @@ from unitree_hg.msg import HandState, LowState
 
 from g1_camera import wire
 from g1_camera.client import CameraClient
-from robot_sim.robots.g1 import DEFAULT_MJCF
 from robot_bridge.cmd_client import RobotCmdClient
+from robot_sim.robots.g1 import DEFAULT_MJCF
 
 NUM_MOTORS = 29
 ELBOWS = (18, 25)
