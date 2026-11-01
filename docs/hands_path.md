@@ -154,7 +154,7 @@ getting limp frames.
 - **The real left hand drops state for up to 1 s** (G1 gantry, 2026-10-23). The
   0.2 s guard releases it limp; Ready skips it if the gap is at the call. Press
   Ready again; cause open (roadmap).
-- **`checkExternalPublisher_` will not see `dex3_probe --command`.** It queries
+- **`checkExternalPublisher_` will not see `dex3_probe command`.** It queries
   the ROS graph; `unitree_sdk2py` publishers are not ROS 2 nodes. The
   two-publisher guard is partial on the hand topics, and warns rather than
   blocking so a contested hand topic cannot stop the body bridge.

@@ -66,7 +66,7 @@ sairol_bridge::G1Bridge::G1Bridge(rclcpp::Node::SharedPtr node) : BridgeCore(nod
 
         // Warn, unlike /lowcmd's blocking loop: a contested hand topic must not
         // stop the body bridge from coming up. This sees ROS 2 publishers only --
-        // a raw unitree_sdk2py publisher such as `dex3_probe --command` is
+        // a raw unitree_sdk2py publisher such as `dex3_probe command` is
         // invisible to the ROS graph and will not be caught here.
         if (nh->count_publishers(cmd_topic) > 0)
         {
