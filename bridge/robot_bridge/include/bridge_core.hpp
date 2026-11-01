@@ -77,7 +77,7 @@ namespace sairol_bridge
 
         // Each robot bridge but X2 (which makes its own three) calls this after its wait
         // loops: DDS stores a call made during the wait and runs it once spin starts.
-        // limp false: no /limp_control (H1, H1_2: their frame divides by kp).
+        // limp false: no /limp_control (H1, H1_2: no Gate 4, so q does not follow the hand at kp 0).
         void createArmingServices_(bool limp = true);
 
         void readyPositionControl_();
