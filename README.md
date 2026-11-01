@@ -1,7 +1,7 @@
 # humanoid_bridge
 
-ROS 2 bridge between a control client and Unitree (G1, H1, H1_2, Go2), Booster (T1)
-or AgiBot (X2) humanoids. It takes commands on `/robot_cmd`, interpolates them, runs safety
+ROS 2 bridge between a control client and Unitree (G1, H1, H1_2), Booster (T1)
+or AgiBot (X2) humanoids, and the Unitree Go2 quadruped. It takes commands on `/robot_cmd`, interpolates them, runs safety
 checks on command and state, and publishes motor commands at 1 kHz.
 
 ```
