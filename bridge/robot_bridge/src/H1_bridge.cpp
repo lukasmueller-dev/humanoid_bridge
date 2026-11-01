@@ -1,4 +1,5 @@
 #include "H1_bridge.hpp"
+#include "gates.hpp"
 
 
 using namespace std::chrono_literals;
@@ -176,9 +177,8 @@ void sairol_bridge::H1Bridge::publishLowCommand_()
         {
             cmd.tau = cmdParams_[i].tau_0 + cmdParams_[i].tau_1 * phase;
         }  
-        cmd.q = std::clamp(cmd.q, 
-            (cmd.kd * (currentState_.motor_state[i].dq - cmd.dq) - joint_info.tau_limit) / cmd.kp + currentState_.motor_state[i].q, 
-            (cmd.kd * (currentState_.motor_state[i].dq - cmd.dq) + joint_info.tau_limit) / cmd.kp + currentState_.motor_state[i].q);
+        cmd.q = gates::pdWindow(cmd.q, currentState_.motor_state[i].q, currentState_.motor_state[i].dq,
+                                cmd.dq, cmd.kp, cmd.kd, joint_info.tau_limit);
 
         last_cmd.q = cmd.q;
         last_cmd.dq = cmd.dq;
