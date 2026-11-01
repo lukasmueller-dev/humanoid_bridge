@@ -44,6 +44,9 @@ def variants(params):
     def dq_trip(p):
         p[names[3]]["dq_trip"] = 0.0
 
+    def damp_kd(p):
+        p[names[3]]["damp_kd"] = -1.0
+
     def gain_range(p):
         p["upper_limbs_kp_max"] = p["upper_limbs_kp_min"] - 1.0
 
@@ -66,6 +69,7 @@ def variants(params):
         ("q_max below q_min", "needs q_min <= q_max", q_range),
         ("negative tau_limit", "needs q_min <= q_max", tau_limit),
         ("dq_trip of zero", "dq_trip must be finite and > 0", dq_trip),
+        ("negative joint damp_kd", "damp_kd must be finite and >= 0", damp_kd),
         ("inverted gain range", "gain range is inverted", gain_range),
         ("torque_control true", "Torque control is not supported", torque_control),
         ("num_joint not the joint count", "joint_names has 29 joints, num_joint is 30", num_joint),
