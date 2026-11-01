@@ -7,7 +7,7 @@ This is what `tools/robot-bringup.sh --arm-from-measured` feeds to start_control
 arming to the pose the robot already holds is the smooth choice, because the
 bridge ramps from wherever it stands to whatever you pass.
 
-    tools/g1-measured-pose.py                    # every joint (G1 29, T1 23)
+    tools/g1-measured-pose.py                    # every joint (G1 29, T1 23, Go2 12)
     tools/g1-bringup.sh --arm-from "$(tools/g1-measured-pose.py)" --robot-is-clear
 """
 
