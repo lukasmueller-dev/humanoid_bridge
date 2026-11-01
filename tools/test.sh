@@ -2,7 +2,7 @@
 # Run everything that can be verified without a robot, and say what each stage
 # covers.
 #
-# Needs: numpy and pytest for the unit stage; ROS 2 sourced plus a built
+# Needs: pytest, numpy, yaml, zmq, msgpack and msgpack_numpy for the unit stage; ROS 2 sourced plus a built
 # workspace for the other stages. Stages that cannot run are skipped with the
 # reason. Exit: 0 every requested stage passed, 1 a stage failed, 2 a stage was
 # skipped (--allow-skip: a skip passes). --docker needs only docker: it builds
