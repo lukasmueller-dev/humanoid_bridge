@@ -335,7 +335,8 @@ void sairol_bridge::T1Bridge::loadParallelAnkleParameters_()
         RCLCPP_FATAL(nh->get_logger(), "parallel_ankle_crank_sign must have two entries (crank a, crank b)");
         throw ConfigError("parallel_ankle_crank_sign");
     }
-    for (int side = 0; side < 2; ++side)
+    // Only the mapping needs the flag: serial mode starts with any if_parallel_joint, as before.
+    for (int side = 0; parallelAnkle_ && side < 2; ++side)
     {
         for (int j = 0; j < 2; ++j)
         {
