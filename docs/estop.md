@@ -166,7 +166,7 @@ tools/robot-bringup.sh --override trip.yaml   # after --params; also with --fore
 ```
 
 - Keys: `override_keys` is `[dq_trip]` (`ros2 param get /robot_bridge override_keys`). It is a constant in `bridge_core.cpp`, never read from a file: a new key needs a bridge PR.
-- Cap: `0 < value <= 2 × dq_limit` of that joint. A value no higher than the base always passes: the T1 and Go2 base trips can be over the cap.
+- Cap: `0 < value <= 2 × dq_limit` of that joint. A value no higher than the base always passes: the T1 head base trips can be over the cap.
 - The bridge refuses the start (exit 1, one ERROR line) on a key not in the list, an unknown joint, a value that is not a finite number > 0, or a value over the cap.
 - `robot-bringup.sh` refuses (exit 2) a missing file and any key outside `robot_bridge.ros__parameters.override`.
 - Applied after the base load, one WARN each: `Override <joint>.dq_trip: <base> -> <new>`. `<joint>.dq_trip` keeps the base; `override.<joint>.dq_trip` shows the override.
