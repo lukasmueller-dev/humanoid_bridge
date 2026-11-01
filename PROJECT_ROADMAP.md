@@ -77,4 +77,3 @@ Decided and fake-tested on `g1-web-interface` (`docs/psi0_gates.md`).
 
 - [ ] `--interface sim` does not reach the bridge: MuJoCo listens on `rt/lowcmd`, which the bridge owns. **Done when:** a sim run drives the same client path as hardware, or the limitation is documented as permanent.
 - [ ] Split `main()` of `check_hand_cmd.py` (195 lines, one function) into one function per check. **Done when:** `radon cc -n D bridge/robot_bridge/tests/integration/check_hand_cmd.py` prints nothing and `tools/test.sh --docker --hands` passes.
-- [ ] Clear the 8 lint sites: 4 unsorted imports, an unused `numpy` import, an unused `rec`, 2 `;` statements. **Done when:** `ruff check . --select F401,F841,I001,E702` exits 0 and `pytest` passes.
