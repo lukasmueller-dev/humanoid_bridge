@@ -73,11 +73,6 @@ Decided and fake-tested on `g1-web-interface` (`docs/psi0_gates.md`).
 - [ ] `fix/config-keymaps`: the keymap headers in `params/*.yaml` are corrected here: each key names its handler, `robot_client.py` or the bridge. Still to send upstream. **Done when:** the PR is open.
 - [ ] `feat/g1-finish-control-release`: e-stop latch built on `g1-web-interface` (`docs/estop.md`), fake-tested only. **Done when:** gantry tests G0–G6 in `docs/estop.md` pass and the branch is merged.
 
-### T1
-
-- [ ] T1 head chatter on arm and in damp: a per-joint `damp_kd`, head kd 0.1 → 0.5, the arm causes checked on the fake T1.
-  **Done when:** the gate `tools/test.sh --docker` passes, with fake-T1 checks of the head kd in damp and in hold.
-
 ### Cleanups
 
 - [ ] `--interface sim` does not reach the bridge: MuJoCo listens on `rt/lowcmd`, which the bridge owns. **Done when:** a sim run drives the same client path as hardware, or the limitation is documented as permanent.
