@@ -8,10 +8,10 @@ import sys
 import time
 import urllib.request
 
-import rclpy
 import yaml
 from bridge_interface.msg import RobotState
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from sim_harness import Checks, ros_node
 from std_msgs.msg import String
 
 from g1_camera import wire
@@ -23,9 +23,9 @@ TOL = 0.08  # rad; the arms' kp 10-50 (T1_config.yaml) sag under gravity
 RAMP_SECONDS = 3.0  # `duration` 2.0 plus margin
 
 
-class Driver:
+class Driver(Checks):
     def __init__(self, node, params):
-        self.node = node
+        super().__init__(node)
         self.client = RobotCmdClient(node, num_dof=NUM_JOINT, control_frequency=50.0)
         config = yaml.safe_load(open(params))["robot_bridge"]["ros__parameters"]
         names = config["joint_names"]
@@ -38,24 +38,12 @@ class Driver:
         node.create_subscription(RobotState, "/robot_state", self._on_state, 10)
         self.bridge = None
         self.state = None
-        self.failures = []
 
     def _on_bridge(self, msg):
         self.bridge = msg.data
 
     def _on_state(self, msg):
         self.state = msg
-
-    def spin(self, seconds):
-        end = time.monotonic() + seconds
-        while time.monotonic() < end:
-            rclpy.spin_once(self.node, timeout_sec=0.005)
-
-    def check(self, name, ok, detail=""):
-        suffix = f"  ({detail})" if detail else ""
-        print(f"{'PASS' if ok else 'FAIL'}  {name}{suffix}", flush=True)
-        if not ok:
-            self.failures.append(name)
 
     def error(self, target):
         return max(abs(a - b) for a, b in zip(self.state.q, target, strict=True))
@@ -104,18 +92,10 @@ class Driver:
 
 
 def main():
-    rclpy.init()
-    node = rclpy.create_node("drive_sim_t1")
-    driver = Driver(node, sys.argv[1])
-    try:
+    with ros_node("drive_sim_t1") as node:
+        driver = Driver(node, sys.argv[1])
         driver.run()
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
-    if driver.failures:
-        print(f"FAILED: {', '.join(driver.failures)}")
-        sys.exit(1)
-    print("all passed")
+    driver.finish()
 
 
 if __name__ == "__main__":

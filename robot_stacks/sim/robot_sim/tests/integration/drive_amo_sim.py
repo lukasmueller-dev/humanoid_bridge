@@ -3,12 +3,11 @@
 Exit 1 on failure. run_sim_amo_test.sh starts the sim, the bridge and the controller first.
 """
 
-import sys
 import time
 
 import numpy as np
-import rclpy
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
+from sim_harness import Checks, ros_node
 from std_msgs.msg import Bool, String
 from unitree_hg.msg import LowState
 
@@ -25,9 +24,9 @@ ELBOW_STEP = 0.3  # rad on top of the default arm
 ELBOW_TOL = 0.1
 
 
-class Driver:
+class Driver(Checks):
     def __init__(self, node):
-        self.node = node
+        super().__init__(node)
         self.client = RobotCmdClient(node, num_dof=NUM_MOTORS, control_frequency=50.0)
         self.gantry = node.create_publisher(Bool, "/robot_sim/gantry", 10)
         self.buttons = node.create_publisher(String, "/robot_sim/buttons", 10)
@@ -38,7 +37,6 @@ class Driver:
         self.state = None
         self.low = None
         self.states = set()
-        self.failures = []
 
     def _on_state(self, msg):
         self.state = msg.data
@@ -46,17 +44,6 @@ class Driver:
 
     def _on_lowstate(self, msg):
         self.low = msg
-
-    def spin(self, seconds):
-        end = time.monotonic() + seconds
-        while time.monotonic() < end:
-            rclpy.spin_once(self.node, timeout_sec=0.005)
-
-    def check(self, name, ok, detail=""):
-        suffix = f"  ({detail})" if detail else ""
-        print(f"{'PASS' if ok else 'FAIL'}  {name}{suffix}", flush=True)
-        if not ok:
-            self.failures.append(name)
 
     def tilt(self):
         roll, pitch, _ = quat_to_euler(self.low.imu_state.quaternion)
@@ -113,20 +100,11 @@ class Driver:
 
 
 def main():
-    rclpy.init()
-    node = rclpy.create_node("drive_amo_sim")
-    driver = Driver(node)
-    try:
+    with ros_node("drive_amo_sim") as node:
+        driver = Driver(node)
         driver.run()
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
-    if driver.failures:
-        print(f"FAILED: {', '.join(driver.failures)}")
-        return 1
-    print("all checks passed")
-    return 0
+    driver.finish()
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
