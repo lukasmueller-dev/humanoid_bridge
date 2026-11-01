@@ -111,3 +111,10 @@ def test_a_second_episode_appends_without_a_header(tmp_path):
     rows = _rows(path)
     assert ["format" in r for r in rows] == [True, False, False]
     assert [r["episode"] for r in rows[1:]] == ["episode_0", "episode_1"]
+
+
+def test_the_controller_name_is_passed_on(tmp_path):
+    client = _logged(tmp_path / "c.jsonl")
+    client.send_cmd(q_target_pos=np.zeros(29), controller="bridge_pd")
+    client.close_log()
+    assert client._client.cmds[0]["controller"] == "bridge_pd"
