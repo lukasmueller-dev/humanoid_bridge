@@ -207,6 +207,10 @@ if [ "$FOREGROUND" = 1 ] && [ -n "$ARM_MODE" ]; then
     echo "Arm from the page, or with: ros2 service call /start_control ..." >&2
     exit 2
 fi
+if [ "$PARALLEL_ANKLE" = 1 ] && [ "$ROBOT" != t1 ]; then
+    echo "refusing --parallel-ankle with --robot $ROBOT: only the T1 bridge maps ankles." >&2
+    exit 2
+fi
 if [ -n "$ARM_MODE" ] && [ "$ROBOT_IS_CLEAR" != 1 ]; then
     echo "refusing to arm without --robot-is-clear." >&2
     echo "start_control ramps all $NUM_JOINT joints, legs included, over 2 s." >&2

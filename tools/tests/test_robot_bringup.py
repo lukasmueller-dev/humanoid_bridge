@@ -48,6 +48,13 @@ def test_parallel_ankle_reaches_the_bridge_command(tmp_path):
     assert start[0].split()[-4:] == expected
 
 
+@pytest.mark.parametrize("robot", ["g1", "go2"])
+def test_parallel_ankle_on_another_robot_is_refused(tmp_path, robot):
+    result = bringup(tmp_path, "--robot", robot, "--parallel-ankle")
+    assert result.returncode == 2
+    assert "refusing --parallel-ankle" in result.stderr
+
+
 def test_override_under_override_only_passes_the_check(tmp_path):
     path = override_file(tmp_path, {"robot_bridge": {"ros__parameters": {"override": JOINT}}})
     result = bringup(tmp_path, "--override", str(path))
