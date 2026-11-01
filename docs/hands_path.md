@@ -80,7 +80,7 @@ untouched, so older configs and the H1 still work.
 | cmd size | 29 or reject | 7 or reject |
 | cmd NaN/Inf, absurd magnitude | reject | reject |
 | `kp`/`kd` | clamped by strong/weak class | clamped by `hand_kp_*`/`hand_kd_*` |
-| `q` | torque-implied bound in `publishLowCommand_` | clamped to `[q_min, q_max]` |
+| `q` | range clamp, rate limit and torque-implied bound in `trackingFrame_` | clamped to `[q_min, q_max]` |
 | watchdog | `duration + 0.2 s`, then latches `hold cmd_timeout` | `duration + 0.2 s`, then limp |
 
 `BridgeCore::checkMotorCmd_` is the shared per-motor half; both loops call it.
