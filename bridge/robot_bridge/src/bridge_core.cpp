@@ -129,8 +129,14 @@ namespace sairol_bridge
         return state;
     }
 
-    void BridgeCore::createArmingServices_()
+    void BridgeCore::createArmingServices_(bool limp)
     {
+        if (limp)
+        {
+            limpControlService_ = nh->create_service<std_srvs::srv::Trigger>(
+                "limp_control", std::bind(&BridgeCore::limpControlServiceCB_, this, _1, _2));
+        }
+
         readyPositionService_ = nh->create_service<std_srvs::srv::Trigger>(
             "ready_position_control", std::bind(&BridgeCore::readyPositionControlServiceCB_, this, _1, _2));
 
@@ -670,6 +676,12 @@ namespace sairol_bridge
         {
             return;   // stopped since the check above, or still arming: no stream
         }
+        if (limp_)
+        {
+            RCLCPP_WARN_THROTTLE(nh->get_logger(), steadyClock_, 1000,
+                                 "ARMED limp: /robot_cmd dropped; /start_control first");
+            return;
+        }
         if (!stream_.empty() && controller != stream_)
         {
             RCLCPP_WARN_THROTTLE(nh->get_logger(), steadyClock_, 1000,
@@ -1017,7 +1029,13 @@ namespace sairol_bridge
     std::string BridgeCore::describeState_()
     {
         std::lock_guard<std::mutex> lock(mutex_);
-        return latch_.describe(controlStarted_);
+        return stateText_();
+    }
+
+    std::string BridgeCore::stateText_()
+    {
+        const std::string state = latch_.describe(controlStarted_);
+        return limp_ && state == "ARMED" ? state + " limp" : state;
     }
 
     void BridgeCore::publishBridgeState_(const std::string &state)
@@ -1034,6 +1052,7 @@ namespace sairol_bridge
         {
             std::lock_guard<std::mutex> lock(mutex_);
             const bool was_tracking = controlStarted_.exchange(false);
+            limp_ = false;
             endStream_();
             transition = latch_.trigger(cause, was_tracking);
             if (transition.snapshot)
@@ -1079,7 +1098,7 @@ namespace sairol_bridge
         return remoteOnEventsOnly_ ? last > 0.0 : steadyClock_.now().seconds() - last <= estop::REMOTE_TIMEOUT_S;
     }
 
-    bool BridgeCore::armControl_(bridge_interface::msg::RobotCmd default_cmd, std::string &why)
+    bool BridgeCore::armControl_(bridge_interface::msg::RobotCmd default_cmd, std::string &why, bool limp)
     {
         uint64_t generation = 0;
         // initControl_ sets controlStarted_ before its arm ramp: a /robot_cmd until the end starts no stream.
@@ -1132,7 +1151,12 @@ namespace sairol_bridge
             return false;
         }
         syncLatchFlags_();
-        publishBridgeState_(latch_.describe(controlStarted_));
+        limp_ = limp;
+        if (limp)
+        {
+            endStream_();
+        }
+        publishBridgeState_(stateText_());
         clearLink_();
         return true;
     }
@@ -1253,6 +1277,33 @@ namespace sairol_bridge
         response->message = describeState_();
     }
 
+    void BridgeCore::limpControlServiceCB_(
+        const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+        std::shared_ptr<std_srvs::srv::Trigger::Response> response)
+    {
+        // initControl_ ramps from the measured pose to these: q stays, the gains fade out.
+        bridge_interface::msg::RobotCmd limp_cmd;
+        limp_cmd.motor_cmd.resize(numJoint_);
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            for (int i = 0; i < numJoint_; ++i)
+            {
+                limp_cmd.motor_cmd[i].q = currentState_.motor_state[i].q;
+            }
+        }
+        std::string why;
+        if (!armControl_(limp_cmd, why, true))
+        {
+            RCLCPP_WARN(nh->get_logger(), "Limp control refused: %s", why.c_str());
+            response->success = false;
+            response->message = why;
+            return;
+        }
+        RCLCPP_WARN(nh->get_logger(), "ARMED limp: kp, kd and tau ramp to 0 over %.1f s", duration_);
+        response->success = true;
+        response->message = "armed limp: kp, kd and tau ramp to 0";
+    }
+
     void BridgeCore::estopDampServiceCB_(
         const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
         std::shared_ptr<std_srvs::srv::Trigger::Response> response)
@@ -1357,6 +1408,11 @@ namespace sairol_bridge
             setPose_(q);
             interpolationParams_(duration_, 1, true);
             useController_(MOTOR_PD);   // the stream goes on: its next /robot_cmd switches back
+            if (limp_)
+            {
+                limp_ = false;   // ramps from the measured pose: lastCommand_ follows it at kp 0
+                publishBridgeState_(stateText_());
+            }
         }
         RCLCPP_INFO(nh->get_logger(), "%s position control activated", name.c_str());
         response->success = true;
