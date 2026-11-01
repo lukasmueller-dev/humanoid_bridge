@@ -85,8 +85,8 @@ Options:
   --hands               hand-path integration test only
   --config              broken-config refusal test only
   --controllers         low-level controller selection integration test only
-  --sim                 G1_bridge against robot_sim only, not in the default set; needs robot_sim
-                        built and $G1_MJCF, so not with --docker
+  --sim                 robot_sim stages only (sim, sim-link, sim-t1), not in the default set; needs robot_sim
+                        built, $G1_MJCF, $T1_MJCF and unitree_sdk2py, so not with --docker
   --rmw <impl>          cyclonedds | fastrtps | auto (default auto)
   --python <path>       interpreter for the unit stage (default python3, or $PYTHON)
   --stale-after <s>     hands-stale run: the left hand's state stops <s> seconds after
