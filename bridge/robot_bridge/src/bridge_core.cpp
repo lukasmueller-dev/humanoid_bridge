@@ -564,6 +564,17 @@ namespace sairol_bridge
             RCLCPP_ERROR(nh->get_logger(), "estop.damp_kd must be > 0, got %.3f", estopConfig_.damp_kd);
             return false;
         }
+        // Optional per joint: `<name>.damp_kd`; absent = estop.damp_kd.
+        for (size_t i = 0; i < joints_.size(); ++i)
+        {
+            joints_[i].damp_kd = estopConfig_.damp_kd;
+            if (nh->get_parameter(jointNames_[i] + ".damp_kd", joints_[i].damp_kd) &&
+                !(std::isfinite(joints_[i].damp_kd) && joints_[i].damp_kd >= 0))
+            {
+                RCLCPP_ERROR(nh->get_logger(), "%s: damp_kd must be finite and >= 0", jointNames_[i].c_str());
+                return false;
+            }
+        }
 
         // The remote's key names: estop.remote_keys, unitree unless the robot says otherwise.
         std::string remote_keys = "unitree";
