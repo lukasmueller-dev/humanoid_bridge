@@ -45,7 +45,7 @@ Forked from [DFKI-SAIROL/humanoid_bridge](https://github.com/DFKI-SAIROL/humanoi
 | `start_control` answers `success: true` on a wrong length, then moves to `ready_q_` | upstream | fixed here: empty = `ready_q_`, any other wrong length refused |
 | `start_control` drops `default_kp`/`default_kd` silently, arms with the config gains | upstream | fixed here: non-empty gains refused, no PR yet |
 | Arming services exist during the startup waits, so a call made then arms later | upstream | fixed here: created after the waits, no PR yet |
-| Ctrl-C during the startup waits aborts the bridge: the graph calls throw once rclcpp is shut down | upstream | fixed here for G1, H1, H1_2: clean exit, no PR yet; T1 open |
+| Ctrl-C during the startup waits aborts the bridge: the graph calls throw once rclcpp is shut down | upstream | fixed here for G1, H1, H1_2, T1, Go2: clean exit, no PR yet |
 | Any host can `ros2 param set /robot_bridge`: the bridge ignores it, live readers do not | upstream | G1: fixed here: every change refused, no PR yet |
 | G1 `_default_pos` is 27 long while kp/kd are 29 | upstream | fixed here: `robot_tables.py` has 29, no PR yet |
 | `finishControl_` only logs on G1, H1, H1_2, so an abort holds at full gains | upstream | G1: fixed here by the e-stop latch (`docs/estop.md`); H1, H1_2: open |
