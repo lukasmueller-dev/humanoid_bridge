@@ -3,7 +3,7 @@
 > One per repo. Planned work only, one item per task. Finished items are
 > deleted; git history is the log.
 
-_Last updated: 2026-10-30 · safety-limits job_
+_Last updated: 2026-11-01 · codebase-health job_
 
 ## Items
 
@@ -76,4 +76,8 @@ Decided and fake-tested on `g1-web-interface` (`docs/psi0_gates.md`).
 ### Cleanups
 
 - [ ] `--interface sim` does not reach the bridge: MuJoCo listens on `rt/lowcmd`, which the bridge owns. **Done when:** a sim run drives the same client path as hardware, or the limitation is documented as permanent.
-- [ ] Dedup the test-driver helpers: 14 `drive_*.py` define their own `check(name, ok, detail)`, and several repeat `spin`/`wait` and the `main()` boilerplate. Move them to one shared module per integration directory (`bridge/robot_bridge/tests/integration/`, `robot_stacks/sim/robot_sim/tests/integration/`). **Done when:** `grep -l 'def check(' bridge/robot_bridge/tests/integration/drive_*.py robot_stacks/sim/robot_sim/tests/integration/drive_*.py` prints nothing and `tools/test.sh --docker` passes.
+- [ ] Dedup the test-driver helpers: 15 `drive_*.py` define their own `check(name, ok, detail)`, and several repeat `spin`/`wait` and the `main()` boilerplate. Move them to one shared module per integration directory (`bridge/robot_bridge/tests/integration/`, `robot_stacks/sim/robot_sim/tests/integration/`). **Done when:** `grep -l 'def check(' bridge/robot_bridge/tests/integration/drive_*.py robot_stacks/sim/robot_sim/tests/integration/drive_*.py` prints nothing and `tools/test.sh --docker` passes.
+- [ ] Dedup `initControl_`: `H1_bridge.cpp` and `H1_2_bridge.cpp` hold the same 40-line copy; `X2_bridge.cpp` adds one `dampingActive_` guard. Move the body to `BridgeCore`. **Done when:** `grep -l '::initControl_(' bridge/robot_bridge/src/H1_bridge.cpp bridge/robot_bridge/src/H1_2_bridge.cpp` prints nothing and `tools/test.sh --docker` passes.
+- [ ] Dedup the node `main()`: `g1_node.cpp`, `go2_node.cpp` and `t1_node.cpp` each repeat the read-only parameter callback and the 3 s exit watchdog. Move both to one header under `include/`. **Done when:** `grep -l '_Exit' bridge/robot_bridge/src/*_node.cpp` prints nothing and `tools/test.sh --docker` passes.
+- [ ] Split `main()` of `check_hand_cmd.py` (195 lines, one function) into one function per check. **Done when:** `radon cc -n D bridge/robot_bridge/tests/integration/check_hand_cmd.py` prints nothing and `tools/test.sh --docker --hands` passes.
+- [ ] Clear the 8 lint sites: 4 unsorted imports, an unused `numpy` import, an unused `rec`, 2 `;` statements. **Done when:** `ruff check . --select F401,F841,I001,E702` exits 0 and `pytest` passes.
