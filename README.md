@@ -137,8 +137,8 @@ ros2 run robot_bridge G1_bridge --ros-args \
 ```
 
 Substitute `H1_bridge`, `H1_2_bridge` or `T1_bridge` and the matching config.
-The bridge starts in damping mode, and refuses to start while anything else
-publishes `/lowcmd`. `tools/g1-release-lowcmd.py --iface <nic>` frees it;
+The bridge starts idle and publishes nothing until control starts. It refuses to
+start while anything else publishes `/lowcmd`. `tools/g1-release-lowcmd.py --iface <nic>` frees it;
 `L2 + R2` on the controller does the same. On G1, H1 and H1_2,
 `/start_control`, `/ready_position_control` and `/zero_position_control` do not
 exist until then.
