@@ -7,7 +7,7 @@ _Last updated: 2026-10-30 · safety-limits job_
 
 ## Goal
 
-The lab's robot stack for Unitree (G1, H1, H1_2), Booster (T1) and AgiBot (X2) humanoids, in
+The lab's robot stack for Unitree (G1, H1, H1_2, Go2), Booster (T1) and AgiBot (X2) humanoids, in
 two layers, so the bridge layer can go back to DFKI as PRs while the per-robot
 deploy layers stay independent of it.
 
