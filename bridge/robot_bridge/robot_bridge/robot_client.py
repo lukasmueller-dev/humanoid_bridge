@@ -626,7 +626,7 @@ class RobotClient:
 
     def init_control(self, default_pos=None):
         """
-        Start the control loop by calling the init_control service.
+        Start the control loop by calling the start_control service.
 
         X2 returns the pending future; its done-callback handles the response.
         The Unitree and Booster joystick handlers drop the result (fire-and-forget):
