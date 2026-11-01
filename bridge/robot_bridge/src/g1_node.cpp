@@ -1,10 +1,8 @@
 #include "rclcpp/rclcpp.hpp"
 #include "G1_bridge.hpp"
+#include "node_common.hpp"
 
 #include <chrono>
-#include <cstdio>
-#include <cstdlib>
-#include <thread>
 
 
 int main(int argc, char **argv)
@@ -42,13 +40,8 @@ try
         return 1;
     }
 
-    // Read once above, while readers such as g1_web_commander read the live values: refuse every change.
-    auto read_only = nh->add_on_set_parameters_callback([](const std::vector<rclcpp::Parameter> &) {
-        rcl_interfaces::msg::SetParametersResult result;
-        result.successful = false;
-        result.reason = "robot_bridge parameters are read-only: edit the config and restart the bridge";
-        return result;
-    });
+    // Read once above, while readers such as robot_web_commander read the live values: refuse every change.
+    auto read_only = sairol_bridge::refuseParameterChanges(*nh);
 
     if (bridge && rclcpp::ok())   // not after Ctrl-C in the constructor's waits: spin would throw
     {
@@ -57,13 +50,7 @@ try
     }
 
     bridge->stop();
-    // With the NIC down, Cyclone's dds_delete waits forever for its receive thread and the
-    // process never exits after "G1 Bridge stopped.": end it if teardown takes over 3 s.
-    std::thread([] {
-        std::this_thread::sleep_for(std::chrono::seconds(3));
-        std::fflush(nullptr);
-        std::_Exit(0);
-    }).detach();
+    sairol_bridge::exitIfTeardownHangs();
     return 0;
 }
 catch (const std::exception &)

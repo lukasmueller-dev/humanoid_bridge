@@ -1,10 +1,8 @@
 #include "rclcpp/rclcpp.hpp"
 #include "Go2_bridge.hpp"
+#include "node_common.hpp"
 
 #include <chrono>
-#include <cstdio>
-#include <cstdlib>
-#include <thread>
 
 
 int main(int argc, char **argv)
@@ -38,12 +36,7 @@ try
     }
 
     // Read once above, while readers such as robot_web_commander read the live values: refuse every change.
-    auto read_only = nh->add_on_set_parameters_callback([](const std::vector<rclcpp::Parameter> &) {
-        rcl_interfaces::msg::SetParametersResult result;
-        result.successful = false;
-        result.reason = "robot_bridge parameters are read-only: edit the config and restart the bridge";
-        return result;
-    });
+    auto read_only = sairol_bridge::refuseParameterChanges(*nh);
 
     if (bridge && rclcpp::ok())   // not after Ctrl-C in the constructor's waits: spin would throw
     {
@@ -52,11 +45,7 @@ try
     }
 
     bridge->stop();
-    std::thread([] {
-        std::this_thread::sleep_for(std::chrono::seconds(3));
-        std::fflush(nullptr);
-        std::_Exit(0);
-    }).detach();
+    sairol_bridge::exitIfTeardownHangs();
     return 0;
 }
 catch (const std::exception &)
