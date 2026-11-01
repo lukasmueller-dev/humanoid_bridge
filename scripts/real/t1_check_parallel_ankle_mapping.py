@@ -6,7 +6,7 @@ prepare mode (or hanging) while you move both feet by hand through pitch and rol
 
 /low_state carries both motor_state_parallel (crank motors in slots 15/16 and 21/22) and motor_state_serial (the
 firmware's ankle pitch/roll). For every hypothesis (crank b in the pitch slot or not, sign of each crank) the script
-computes f^-1(cranks) with t1_parallel_ankle.py and compares it with the firmware's serial angles. The best
+computes f^-1(cranks) with robot_sim/t1_parallel_ankle.py and compares it with the firmware's serial angles. The best
 hypothesis gives parallel_ankle_swap_cranks / parallel_ankle_crank_sign for robot_bridge/params/T1_config.yaml;
 its error should be small (a few mrad) over the whole motion before parallel_ankle_mapping is turned on.
 
@@ -20,11 +20,12 @@ from pathlib import Path
 
 import numpy as np
 
-SCRIPT_DIR = Path(__file__).resolve().parent
-if str(SCRIPT_DIR) not in sys.path:
-    sys.path.insert(0, str(SCRIPT_DIR))
+# The kinematics live in robot_sim (numpy only); the source tree, so no ROS workspace is needed.
+SIM_SRC = Path(__file__).resolve().parents[2] / "robot_stacks" / "sim" / "robot_sim"
+if str(SIM_SRC) not in sys.path:
+    sys.path.insert(0, str(SIM_SRC))
 
-import t1_parallel_ankle as pa
+from robot_sim import t1_parallel_ankle as pa
 
 SERIAL_IDX = {"left": (15, 16), "right": (21, 22)}  # (pitch, roll) = the two crank slots in parallel mode
 HYPOTHESES = [dict(swap=swap, sign=(sa, sb)) for swap, sa, sb in itertools.product((False, True), (1.0, -1.0), (1.0, -1.0))]

@@ -1,8 +1,9 @@
-"""Numpy kinematics of the Booster T1 parallel ankle, the Python twin of robot_bridge/include/t1_parallel_ankle.hpp.
+"""Numpy kinematics of the Booster T1 parallel ankle, twin of robot_bridge's t1_parallel_ankle.hpp.
 
-Copied from loco-mujoco-t1 (branch parallel_act): loco_mujoco/core/utils/parallel_ankle.py (closed-form f and J_A,
-numpy only) and parallel_act/ankle_jacobian.py (Newton inverse). q_s = (pitch, roll), q_m = (crank_a, crank_b) in
-the convention of the ankle_drive_a/b joints of booster_assets robots/T1/T1_23dof_parallel.xml.
+Copied from loco-mujoco-t1 (branch parallel_act): loco_mujoco/core/utils/parallel_ankle.py
+(closed-form f and J_A) and parallel_act/ankle_jacobian.py (Newton inverse). q_s = (pitch, roll),
+q_m = (crank_a, crank_b) as the ankle_drive_a/b joints of booster_assets T1_23dof_parallel.xml.
+Numpy only: scripts/real/t1_check_parallel_ankle_mapping.py imports it without ROS.
 """
 
 import numpy as np
@@ -41,7 +42,9 @@ def _crank_terms(side, i, q_s):
     cp, sp, cr, sr = np.cos(qp), np.sin(qp), np.cos(qr), np.sin(qr)
     a = g["anchors"][i]
     inner = g["p_roll"] + np.array([a[0], cr * a[1] - sr * a[2], sr * a[1] + cr * a[2]])
-    b = g["p_pitch"] + np.array([cp * inner[0] + sp * inner[2], inner[1], -sp * inner[0] + cp * inner[2]])
+    b = g["p_pitch"] + np.array(
+        [cp * inner[0] + sp * inner[2], inner[1], -sp * inner[0] + cp * inner[2]]
+    )
     db_p = np.array([-sp * inner[0] + cp * inner[2], 0.0, -cp * inner[0] - sp * inner[2]])
     v1, v2 = -sr * a[1] - cr * a[2], cr * a[1] - sr * a[2]
     db_r = np.array([sp * v2, v1, cp * v2])
@@ -64,7 +67,7 @@ def _crank_terms(side, i, q_s):
 
 
 def kinematics(q_s, side):
-    """Crank angles q_m, J_A = dq_m/dq_s and the loop-closure margin (negative: unreachable) for one ankle."""
+    """Crank angles q_m, J_A = dq_m/dq_s and the loop-closure margin (negative: unreachable)."""
     th0, row0, ratio0 = _crank_terms(side, 0, q_s)
     th1, row1, ratio1 = _crank_terms(side, 1, q_s)
     return wrap(np.array([th0, th1])), np.stack([row0, row1]), 1.0 - max(abs(ratio0), abs(ratio1))
