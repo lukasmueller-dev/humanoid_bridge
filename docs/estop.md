@@ -72,7 +72,7 @@ Built by a new `publishStopCommand_()`. It does not reuse `trackingFrame_`: the 
 | `dq`, `tau` | 0 | 0 |
 | `kp` | 0 | joint `kp` from config |
 | `kd` | `estop.damp_kd` | joint `kd` from config |
-| parallel joints (ankles) | same as above | same tau conversion as `publishLowCommand_` |
+| parallel joints (T1 ankles; none on the G1) | same as above | same tau conversion as `trackingFrame_` |
 | rate | `control_dt` (0.001 s) | `control_dt` |
 
 - `damp` is not fully limp: no position spring, but each joint resists speed, so arms sink slowly. `kd=0` would let them drop.
