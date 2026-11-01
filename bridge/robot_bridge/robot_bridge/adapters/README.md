@@ -13,8 +13,9 @@ interpolation, 1 kHz publish and watchdog.
 | Reach the wire only through the injected client | Keeps the adapter testable and transport-agnostic |
 | No controller import at module level | This repo does not depend on the controller |
 
-The client is `robot_bridge.cmd_client.RobotCmdClient` or
-`robot_bridge.robot_client.RobotClient`; both expose `send_cmd`.
+The client is `robot_bridge.cmd_client.RobotCmdClient`. `RobotClient.send_cmd`
+takes no `duration` or `hold_position`, so only `gear_hands` also runs on
+`robot_bridge.robot_client.RobotClient`.
 
 ## Requirements
 

@@ -39,7 +39,7 @@ sairol_bridge::H1_2Bridge::H1_2Bridge(rclcpp::Node::SharedPtr node) : BridgeCore
         return;
     }
 
-    createArmingServices_();
+    createArmingServices_(false);
 }
 
 bool sairol_bridge::H1_2Bridge::checkExternalPublisher_(std::string topic_name)

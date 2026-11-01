@@ -46,7 +46,7 @@ Not gated: self-collision. The joint ranges let an arm reach the head.
 
 ## Gates 1 and 2: design
 
-In `G1Bridge::publishLowCommand_`, per joint, after the interpolation and before
+In `BridgeCore::trackingFrame_` (`G1Bridge::publishLowCommand_` calls it), per joint, after the interpolation and before
 the torque window:
 
 ```

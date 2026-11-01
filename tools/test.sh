@@ -2,7 +2,7 @@
 # Run everything that can be verified without a robot, and say what each stage
 # covers.
 #
-# Needs: numpy and pytest for the unit stage; ROS 2 sourced plus a built
+# Needs: pytest, numpy, yaml, zmq, msgpack and msgpack_numpy for the unit stage; ROS 2 sourced plus a built
 # workspace for the other stages. Stages that cannot run are skipped with the
 # reason. Exit: 0 every requested stage passed, 1 a stage failed, 2 a stage was
 # skipped (--allow-skip: a skip passes). --docker needs only docker: it builds
@@ -18,7 +18,7 @@
 #   estop  the real G1_bridge's e-stop against a fake robot
 #   link   /robot_link: a fake robot drops its link and reboots, armed and disarmed
 #   state  /robot_state and /hand_state: every field against fake_g1 and fake_dex3
-#   t1     the real T1_bridge against fake_t1: custom mode, gamepad e-stop, bounded /low_state
+#   t1     the real T1_bridge against fake_t1: custom mode, gamepad e-stop, head gains, bounded /low_state
 #   go2    the real Go2_bridge against fake_go2: the frame on the wire (CRC), stand-up, remote e-stop
 #   gates  a fresh G1_bridge's target gates (range, speed, torque window, arming seed)
 #          against a fake robot
@@ -85,8 +85,8 @@ Options:
   --hands               hand-path integration test only
   --config              broken-config refusal test only
   --controllers         low-level controller selection integration test only
-  --sim                 G1_bridge against robot_sim only, not in the default set; needs robot_sim
-                        built and $G1_MJCF, so not with --docker
+  --sim                 robot_sim stages only (sim, sim-link, sim-t1), not in the default set; needs robot_sim
+                        built, $G1_MJCF, $T1_MJCF and unitree_sdk2py, so not with --docker
   --rmw <impl>          cyclonedds | fastrtps | auto (default auto)
   --python <path>       interpreter for the unit stage (default python3, or $PYTHON)
   --stale-after <s>     hands-stale run: the left hand's state stops <s> seconds after

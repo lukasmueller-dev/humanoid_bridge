@@ -58,7 +58,7 @@ namespace sairol_bridge
 
     protected:
         bool loadParameters_();
-        // Declares override_keys, then checks every override.<joint>.<key> and applies it over the loaded
+        // Sets override_keys, then checks every override.<joint>.<key> and applies it over the loaded
         // joints_ (docs/estop.md, Overrides); false logs the one refusal. The parameters stay as loaded.
         bool loadOverrides_();
         // motor_pd and every name in controllers_allowed; false names the one that does not load.
@@ -77,7 +77,8 @@ namespace sairol_bridge
 
         // Each robot bridge but X2 (which makes its own three) calls this after its wait
         // loops: DDS stores a call made during the wait and runs it once spin starts.
-        void createArmingServices_();
+        // limp false: no /limp_control (H1, H1_2: no Gate 4, so q does not follow the hand at kp 0).
+        void createArmingServices_(bool limp = true);
 
         void readyPositionControl_();
         void zeroPositionControl_();
@@ -113,7 +114,8 @@ namespace sairol_bridge
         void enterStop_(estop::Cause cause);
         // The only way the arming services start control: refused while latched, on a
         // checkState_ fault, and without the remote when estop.require_remote.
-        bool armControl_(bridge_interface::msg::RobotCmd default_cmd, std::string &why);
+        // limp: ARMED limp, /robot_cmd dropped until start_control, Ready or Zero.
+        bool armControl_(bridge_interface::msg::RobotCmd default_cmd, std::string &why, bool limp = false);
         // False only when estop.require_remote and the remote is not present.
         bool remoteAllowsArming_(std::string &why);
         // A remote header within REMOTE_TIMEOUT_S; with remoteOnEventsOnly_, any message so far.
@@ -138,6 +140,7 @@ namespace sairol_bridge
         virtual void publishStopCommand_() {}
         void syncLatchFlags_();   // mutex_ held
         std::string describeState_();
+        std::string stateText_();   // mutex_ held: latch_.describe, ARMED limp while limp_
         // mutex_ held for every state change, so two threads cannot publish out of order.
         void publishBridgeState_(const std::string &state);
         // /robot_state from currentState_ and imu_, mutex_ held; the robot's state handler fills
@@ -149,6 +152,7 @@ namespace sairol_bridge
         rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr readyPositionService_;
         rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr zeroPositionService_;
         rclcpp::Service<bridge_interface::srv::SetDefaultPosition>::SharedPtr startControlService_;
+        rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr limpControlService_;
         rclcpp::Subscription<bridge_interface::msg::RobotCmd>::SharedPtr desiredSubscriber_;
         rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr estopDampService_;
         rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr estopHoldService_;
@@ -206,6 +210,7 @@ namespace sairol_bridge
         bool receivedCmd_{false}; // Whether the control is initialized
         // Set at start: the robot maps its parallel joints to their motors (T1 parallel_ankle_mapping).
         bool robotMapsParallelJoints_{false};
+        bool limp_{false};   // mutex_: armed by /limp_control, frames ramp to kp, kd, tau 0
         float_t imu_rpy_threshold_{1.0}; // Threshold for IMU roll/pitch in radians
 
         // E-stop. latch_ and holdQ_ are guarded by mutex_; the atomics mirror
@@ -241,6 +246,10 @@ namespace sairol_bridge
 
         void startControlServiceCB_(const std::shared_ptr<bridge_interface::srv::SetDefaultPosition::Request> request,
                                           std::shared_ptr<bridge_interface::srv::SetDefaultPosition::Response> response);
+
+        // armControl_ into kp 0, kd 0, tau 0 over duration_: joints move by hand, the e-stop stays active.
+        void limpControlServiceCB_(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+                                   std::shared_ptr<std_srvs::srv::Trigger::Response> response);
 
         void estopDampServiceCB_(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
                                  std::shared_ptr<std_srvs::srv::Trigger::Response> response);

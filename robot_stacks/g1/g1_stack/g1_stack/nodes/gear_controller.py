@@ -210,8 +210,7 @@ def main(argv=None):
     # the env (`run_g1_control_loop.py`), so the ros2 manager calls
     # `rclpy.init()` (`ros_utils.py`) before `init_channel` ever runs -- rmw
     # takes the domain first and the channel factory dies on it, deep inside
-    # env construction where the message means nothing. The status topic this
-    # node reads is a ZMQ port too.
+    # env construction where the message means nothing.
     if config.messaging_backend != "zmq":
         print(
             f"--messaging-backend must be zmq here, not {config.messaging_backend!r}: "

@@ -36,8 +36,8 @@ pose = goal.pose_from_named({"left_elbow_joint": 0.5})  # (31,) float32
 msg = goal.hold_goal(pose, target_time, base_height=0.75)
 ```
 
-`goal.UPPER_BODY_JOINTS` is the 31 names in goal order. `goal.goal(pose, nav,
-height, target_time)` is the general form.
+`goal.UPPER_BODY_JOINTS` is the 31 names in goal order. `goal.goal(pose, navigate_cmd,
+base_height, target_time)` is the general form.
 
 ## Verify
 

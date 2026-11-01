@@ -1,7 +1,7 @@
 # remote control: the T1 gamepad on /remote_controller_state (docs/estop.md):
 # e-stop damp: RB + RT    e-stop hold: LB + RB    (set under estop:)
-# arming needs the gamepad (a message within 0.5 s; estop.require_remote)
-# robot_client.py (the examples' client) reads its own keys: LT + START, LT + A, BACK
+# arming needs the gamepad (any message since the bridge started; estop.require_remote)
+# robot_client.py (the examples' client) reads its own keys: LT + RT + START, LB, RB, BACK, LT + BACK
 # dq_trip: the trip on measured |dq|, 1.25 x the T1_23dof.urdf velocity; dq_limit only clamps commands.
 # No key = dq_limit (Ankle_Pitch: 1.25 x 12.57 is below its dq_limit 18.8).
 
@@ -32,7 +32,7 @@ robot_bridge:
 
     # docs/estop.md. Operator e-stops have a fixed mode; these set the rest.
     estop:
-      damp_kd: 5.0                      # float: an integer here fails the load
+      damp_kd: 5.0                      # float: an integer here fails the load; a joint's damp_kd overrides it
       remote_keys: t1                   # the T1 gamepad's names
       remote_combo_damp: ["RB", "RT"]   # one hand: the right shoulder buttons
       remote_combo_hold: ["LB", "RB"]
@@ -76,7 +76,8 @@ robot_bridge:
       dq_trip: 52.36
       tau_limit: 7.0
       kp: 5.0
-      kd: 0.1
+      kd: 0.5             # first value, Lukas tunes it on the robot (was 0.1: chatter)
+      damp_kd: 0.5        # first value, Lukas tunes it; absent = estop.damp_kd (5.0: chatter)
       if_strong_joint: false
       if_parallel_joint: false
 
@@ -88,7 +89,8 @@ robot_bridge:
       dq_trip: 52.36
       tau_limit: 7.0      
       kp: 5.0
-      kd: 0.1
+      kd: 0.5             # first value, Lukas tunes it on the robot (was 0.1: chatter)
+      damp_kd: 0.5        # first value, Lukas tunes it; absent = estop.damp_kd (5.0: chatter)
       if_strong_joint: false
       if_parallel_joint: false
 
