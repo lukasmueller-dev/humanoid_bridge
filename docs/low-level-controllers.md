@@ -59,6 +59,7 @@ Rename the package, the class and `name` in `plugins.xml`. That `name` is what a
 - Gate 4 bounds `q` by the torque window. At `kp` 0 the bridge sends `q_meas`.
 - A parallel joint (T1 ankles) at `kp > 0`: the bridge moves the P part into `tau` and drops the command's `tau`.
   At `kp` 0 it sends `tau` as is: `bridge_pd`'s PD, or the command's feedforward under `motor_pd` (0 before this change).
+  T1 with `parallel_ankle_mapping: true`: no move, gate 4 counts `tau`; the T1 bridge maps the ankle frame to the cranks.
 
 ### 3. Build and allow
 

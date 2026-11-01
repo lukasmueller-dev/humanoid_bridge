@@ -11,9 +11,9 @@
 # or older than the newest file under bridge/.
 #
 #   unit   pure Python: clients, adapters, goal order, observation, camera, tools/tests
-#   cpp    gtests test_estop, test_gates, test_crc, test_booster, test_go2, test_controllers: e-stop latch, stop
-#          frames, remote keys, robot link, target gates, the /lowcmd CRC against Unitree's SDK, the Go2 frame,
-#          motor_pd and bridge_pd loaded by name
+#   cpp    gtests test_estop, test_gates, test_crc, test_booster, test_go2, test_controllers, and test_t1_parallel_ankle:
+#          e-stop latch, stop frames, remote keys, robot link, target gates, the /lowcmd CRC against Unitree's SDK,
+#          the Go2 frame, motor_pd and bridge_pd loaded by name, the T1 ankle crank kinematics
 #   wire   the real G1_bridge against a fake robot, body path
 #   estop  the real G1_bridge's e-stop against a fake robot
 #   link   /robot_link: a fake robot drops its link and reboots, armed and disarmed
@@ -73,8 +73,8 @@ Exit 0: every requested stage passed; 1: a stage failed; 2: a stage was skipped 
 
 Options:
   --unit                pure Python tests only; needs no ROS
-  --cpp                 gtests test_estop, test_gates, test_crc, test_booster, test_go2 and test_controllers only;
-                        needs a built workspace
+  --cpp                 gtests test_estop, test_gates, test_crc, test_booster, test_go2, test_controllers and
+                        test_t1_parallel_ankle only; needs a built workspace
   --wire                body-path integration test only
   --estop               e-stop integration test only
   --link                robot link (drop, reboot) integration test only
@@ -325,7 +325,7 @@ stage_cpp() {
         FAILED=1
         return
     fi
-    for name in test_estop test_gates test_crc test_booster test_go2 test_controllers; do
+    for name in test_estop test_gates test_crc test_booster test_go2 test_controllers test_t1_parallel_ankle; do
         bin="${prefix%/install/robot_bridge}/build/robot_bridge/$name"
         if [ ! -x "$bin" ]; then
             record cpp SKIP "no $bin; build with BUILD_TESTING on (colcon's default)"
