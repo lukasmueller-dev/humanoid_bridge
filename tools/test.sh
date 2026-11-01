@@ -345,7 +345,7 @@ stage_cpp() {
 }
 
 BUILD_PROBLEM=""
-if [ "$RUN_CPP$RUN_WIRE$RUN_ESTOP$RUN_LINK$RUN_STATE$RUN_T1$RUN_GO2$RUN_GATES$RUN_HANDS$RUN_CONFIG$RUN_CONTROLLERS" != 00000000000 ] && command -v ros2 >/dev/null \
+if [ "$RUN_CPP$RUN_WIRE$RUN_ESTOP$RUN_LINK$RUN_STATE$RUN_T1$RUN_GO2$RUN_GATES$RUN_HANDS$RUN_CONFIG$RUN_CONTROLLERS$RUN_SIM" != 000000000000 ] && command -v ros2 >/dev/null \
    && ros2 pkg prefix robot_bridge >/dev/null 2>&1; then
     BUILD_PROBLEM="$(stale_build)"
 fi
