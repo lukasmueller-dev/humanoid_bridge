@@ -126,7 +126,8 @@ GEAR's own gains, because it is a drop-in and its caller passes none.
 ## Verify
 
 Verified against the fake and `robot_sim` only. Dex3 is mounted on the lab G1
-(2026-10-20); no hand command has gone through the bridge on hardware yet.
+(2026-10-20); the bridge's hand path has run on it (2026-10-23, 2026-10-26: see
+"What breaks it"), but this doc's behaviour is verified on the fakes only.
 
 ```bash
 tools/test.sh --hands               # plain, hands-stale, hands-hot, hands-ready, hands-ready-one
