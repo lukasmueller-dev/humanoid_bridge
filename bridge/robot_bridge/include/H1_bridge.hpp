@@ -1,5 +1,5 @@
-#ifndef SAIROL_BRIDGE_G1_BRIDGE_HPP_
-#define SAIROL_BRIDGE_G1_BRIDGE_HPP_
+#ifndef SAIROL_BRIDGE_H1_BRIDGE_HPP_
+#define SAIROL_BRIDGE_H1_BRIDGE_HPP_
 
 #include <memory>
 #include <chrono>
