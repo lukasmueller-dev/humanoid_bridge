@@ -71,7 +71,7 @@ Built by a new `publishStopCommand_()`. It does not reuse `publishLowCommand_`: 
 | `q` | measured q (ignored at `kp=0`) | measured q at trigger, kept fixed |
 | `dq`, `tau` | 0 | 0 |
 | `kp` | 0 | joint `kp` from config |
-| `kd` | `estop.damp_kd` | joint `kd` from config |
+| `kd` | joint `damp_kd` (optional, finite, >= 0), else `estop.damp_kd` | joint `kd` from config |
 | parallel joints (ankles) | same as above | same tau conversion as `publishLowCommand_` |
 | rate | `control_dt` (0.001 s) | `control_dt` |
 

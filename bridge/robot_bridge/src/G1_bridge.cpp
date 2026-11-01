@@ -340,7 +340,7 @@ void sairol_bridge::G1Bridge::publishStopCommand_()
     for (int i = 0; i < numJoint_; ++i)
     {
         const auto frame = estop::stopFrame(mode, joints_[i], currentState_.motor_state[i].q,
-                                            holdQ_[i], estopConfig_.damp_kd);
+                                            holdQ_[i], joints_[i].damp_kd);
         auto &cmd = unitree_cmd.motor_cmd[i];
         cmd.mode = 1; // Enable motor
         cmd.q = frame.q;
