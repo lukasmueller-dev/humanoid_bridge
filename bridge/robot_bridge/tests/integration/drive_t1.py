@@ -14,6 +14,7 @@ from bridge_interface.msg import RobotState
 from fake_t1 import NUM_JOINT, RPY
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import Bool, String
+from std_srvs.srv import Trigger
 
 from robot_bridge.cmd_client import RobotCmdClient
 
@@ -48,6 +49,7 @@ class Driver:
         self.state = None
         self.cmds = 0
         self.cmd_motors = None
+        self.last_cmd = None
         self.failures = []
 
     def _on_bridge(self, msg):
@@ -62,6 +64,7 @@ class Driver:
     def _on_cmd(self, msg):
         self.cmds += 1
         self.cmd_motors = len(msg.motor_cmd)
+        self.last_cmd = msg
 
     def check(self, name, ok, detail=""):
         print(f"{name:<44} {'PASS' if ok else 'FAIL'}{'  ' + detail if detail else ''}", flush=True)
@@ -116,6 +119,27 @@ class Driver:
         self.buttons.publish(String(data="LB+RB"))  # remote_combo_hold, from DISARMED: latches too
         held = self.wait(lambda: str(self.bridge).startswith("LATCHED hold"), 2.0)
         self.check("gamepad LB+RB latches hold", held, str(self.bridge))
+        self.buttons.publish(String(data=""))
+        self.wait(lambda: False, 0.3)
+        reply = self.client.estop_reset()
+        self.check("estop_reset after the hold", reply.success, reply.message)
+        self.limp()
+
+    def limp(self):
+        """/limp_control: kp, kd, tau 0 on every motor, ankles too; the gamepad still latches."""
+        limp = self.node.create_client(Trigger, "/limp_control")
+        reply = self.client._call(limp, Trigger.Request(), 30.0)
+        self.check("limp_control", reply.success, reply.message)
+        self.wait(lambda: False, RAMP_SECONDS)
+        self.check("ARMED limp", self.bridge == "ARMED limp", str(self.bridge))
+        motors = list(self.last_cmd.motor_cmd) if self.last_cmd else []
+        stiff = [i for i, m in enumerate(motors) if max(abs(m.kp), abs(m.kd), abs(m.tau)) > 1e-6]
+        limp_ok = len(motors) == NUM_JOINT and not stiff
+        detail = f"{len(motors)} motors, stiff {stiff}"
+        self.check("limp frame: kp, kd, tau 0 on every motor", limp_ok, detail)
+        self.buttons.publish(String(data="RB+RT"))
+        latched = self.wait(lambda: str(self.bridge).startswith("LATCHED damp"), 2.0)
+        self.check("gamepad RB+RT from limp latches damp", latched, str(self.bridge))
         self.buttons.publish(String(data=""))
         rclpy.spin_once(self.node, timeout_sec=0.2)
 
