@@ -6,11 +6,10 @@ example_controller.
 """
 
 import argparse
-import sys
 import time
 
-import rclpy
 import yaml
+from harness import Checks, ros_node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import Float32, String
 from unitree_hg.msg import LowCmd
@@ -37,9 +36,9 @@ def load_params(path):
     }
 
 
-class Driver:
+class Driver(Checks):
     def __init__(self, node, params):
-        self.node = node
+        super().__init__(node, width=48, poll=0.002)
         self.params = params
         # Order 0: a step, which gate 2 ramps.
         self.client = RobotCmdClient(
@@ -55,26 +54,12 @@ class Driver:
         self.dq = node.create_publisher(Float32, "/fake_g1/dq", 10)
         self.frame = None  # the last /lowcmd's motors
         self.controller = None  # the last /low_level_controller
-        self.failures = []
 
     def _on_cmd(self, msg):
         self.frame = list(msg.motor_cmd)[:NUM_MOTORS]
 
     def _on_controller(self, msg):
         self.controller = msg.data
-
-    def spin(self, seconds):
-        end = time.monotonic() + seconds
-        while time.monotonic() < end:
-            rclpy.spin_once(self.node, timeout_sec=0.002)
-
-    def check(self, name, ok, detail=""):
-        print(
-            "{:<48} {}{}".format(name, "PASS" if ok else "FAIL", "  " + detail if detail else ""),
-            flush=True,
-        )
-        if not ok:
-            self.failures.append(name)
 
     def stream(self, q, controller, seconds=STREAM_SECONDS, kp=None, tau=None):
         """/robot_cmd at 50 Hz for `seconds`, as a policy sends it; then the last frame."""
@@ -220,19 +205,10 @@ def main():
     parser.add_argument("--start-q", type=float, default=0.2, help="the pose fake_g1 starts in")
     args = parser.parse_args()
 
-    rclpy.init()
-    node = rclpy.create_node("controllers_driver")
-    driver = Driver(node, load_params(args.params))
-    try:
+    with ros_node("controllers_driver") as node:
+        driver = Driver(node, load_params(args.params))
         driver.run(args.start_q)
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
-
-    if driver.failures:
-        print("\n{} check(s) failed: {}".format(len(driver.failures), ", ".join(driver.failures)))
-        sys.exit(1)
-    print("\nall checks passed")
+    driver.finish()
 
 
 if __name__ == "__main__":

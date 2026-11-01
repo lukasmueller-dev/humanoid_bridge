@@ -4,10 +4,10 @@ Exit 1 on failure. run_fake_gates_test.sh starts the bridge on G1_config.yaml mi
 """
 
 import argparse
-import sys
 import time
 
 import rclpy
+from harness import Checks
 from std_msgs.msg import Bool
 
 from robot_bridge.cmd_client import RobotCmdClient
@@ -25,20 +25,8 @@ def main():
     node = rclpy.create_node("no_estop_driver")
     client = RobotCmdClient(node, num_dof=NUM_MOTORS, control_frequency=50.0)
     remote = node.create_publisher(Bool, "/fake_g1/remote", 10)
-    failures = []
-
-    def spin(seconds):
-        end = time.monotonic() + seconds
-        while time.monotonic() < end:
-            rclpy.spin_once(node, timeout_sec=0.01)
-
-    def check(name, ok, detail=""):
-        print(
-            "{:<48} {}{}".format(name, "PASS" if ok else "FAIL", "  " + detail if detail else ""),
-            flush=True,
-        )
-        if not ok:
-            failures.append(name)
+    checks = Checks(node, width=48, poll=0.01)
+    check, spin = checks.check, checks.spin
 
     up = client.start_control_client.wait_for_service(timeout_sec=30.0)
     check("bridge up on a config without estop:", up)
@@ -68,10 +56,7 @@ def main():
 
     node.destroy_node()
     rclpy.shutdown()
-    if failures:
-        print("\n{} check(s) failed: {}".format(len(failures), ", ".join(failures)))
-        sys.exit(1)
-    print("\nall checks passed")
+    checks.finish()
 
 
 if __name__ == "__main__":

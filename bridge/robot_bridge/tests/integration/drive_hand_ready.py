@@ -8,8 +8,8 @@ import time
 
 import numpy as np
 import yaml
-
 from drive_hand_cmd import fingerprint
+from harness import Checks, ros_node
 
 SIDES = ("left", "right")
 RAMP_SECONDS = 2.5  # `duration` 2.0 plus margin
@@ -30,13 +30,11 @@ def load_hand_params(path):
     }
 
 
-class Driver:
+class Driver(Checks):
     def __init__(self, node, client, params, silent):
-        import rclpy
         from unitree_hg.msg import HandCmd
 
-        self.rclpy = rclpy
-        self.node = node
+        super().__init__(node, width=52, poll=0.002)
         self.client = client
         self.params = params
         self.silent = silent
@@ -55,17 +53,6 @@ class Driver:
                 ),
                 100,
             )
-        self.failures = []
-
-    def check(self, name, ok, detail=""):
-        print("{:<52} {}{}".format(name, "PASS" if ok else "FAIL", "  " + detail), flush=True)
-        if not ok:
-            self.failures.append(name)
-
-    def spin(self, seconds):
-        end = time.monotonic() + seconds
-        while time.monotonic() < end:
-            self.rclpy.spin_once(self.node, timeout_sec=0.002)
 
     def since(self, side, t0, t1=float("inf")):
         return [f for f in self.frames[side] if t0 <= f[0] < t1]
@@ -138,22 +125,13 @@ def main():
     parser.add_argument("--silent", choices=SIDES, help="the hand fake_dex3 runs --silent")
     args = parser.parse_args()
 
-    import rclpy
-
     from robot_bridge.cmd_client import RobotCmdClient
 
-    rclpy.init()
-    node = rclpy.create_node("hand_ready_driver")
-    client = RobotCmdClient(node, num_dof=29, control_frequency=50.0)
-    driver = Driver(node, client, load_hand_params(args.params), args.silent)
-    try:
+    with ros_node("hand_ready_driver") as node:
+        client = RobotCmdClient(node, num_dof=29, control_frequency=50.0)
+        driver = Driver(node, client, load_hand_params(args.params), args.silent)
         driver.run()
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
-    if driver.failures:
-        raise SystemExit(f"{len(driver.failures)} failed: " + ", ".join(driver.failures))
-    print("all checks passed", flush=True)
+    driver.finish()
 
 
 if __name__ == "__main__":

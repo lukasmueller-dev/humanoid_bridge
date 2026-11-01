@@ -6,11 +6,11 @@ Exit 1 on failure. run_fake_estop_test.sh runs it last: the bridge does not surv
 import argparse
 import os
 import signal
-import sys
 import time
 
 import rclpy
 from drive_estop import NUM_MOTORS, load_params
+from harness import Checks
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import String
 from unitree_hg.msg import LowCmd
@@ -32,7 +32,9 @@ def main():
     rclpy.init()
     node = rclpy.create_node("shutdown_driver")
     client = RobotCmdClient(node, num_dof=NUM_MOTORS, control_frequency=50.0)
-    frames, states, failures = [], [], []  # frames: (t, kp, kd)
+    frames, states = [], []  # frames: (t, kp, kd)
+    checks = Checks(node)
+    check, spin = checks.check, checks.spin
 
     def on_cmd(msg):
         motors = list(msg.motor_cmd)[:NUM_MOTORS]
@@ -43,19 +45,6 @@ def main():
     )
     node.create_subscription(LowCmd, "/lowcmd", on_cmd, 10)
     node.create_subscription(String, "/bridge_state", lambda msg: states.append(msg.data), latched)
-
-    def spin(seconds):
-        end = time.monotonic() + seconds
-        while time.monotonic() < end:
-            rclpy.spin_once(node, timeout_sec=0.005)
-
-    def check(name, ok, detail=""):
-        print(
-            "{:<44} {}{}".format(name, "PASS" if ok else "FAIL", "  " + detail if detail else ""),
-            flush=True,
-        )
-        if not ok:
-            failures.append(name)
 
     reply = client.start_control(default_position=[0.123] * NUM_MOTORS, timeout_sec=30.0)
     check("start_control", reply.success, reply.message)
@@ -96,10 +85,7 @@ def main():
 
     node.destroy_node()
     rclpy.shutdown()
-    if failures:
-        print("\n{} check(s) failed: {}".format(len(failures), ", ".join(failures)))
-        sys.exit(1)
-    print("\nall checks passed")
+    checks.finish()
 
 
 if __name__ == "__main__":
