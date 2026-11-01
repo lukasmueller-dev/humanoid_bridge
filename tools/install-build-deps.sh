@@ -11,7 +11,7 @@
 #   rmw_cyclonedds_cpp         GEAR's sim forces raw CycloneDDS, so every ROS 2
 #                              node has to match it. Humble defaults to Fast DDS
 #   the Python deps            the union of g1_stack's and g1_camera's
-#                              install_requires, plus OpenCV, which g1_camera
+#                              install_requires, plus scipy (robot_client.py), OpenCV, which g1_camera
 #                              deliberately does not declare (no aarch64 wheel
 #                              for the Jetson), plus pytest and ruff. colcon
 #                              installs neither: they are ament_python packages
