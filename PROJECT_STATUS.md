@@ -3,7 +3,7 @@
 > One per repo. The *current* picture: goal, architecture, decisions, open
 > questions. Finished work is removed; git history is the log.
 
-_Last updated: 2026-11-01 · limp-control job_
+_Last updated: 2026-11-01 · t1-ankle-core job_
 
 ## Goal
 
@@ -68,6 +68,8 @@ _One line each, dated, with a pointer (commit or PR)._
 - 2026-10-30: the 1 kHz tick runs a `pluginlib` low-level controller a policy picks per `/robot_cmd` stream (`RobotCmd.controller`, gated by `controllers_allowed`); `motor_pd` and `bridge_pd` ship, colleagues add plugins — `docs/low-level-controllers.md`, PR from `low-level-controllers`
 - 2026-11-01: `/limp_control` arms G1, T1, Go2 into kp, kd, tau 0 (ramp over `duration`), e-stop active; `/robot_cmd` is dropped in limp, `start_control`, Ready or Zero leave it; not on H1, H1_2 (no Gate 4: q does not follow the hand) — `docs/estop.md` § States, PR from `limp-control`
 - 2026-09-09: `examples/` sits inside `robot_bridge`, the package it demonstrates, so a subtree split of `bridge/` carries it; excluded from lint as vendored upstream code — same commit
+- 2026-11-01: T1 leg limits in `T1_config.yaml` are Siwei's measured stops, not the old ones: ankle pitch -0.87..0.35, where the old 0.855 lies 0.5 rad past the measured stop — `6806406` on `t1-parallel-ankle` (#61)
+- 2026-11-01: `main` takes only the T1 ankle mapping; the T1 examples move to robots_web_commander `workspaces/scratch/` (#59), the joint-response tools stay on `t1-parallel-ankle` (#61, closed without a merge) until Siwei decides — PR from `t1-ankle-core`
 
 ## Roadmap
 

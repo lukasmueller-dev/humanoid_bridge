@@ -208,6 +208,8 @@ namespace sairol_bridge
         std::vector<low_level_controller::MotorCommand> target_, frame_;   // control thread only, sized once
         std::atomic<bool> controlStarted_{false};   // tracking /robot_cmd
         bool receivedCmd_{false}; // Whether the control is initialized
+        // Set at start: the robot maps its parallel joints to their motors (T1 parallel_ankle_mapping).
+        bool robotMapsParallelJoints_{false};
         bool limp_{false};   // mutex_: armed by /limp_control, frames ramp to kp, kd, tau 0
         float_t imu_rpy_threshold_{1.0}; // Threshold for IMU roll/pitch in radians
 
