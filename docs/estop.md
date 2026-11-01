@@ -64,7 +64,7 @@ Closes roadmap `feat/g1-finish-control-release`.
 
 ## Stop frames
 
-Built by a new `publishStopCommand_()`. It does not reuse `publishLowCommand_`: that q clamp divides by `kp`.
+Built by a new `publishStopCommand_()`. It does not reuse `trackingFrame_`: the q clamp there divides by `kp`.
 
 | Field | `damp` | `hold` |
 |---|---|---|
