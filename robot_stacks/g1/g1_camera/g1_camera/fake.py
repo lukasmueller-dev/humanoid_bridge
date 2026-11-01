@@ -12,7 +12,7 @@ from . import wire
 
 
 def synthetic_rgb(seed: int = 0, size=wire.DEFAULT_SIZE) -> np.ndarray:
-    """A deterministic test image with a different gradient per channel.
+    """A deterministic test image: red a row gradient, green a column gradient, blue flat per seed.
 
     A flat colour would pass a shape check with the channels or rows swapped.
     """
