@@ -198,49 +198,6 @@ void sairol_bridge::H1Bridge::publishLowCommand_()
     lowCommandPublisher_->publish(unitree_cmd);
 }
 
-bool sairol_bridge::H1Bridge::initControl_(bridge_interface::msg::RobotCmd default_cmd)
-{
-    last_state_time_ = steadyClock_.now();
-
-    for (int i = 0; i < numJoint_; ++i)
-    {
-        lowCommandDesired_.motor_cmd[i].q = currentState_.motor_state[i].q;
-        lowCommandDesired_.motor_cmd[i].kp = joints_[i].kp;
-        lowCommandDesired_.motor_cmd[i].kd = joints_[i].kd;
-    }
-
-    calculateInterpolationParams_(0.0, 1, true);
-
-    controlStarted_ = true;
-    receivedCmd_ = true;
-    rclcpp::Rate rate(100);
-    rate.sleep();
-    RCLCPP_INFO(nh->get_logger(), "Control initialized successfully.");
-    
-    if (default_cmd.motor_cmd.size() == numJoint_)
-    {
-        for (size_t i = 0; i < numJoint_; ++i)
-        {
-            lowCommandDesired_.motor_cmd[i].q = default_cmd.motor_cmd[i].q;
-            lowCommandDesired_.motor_cmd[i].kp = default_cmd.motor_cmd[i].kp;
-            lowCommandDesired_.motor_cmd[i].kd = default_cmd.motor_cmd[i].kd;
-        }
-    }
-    else 
-    {
-        for (size_t i = 0; i < numJoint_; ++i)
-        {
-            lowCommandDesired_.motor_cmd[i].q = ready_q_[i];
-            lowCommandDesired_.motor_cmd[i].kp = joints_[i].kp;
-            lowCommandDesired_.motor_cmd[i].kd = joints_[i].kd;
-        }
-    }
-
-    calculateInterpolationParams_(duration_, 1, true);
-
-    return true;
-}
-
 void sairol_bridge::H1Bridge::finishControl_() {
     RCLCPP_INFO(nh->get_logger(), "finishControl_ called from H1Bridge");
 }

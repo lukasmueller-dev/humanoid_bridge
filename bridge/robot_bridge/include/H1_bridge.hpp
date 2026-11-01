@@ -49,7 +49,6 @@ private:
     void publishLowCommand_();
     void publishLowCommandOLD_();
     void lowStateHandler_(unitree_go::msg::LowState::SharedPtr message);
-    bool initControl_(bridge_interface::msg::RobotCmd default_cmd) override;
     void finishControl_() override; 
     bool checkExternalPublisher_(std::string topic_name);
 
