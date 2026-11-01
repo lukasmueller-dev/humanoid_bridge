@@ -251,7 +251,7 @@ tests that need `bridge_interface` skip. `tools/test.sh` prints what it ran.
   silent, and the motors go passive about 0.4 s later (`docs/estop.md`, G0).
   Ctrl-C or SIGTERM while sending damps for 1 s first.
 - **H1, H1_2: an abort does not release the joints.** `finishControl_` only
-  logs, so the robot holds its last pose at full kp/kd. Only T1 drops to damping.
+  logs, so the robot holds its last pose at full kp/kd. G1, Go2, T1 and X2 send stop frames.
 - **`kp = 0` makes the torque clamp a no-op for that joint** (`upper_limbs_kp_min: 0.0`).
 - **G1: `/robot_bridge` parameters are read-only.** `ros2 param set` is refused:
   the bridge reads them once at start. Edit the config and restart.
