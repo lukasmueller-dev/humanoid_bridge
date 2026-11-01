@@ -63,7 +63,7 @@ hand_state_timeout: 0.2
 hand_temperature_limit: 80.0
 hand_kp_min/max: 0.0 / 10.0
 hand_kd_min/max: 0.0 / 2.0
-hand_ready_q: [0.0 x7]        # zero is the open, extended end on both hands
+hand_ready_q: [0.0 x7]        # zero is the open pose on both hands
 left_hand_joint_names:  [L_HAND_THUMB_0, ...]   # 7 blocks, idx 0-6
 right_hand_joint_names: [R_HAND_THUMB_0, ...]   # 7 blocks, idx 0-6
 ```
