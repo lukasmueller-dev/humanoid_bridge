@@ -64,11 +64,11 @@ class LoggedCmdClient:
         self._note = fields
 
     def send_cmd(self, q_target_pos=None, q_target_vel=None, target_tau=None, target_kp=None,
-                 target_kd=None, duration=None, hold_position=False):
+                 target_kd=None, duration=None, hold_position=False, controller=""):
         out = self._client.send_cmd(
             q_target_pos=q_target_pos, q_target_vel=q_target_vel, target_tau=target_tau,
             target_kp=target_kp, target_kd=target_kd, duration=duration,
-            hold_position=hold_position)
+            hold_position=hold_position, controller=controller)
         row = {"episode": self._episode, "phase": "policy", "step": None,
                "wall_t": self._clock(), "t": self._wall(), "q_target": _copy(q_target_pos),
                "tau": _copy(target_tau), "kp": _copy(target_kp), "kd": _copy(target_kd),

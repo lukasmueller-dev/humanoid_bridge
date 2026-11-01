@@ -157,6 +157,31 @@ TEST(Window, ZeroKpGivesTheMeasuredPose)
     }
 }
 
+// --- the H1 and H1_2 window ---------------------------------------------------
+
+TEST(PdWindow, MatchesTorqueWindowWithoutTau)
+{
+    for (const float_t q : {-2.0f, 0.2f, 2.0f})
+    {
+        for (const float_t dq : {-5.0f, 0.0f, 5.0f})
+        {
+            EXPECT_FLOAT_EQ(pdWindow(q, 0.1f, dq, 0.0f, 50.0f, 2.0f, 25.0f),
+                            torqueWindow(q, 0.1f, dq, 0.0f, 50.0f, 2.0f, 0.0f, 25.0f));
+        }
+    }
+}
+
+TEST(PdWindow, ZeroKpKeepsTheTarget)
+{
+    // kd·Δdq ±40 Nm past tau_limit 25: unguarded, both bounds are the same inf and so is q.
+    for (const float_t dq : {0.0f, 20.0f, -20.0f})
+    {
+        const float_t q = pdWindow(1.5f, 0.3f, dq, 0.0f, 0.0f, 2.0f, 25.0f);
+        EXPECT_TRUE(std::isfinite(q));
+        EXPECT_FLOAT_EQ(q, 1.5f);
+    }
+}
+
 // --- last check: a tracking frame goes out only when every field is finite ----
 
 TEST(Finite, EveryFieldIsChecked)

@@ -16,6 +16,10 @@ namespace sairol_bridge::gates
     float_t torqueWindow(float_t q, float_t q_meas, float_t dq_meas, float_t dq_cmd,
                          float_t kp, float_t kd, float_t tau, float_t tau_limit);
 
+    // The H1 and H1_2 window: torqueWindow without tau; at kp ~ 0 q unchanged, never inf or NaN.
+    float_t pdWindow(float_t q, float_t q_meas, float_t dq_meas, float_t dq_cmd,
+                     float_t kp, float_t kd, float_t tau_limit);
+
     // The last check of a tracking frame: false if any field is NaN or Inf.
     bool finiteCommand(float_t q, float_t dq, float_t kp, float_t kd, float_t tau);
 } // namespace sairol_bridge::gates
