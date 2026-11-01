@@ -16,7 +16,7 @@ Rehearsal, both on one machine:
     # terminal 2
     python -m g1_stack.nodes.joint_probe --slot 3
 
-`--slot` takes an index, a joint name, or `all` to sweep every slot in turn.
+`--slot` takes an index, a joint-name substring, or `all` to sweep every slot in turn.
 """
 
 from __future__ import annotations
@@ -38,7 +38,7 @@ JOINTS = goal_mod.UPPER_BODY_JOINTS
 
 
 def resolve_slots(spec):
-    """`all`, an index, or a joint name -> the list of slots to drive."""
+    """`all`, an index, or a joint-name substring -> the list of slots to drive."""
     if spec == "all":
         return list(range(len(JOINTS)))
     if spec.isdigit():
