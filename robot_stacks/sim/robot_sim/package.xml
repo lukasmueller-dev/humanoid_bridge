@@ -3,7 +3,7 @@
 <package format="3">
   <name>robot_sim</name>
   <version>0.1.0</version>
-  <description>MuJoCo robot (G1) that stands in for the robot on its native topics.</description>
+  <description>MuJoCo robot (G1, T1, Go2) that stands in for the robot on its native topics.</description>
   <maintainer email="lukasbmueller@gmail.com">Lukas Mueller</maintainer>
   <license>MIT</license>
 
