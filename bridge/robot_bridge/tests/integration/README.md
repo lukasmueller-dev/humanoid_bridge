@@ -15,8 +15,8 @@ source <workspace>/install/setup.bash
 No ROS on the host: `tools/test.sh --docker [--wire|--estop|--link|--state|--t1|--go2|--gates|--hands|--config|--controllers]`
 builds and runs them in a container.
 
-`robot_bridge`'s `package.xml` depends on `booster_interface` unconditionally,
-so it builds even with T1 off.
+`robot_bridge`'s `package.xml` depends on `booster_interface` and `aimdk_msgs`
+unconditionally, so both build even with T1 and X2 off.
 
 `tools/test.sh` runs every `run_*.sh` below; each pins DDS to loopback (`loopback_dds.sh`).
 
