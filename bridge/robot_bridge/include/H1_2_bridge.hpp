@@ -44,6 +44,7 @@ private:
     void wireless_callback(unitree_go::msg::WirelessController::SharedPtr data);
     void publishLowCommand_() override;
     void lowStateHandler_(unitree_hg::msg::LowState::SharedPtr message);
+    bool initControl_(bridge_interface::msg::RobotCmd default_cmd) override { return BridgeCore::initControl_(default_cmd); }
     void finishControl_() override;
     bool checkExternalPublisher_(std::string topic_name);
 
