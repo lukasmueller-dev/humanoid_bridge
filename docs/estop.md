@@ -26,6 +26,7 @@ Closes roadmap `feat/g1-finish-control-release`.
 |---|---|---|---|---|
 | `DISARMED` | nothing | dropped | allowed | arm → `ARMED` |
 | `ARMED` | tracking frames (today's path) | accepted | allowed | stop → `STOPPED`, e-stop or fault → `LATCHED` |
+| `ARMED limp` (`/limp_control`; G1, T1, Go2) | kp, kd, tau ramp to 0 over `duration`, then q = measured | dropped | allowed | `start_control`, Ready, Zero ramp from the measured pose → `ARMED`; stop → `STOPPED hold`; e-stop or fault → `LATCHED` |
 | `STOPPED(mode)` | stop frame, 1 kHz | dropped | allowed | arm → `ARMED`, e-stop or fault → `LATCHED` |
 | `LATCHED(mode, cause)` | stop frame, 1 kHz (nothing if latched from `DISARMED`, or 1.2 s after `/lowstate` stopped) | dropped | **refused** | `/estop_reset` → `STOPPED`, or `DISARMED` if silent |
 
