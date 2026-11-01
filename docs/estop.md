@@ -1,6 +1,6 @@
 # G1 e-stop
 
-Status: implemented on `g1-web-interface`; unit, fake and gantry tests pass (gantry 2026-10-19; G6-IMU not run).
+Status: implemented on `main`; unit, fake and gantry tests pass (gantry 2026-10-19; G6-IMU not run).
 Closes roadmap `feat/g1-finish-control-release`.
 
 ## Before this change
@@ -54,6 +54,7 @@ Closes roadmap `feat/g1-finish-control-release`.
 | `OK` | a new bridge; after a clear | — |
 | `LOST <s>` | no `/lowstate` for 0.2 s; again once a second | `/lowstate` back |
 | `BACK <gap_s> no_restart` | back after a gap, tick moved on: a link drop | successful `/estop_reset` or arming |
+| `BACK <gap_s> no_tick` | back after a gap on a robot with no tick (T1): a reboot looks the same | successful `/estop_reset` or arming |
 | `RESTARTED <gap_s>` | back after a gap, tick not higher: a reboot | a new bridge only |
 
 - `RESTARTED` while `ARMED`, `STOPPED` or latched: latches `damp robot_restart` (silent by then: the gap went past 1.2 s).
@@ -65,7 +66,7 @@ Closes roadmap `feat/g1-finish-control-release`.
 
 ## Stop frames
 
-Built by a new `publishStopCommand_()`. It does not reuse `publishLowCommand_`: that q clamp divides by `kp`.
+Built by a new `publishStopCommand_()`. It does not reuse `trackingFrame_`: the q clamp there divides by `kp`.
 
 | Field | `damp` | `hold` |
 |---|---|---|
@@ -73,7 +74,7 @@ Built by a new `publishStopCommand_()`. It does not reuse `publishLowCommand_`: 
 | `dq`, `tau` | 0 | 0 |
 | `kp` | 0 | joint `kp` from config |
 | `kd` | joint `damp_kd` (optional, finite, >= 0), else `estop.damp_kd` | joint `kd` from config |
-| parallel joints (ankles) | same as above | same tau conversion as `publishLowCommand_` |
+| parallel joints (T1 ankles; none on the G1) | same as above | same tau conversion as `trackingFrame_` |
 | rate | `control_dt` (0.001 s) | `control_dt` |
 
 - `damp` is not fully limp: no position spring, but each joint resists speed, so arms sink slowly. `kd=0` would let them drop.
@@ -166,7 +167,7 @@ tools/robot-bringup.sh --override trip.yaml   # after --params; also with --fore
 ```
 
 - Keys: `override_keys` is `[dq_trip]` (`ros2 param get /robot_bridge override_keys`). It is a constant in `bridge_core.cpp`, never read from a file: a new key needs a bridge PR.
-- Cap: `0 < value <= 2 × dq_limit` of that joint. A value no higher than the base always passes: the T1 and Go2 base trips can be over the cap.
+- Cap: `0 < value <= 2 × dq_limit` of that joint. A value no higher than the base always passes: the T1 head base trips can be over the cap.
 - The bridge refuses the start (exit 1, one ERROR line) on a key not in the list, an unknown joint, a value that is not a finite number > 0, or a value over the cap.
 - `robot-bringup.sh` refuses (exit 2) a missing file and any key outside `robot_bridge.ros__parameters.override`.
 - Applied after the base load, one WARN each: `Override <joint>.dq_trip: <base> -> <new>`. `<joint>.dq_trip` keeps the base; `override.<joint>.dq_trip` shows the override.

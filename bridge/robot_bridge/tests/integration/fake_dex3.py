@@ -3,7 +3,7 @@
 Never publishes /dex3/*/cmd -- the bridge owns that topic. Tracks commands
 perfectly, like fake_g1 does for the body.
 
-Two switches exist so the guards can be exercised:
+Three switches exist so the guards can be exercised:
   --stale-after S   stop publishing left-hand state S seconds after the first
                     left-hand command arrives
   --hot-after S     report the left hand over temperature, same clock

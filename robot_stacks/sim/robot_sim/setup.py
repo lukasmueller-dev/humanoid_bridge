@@ -15,7 +15,7 @@ setup(
     zip_safe=True,
     maintainer="Lukas Mueller",
     maintainer_email="lukasbmueller@gmail.com",
-    description="MuJoCo robot (G1) that stands in for the robot on its native topics.",
+    description="MuJoCo robot (G1, T1, Go2) that stands in for the robot on its native topics.",
     license="MIT",
     entry_points={
         "console_scripts": [

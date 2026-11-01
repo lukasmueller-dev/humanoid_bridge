@@ -64,7 +64,7 @@ Arms only if told to twice.
 
 Options:
   --robot <g1|t1|go2>    which robot (default g1)
-  --iface <nic>          DDS interface (default $BRIDGE_IFACE or enp4s0)
+  --iface <nic>          DDS interface (default $BRIDGE_IFACE or enp4s0); no effect for t1
   --workspace <ws>       colcon workspace that builds this clone (default $BRIDGE_WS or ~/bridge_ws_estop)
   --params <path>        bridge params file (default bridge/robot_bridge/params/<G1|T1|Go2>_config.yaml)
   --override <file>      second params file after --params, only robot_bridge.ros__parameters.override

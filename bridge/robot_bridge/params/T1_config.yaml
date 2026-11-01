@@ -1,7 +1,7 @@
 # remote control: the T1 gamepad on /remote_controller_state (docs/estop.md):
 # e-stop damp: RB + RT    e-stop hold: LB + RB    (set under estop:)
-# arming needs the gamepad (a message within 0.5 s; estop.require_remote)
-# robot_client.py (the examples' client) reads its own keys: LT + START, LT + A, BACK
+# arming needs the gamepad (any message since the bridge started; estop.require_remote)
+# robot_client.py (the examples' client) reads its own keys: LT + RT + START, LB, RB, BACK, LT + BACK
 # dq_trip: the trip on measured |dq|, 1.25 x the T1_23dof.urdf velocity; dq_limit only clamps commands.
 # No key = dq_limit (Ankle_Pitch: 1.25 x 12.57 is below its dq_limit 18.8).
 

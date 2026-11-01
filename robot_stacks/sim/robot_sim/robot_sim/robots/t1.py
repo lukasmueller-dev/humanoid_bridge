@@ -67,7 +67,7 @@ PAD = {"A": "a", "B": "b", "X": "x", "Y": "y", "LB": "lb", "RB": "rb", "LT": "lt
 
 
 def prepare(spec):
-    """ncbf's names to Booster's, joint friction off, the head camera on aahead_pitch_link."""
+    """ncbf's names to Booster's, the head camera on aahead_pitch_link."""
     joints = {joint.name: joint for joint in spec.joints}
     for booster, ncbf, _ in JOINTS:
         if ncbf in joints:
