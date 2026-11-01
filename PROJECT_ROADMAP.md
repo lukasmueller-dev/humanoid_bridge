@@ -73,6 +73,11 @@ Decided and fake-tested on `g1-web-interface` (`docs/psi0_gates.md`).
 - [ ] `fix/config-keymaps`: the keymap headers in `params/*.yaml` are corrected here: each key names its handler, `robot_client.py` or the bridge. Still to send upstream. **Done when:** the PR is open.
 - [ ] `feat/g1-finish-control-release`: e-stop latch built on `g1-web-interface` (`docs/estop.md`), fake-tested only. **Done when:** gantry tests G0–G6 in `docs/estop.md` pass and the branch is merged.
 
+### T1 parallel ankle
+
+- [ ] Bring only the bridge part of #61 (`t1-parallel-ankle`) to `main`; the examples and joint-response tools stay on that branch. Add `tools/robot-bringup.sh --parallel-ankle`.
+  **Done when:** `tools/test.sh --docker` passes with `test_t1_parallel_ankle`, and `git diff --stat origin/main` lists none of #61's examples or joint-response files.
+
 ### Cleanups
 
 - [ ] `--interface sim` does not reach the bridge: MuJoCo listens on `rt/lowcmd`, which the bridge owns. **Done when:** a sim run drives the same client path as hardware, or the limitation is documented as permanent.
