@@ -458,3 +458,27 @@ def test_the_cli_binds_the_jetson_robot_address_by_default():
 
     assert server.parse_args([]).bind == wire.DEFAULT_HOST
     assert server.parse_args(["--bind", "0.0.0.0"]).bind == "0.0.0.0"
+
+
+@pytest.mark.parametrize("kind", ["server", "fake"])
+def test_the_reply_is_one_jpeg_and_two_empty_parts(kind):
+    """wire.py: parts 1 and 2 stay empty. The fake must not hide a client that reads them."""
+    import zmq
+
+    from g1_camera import FakeCameraServer, wire
+
+    if kind == "server":
+        server = CameraServer(bind=LOOPBACK, port=0, source=bgr_frame).start()
+    else:
+        server = FakeCameraServer().start()
+    socket = zmq.Context.instance().socket(zmq.REQ)
+    socket.connect(f"tcp://{LOOPBACK}:{server.port}")
+    try:
+        socket.send(wire.REQUEST)
+        assert socket.poll(3000), "no reply"
+        rgb, ir, depth = socket.recv_multipart()
+    finally:
+        socket.close(linger=0)
+        server.stop()
+    assert rgb[:2] == b"\xff\xd8"  # JPEG SOI
+    assert (ir, depth) == (b"", b"")
