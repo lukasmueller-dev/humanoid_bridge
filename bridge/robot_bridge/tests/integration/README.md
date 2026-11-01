@@ -137,5 +137,5 @@ fake_g1 records `/lowcmd` at all.
   stops. `check_hand_cmd.py` asserts against the last *commanded* frame, and a
   new check that reads `samples[-1]` will be reading the release.
 - CycloneDDS with no `CYCLONEDDS_URI`: multicast is off on loopback, the
-  bridge never sees the fake and prints `Waiting for publisher on /lowstate`.
+  bridge never sees the fake and prints `Waiting for publisher on topic /lowstate...`.
   `tools/test.sh` sets the URI itself; `--rmw fastrtps` is the other way out.
