@@ -110,6 +110,7 @@ class Wire:
     def __init__(self, node, sim, lock):
         from booster_interface.msg import LowCmd, LowState, MotorState, RemoteControllerState
         from booster_interface.srv import RpcService
+        from rclpy.qos import QoSDurabilityPolicy, QoSProfile
 
         self.node = node
         self.sim = sim
@@ -119,7 +120,10 @@ class Wire:
         node.create_subscription(LowCmd, "/joint_ctrl", self._on_cmd, 10)
         node.create_service(RpcService, "booster_rpc_service", self._on_rpc)
         pad_topic = "/remote_controller_state"
-        self.pad_publisher = node.create_publisher(RemoteControllerState, pad_topic, 10)
+        # Transient local, as the T1's own publisher and T1_bridge's subscription: a volatile
+        # one does not match it, so the bridge never sees the pad and refuses Arm (require_remote).
+        pad_qos = QoSProfile(depth=10, durability=QoSDurabilityPolicy.TRANSIENT_LOCAL)
+        self.pad_publisher = node.create_publisher(RemoteControllerState, pad_topic, pad_qos)
         self.Pad = RemoteControllerState
         self.pad = RemoteControllerState()
         self.remote = True
