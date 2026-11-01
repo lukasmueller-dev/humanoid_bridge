@@ -14,6 +14,7 @@ from bridge_interface.msg import RobotState
 from fake_t1 import NUM_JOINT, RPY
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import Bool, String
+from std_srvs.srv import Trigger
 
 from robot_bridge.cmd_client import RobotCmdClient
 
@@ -163,6 +164,27 @@ class Driver:
         self.check("gamepad LB+RB latches hold", held, str(self.bridge))
         hold = self.frame(self.kd, [self.kp[i] for i in self.head])
         self.check("hold frame: every joint's config kd", *hold)
+        self.buttons.publish(String(data=""))
+        self.wait(lambda: False, 0.3)
+        reply = self.client.estop_reset()
+        self.check("estop_reset after the hold", reply.success, reply.message)
+        self.limp()
+
+    def limp(self):
+        """/limp_control: kp, kd, tau 0 on every motor, ankles too; the gamepad still latches."""
+        limp = self.node.create_client(Trigger, "/limp_control")
+        reply = self.client._call(limp, Trigger.Request(), 30.0)
+        self.check("limp_control", reply.success, reply.message)
+        self.wait(lambda: False, RAMP_SECONDS)
+        self.check("ARMED limp", self.bridge == "ARMED limp", str(self.bridge))
+        motors = list(self.last_cmd.motor_cmd) if self.last_cmd else []
+        stiff = [i for i, m in enumerate(motors) if max(abs(m.kp), abs(m.kd), abs(m.tau)) > 1e-6]
+        limp_ok = len(motors) == NUM_JOINT and not stiff
+        detail = f"{len(motors)} motors, stiff {stiff}"
+        self.check("limp frame: kp, kd, tau 0 on every motor", limp_ok, detail)
+        self.buttons.publish(String(data="RB+RT"))
+        latched = self.wait(lambda: str(self.bridge).startswith("LATCHED damp"), 2.0)
+        self.check("gamepad RB+RT from limp latches damp", latched, str(self.bridge))
         self.buttons.publish(String(data=""))
         rclpy.spin_once(self.node, timeout_sec=0.2)
 

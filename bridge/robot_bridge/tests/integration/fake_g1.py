@@ -4,6 +4,7 @@ Test inputs: /fake_g1/keys (UInt16, remote key mask), /fake_g1/roll (Float32, ra
 /fake_g1/remote (Bool, remote header on/off), /fake_g1/pause (Bool, stop /lowstate).
 Bad robot data, joint 0 / roll: /fake_g1/nan_q (Bool), /fake_g1/dq (Float32, rad/s),
 /fake_g1/nan_imu (Bool). /fake_g1/dq1: dq of joint 1. /fake_g1/freeze (Bool): stop tracking, q holds (a lagging robot).
+/fake_g1/move (Float32): every joint's q to this value, a hand that moves the joints; freeze first.
 /fake_g1/pause is a link drop: LowState.tick moves on. /fake_g1/reboot (Float32, s): no /lowstate
 for s, then tick from 0 and a motion service holding /lowcmd (never sends); /fake_g1/release (Bool) drops it.
 """
@@ -49,6 +50,7 @@ class FakeG1(Node):
         self.create_subscription(Float32, "/fake_g1/dq1", self._on_dq1, 10)
         self.create_subscription(Bool, "/fake_g1/nan_imu", self._on_nan_imu, 10)
         self.create_subscription(Bool, "/fake_g1/freeze", self._on_freeze, 10)
+        self.create_subscription(Float32, "/fake_g1/move", self._on_move, 10)
         self.create_subscription(Float32, "/fake_g1/reboot", self._on_reboot, 10)
         self.create_subscription(Bool, "/fake_g1/release", self._on_release, 10)
         self.boot_until = None  # monotonic time the reboot ends
@@ -122,6 +124,9 @@ class FakeG1(Node):
 
     def _on_freeze(self, msg):
         self.frozen = bool(msg.data)
+
+    def _on_move(self, msg):
+        self.q = [float(msg.data)] * NUM_JOINT
 
     def _on_remote(self, msg):
         header = (0x55, 0x51) if msg.data else (0, 0)  # remote off: the G1 sends all 40 bytes 0
