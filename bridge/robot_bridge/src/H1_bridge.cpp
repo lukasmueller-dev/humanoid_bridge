@@ -43,7 +43,7 @@ sairol_bridge::H1Bridge::H1Bridge(rclcpp::Node::SharedPtr node) : BridgeCore(nod
         return;
     }
 
-    createArmingServices_();
+    createArmingServices_(false);
 }
 
 

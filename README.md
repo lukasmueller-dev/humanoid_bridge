@@ -186,6 +186,7 @@ ros2 service call /start_control bridge_interface/srv/SetDefaultPosition \
 ros2 service call /stop_control std_srvs/srv/Trigger {}
 ros2 service call /ready_position_control std_srvs/srv/Trigger {}
 ros2 service call /zero_position_control std_srvs/srv/Trigger {}
+ros2 service call /limp_control std_srvs/srv/Trigger {}      # G1, T1, Go2: ARMED limp, kp kd tau 0, e-stop on
 ros2 service call /estop_damp std_srvs/srv/Trigger {}        # G1: latched, kp 0
 ros2 service call /estop_hold std_srvs/srv/Trigger {}        # G1: latched, holds the pose
 ros2 service call /estop_reset std_srvs/srv/Trigger {}       # refused while the cause lasts

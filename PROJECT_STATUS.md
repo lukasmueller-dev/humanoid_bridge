@@ -3,7 +3,7 @@
 > One per repo. The *current* picture: goal, architecture, decisions, open
 > questions. Finished work is removed; git history is the log.
 
-_Last updated: 2026-10-30 · safety-limits job_
+_Last updated: 2026-11-01 · limp-control job_
 
 ## Goal
 
@@ -47,6 +47,7 @@ _One line each, dated, with a pointer (commit or PR)._
 - 2026-10-20: the bridge holds one robot envelope for every model (range clamp, speed limit, gains, speed trip); model-specific shaping lives in each model's adapter node — `docs/psi0_gates.md`
 - 2026-10-30: the speed trip is per joint: `dq_trip` trips on measured dq (absent = `dq_limit`), `dq_limit` only clamps commands; T1 and Go2 trip at max(`dq_limit`, 1.25 × model velocity), G1 unchanged — `docs/estop.md`
 - 2026-10-30: `dq_trip` can be overridden per joint at bridge start from a second params file (`override.<joint>.<key>`, keys in one constant, cap 2 × `dq_limit`, base kept beside it); run-time changes (they break the read-only rule of PR #23) and a plain merged second file (base and override indistinguishable, any key open) rejected — `docs/estop.md` § Overrides
+- 2026-11-01: the damp kd is per joint: `<joint>.damp_kd` (finite, >= 0), absent = `estop.damp_kd`; T1 head kd and damp_kd 0.5 are first values, tuned on the robot — `docs/estop.md` § Stop frames
 - 2026-10-20: G1 arming needs the remote's header; a latch goes silent 1.2 s after `/lowstate` stops, so a restarted robot gets no old frames — `docs/estop.md`
 - 2026-10-22: upstream syncs land as merge commits, never rebase or squash, so upstream commit IDs stay and later syncs and upstream PRs stay simple — PR "Merge DFKI-SAIROL/humanoid_bridge main"
 - 2026-10-22: `BridgeCore::checkState_` calls upstream's virtual `checkStateFreshness_` for state loss; the X2 overrides it, the G1 path is unchanged — same PR
@@ -65,6 +66,7 @@ _One line each, dated, with a pointer (commit or PR)._
 - 2026-10-24: Ready (`/ready_position_control`) also ramps each Dex3 hand with fresh state to `hand_ready_q` (open) and holds it; a hand failure never blocks the body; arming stays body-only — `docs/hands_path.md`, PR from `feat-hands-ready-pos`
 - 2026-10-22: the G1 sim is an own MuJoCo node `g1_sim` on mjlab `g1.xml`, not GEAR's `base_sim` (needs rclpy the SIMPLE image lacks, no remote header, `mode_machine` 0, other model) — `robot_stacks/sim/robot_sim/README.md`
 - 2026-10-30: the 1 kHz tick runs a `pluginlib` low-level controller a policy picks per `/robot_cmd` stream (`RobotCmd.controller`, gated by `controllers_allowed`); `motor_pd` and `bridge_pd` ship, colleagues add plugins — `docs/low-level-controllers.md`, PR from `low-level-controllers`
+- 2026-11-01: `/limp_control` arms G1, T1, Go2 into kp, kd, tau 0 (ramp over `duration`), e-stop active; `/robot_cmd` is dropped in limp, `start_control`, Ready or Zero leave it; not on H1, H1_2 (no Gate 4: q does not follow the hand) — `docs/estop.md` § States, PR from `limp-control`
 - 2026-09-09: `examples/` sits inside `robot_bridge`, the package it demonstrates, so a subtree split of `bridge/` carries it; excluded from lint as vendored upstream code — same commit
 
 ## Roadmap

@@ -18,7 +18,7 @@
 #   estop  the real G1_bridge's e-stop against a fake robot
 #   link   /robot_link: a fake robot drops its link and reboots, armed and disarmed
 #   state  /robot_state and /hand_state: every field against fake_g1 and fake_dex3
-#   t1     the real T1_bridge against fake_t1: custom mode, gamepad e-stop, bounded /low_state
+#   t1     the real T1_bridge against fake_t1: custom mode, gamepad e-stop, head gains, bounded /low_state
 #   go2    the real Go2_bridge against fake_go2: the frame on the wire (CRC), stand-up, remote e-stop
 #   gates  a fresh G1_bridge's target gates (range, speed, torque window, arming seed)
 #          against a fake robot

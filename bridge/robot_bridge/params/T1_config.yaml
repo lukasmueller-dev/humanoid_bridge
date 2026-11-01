@@ -20,7 +20,7 @@ robot_bridge:
 
     # docs/estop.md. Operator e-stops have a fixed mode; these set the rest.
     estop:
-      damp_kd: 5.0                      # float: an integer here fails the load
+      damp_kd: 5.0                      # float: an integer here fails the load; a joint's damp_kd overrides it
       remote_keys: t1                   # the T1 gamepad's names
       remote_combo_damp: ["RB", "RT"]   # one hand: the right shoulder buttons
       remote_combo_hold: ["LB", "RB"]
@@ -64,7 +64,8 @@ robot_bridge:
       dq_trip: 52.36
       tau_limit: 7.0
       kp: 5.0
-      kd: 0.1
+      kd: 0.5             # first value, Lukas tunes it on the robot (was 0.1: chatter)
+      damp_kd: 0.5        # first value, Lukas tunes it; absent = estop.damp_kd (5.0: chatter)
       if_strong_joint: false
       if_parallel_joint: false
 
@@ -76,7 +77,8 @@ robot_bridge:
       dq_trip: 52.36
       tau_limit: 7.0      
       kp: 5.0
-      kd: 0.1
+      kd: 0.5             # first value, Lukas tunes it on the robot (was 0.1: chatter)
+      damp_kd: 0.5        # first value, Lukas tunes it; absent = estop.damp_kd (5.0: chatter)
       if_strong_joint: false
       if_parallel_joint: false
 
