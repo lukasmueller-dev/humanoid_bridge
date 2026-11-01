@@ -30,6 +30,8 @@
 #
 # --override <file>: a second --params-file after the base one, for override.<joint>.<key> only
 # (docs/estop.md, Overrides). Any other key refuses the start (exit 2), before ROS is touched.
+#
+# --parallel-ankle (T1): -p parallel_ankle_mapping:=true after the params files; the bridge maps the ankles.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -38,6 +40,7 @@ REPO="$(cd "$HERE/.." && pwd)"
 ROBOT=g1
 PARAMS=""
 OVERRIDE=""
+PARALLEL_ANKLE=0
 RELEASE_ARGS=()   # g1-release-lowcmd.py; the Go2 stands down first
 IFACE="${BRIDGE_IFACE:-enp4s0}"
 IFACE_GIVEN=0
@@ -70,6 +73,8 @@ Options:
   --override <file>      second params file after --params, only robot_bridge.ros__parameters.override
                          (dq_trip per joint, at most 2 x dq_limit; docs/estop.md, Overrides);
                          a missing file or any other key refuses the start (exit 2)
+  --parallel-ankle       T1: the bridge maps the ankles to the crank motors (-p parallel_ankle_mapping:=true
+                         after the params files); check the cranks first: scripts/real/t1_check_parallel_ankle_mapping.py
   --no-release           G1, Go2: skip the /lowcmd release (already released, or a fake robot)
   --arm-from-measured    arm to the pose the robot currently holds
   --arm-from "<N nums>"  arm to an explicit pose (G1 29, T1 23, Go2 12), length-checked here
@@ -103,6 +108,7 @@ while [ $# -gt 0 ]; do
         --workspace) WS="${2:?--workspace needs a path}"; shift ;;
         --params)  PARAMS="${2:?--params needs a path}"; shift ;;
         --override) OVERRIDE="${2:?--override needs a file}"; shift ;;
+        --parallel-ankle) PARALLEL_ANKLE=1 ;;
         --no-release) DO_RELEASE=0 ;;
         --arm-from-measured) ARM_MODE="measured" ;;
         --arm-from) ARM_MODE="explicit"; ARM_VALUES="${2:?--arm-from needs the joint values}"; shift ;;
@@ -131,6 +137,7 @@ CONFIG_NAME="${ROBOT^^}"; [ "$ROBOT" = go2 ] && CONFIG_NAME=Go2
 [ -n "$PARAMS" ] || PARAMS="$REPO/bridge/robot_bridge/params/${CONFIG_NAME}_config.yaml"
 PARAMS_ARGS=(--params-file "$PARAMS")
 [ -z "$OVERRIDE" ] || PARAMS_ARGS+=(--params-file "$OVERRIDE")   # after the base: ROS merges in order
+[ "$PARALLEL_ANKLE" = 0 ] || PARAMS_ARGS+=(-p parallel_ankle_mapping:=true)   # after the files: it wins
 BRIDGES=(G1_bridge T1_bridge Go2_bridge)   # one robot per host: any of them counts
 
 say()  { printf '== %s\n' "$*"; }
@@ -312,6 +319,7 @@ if [ "${#running[@]}" -eq 1 ]; then
     if [ -f "$log" ]; then BRIDGE_LOG="$log"; fi
     echo "   restart it: $0 --stop, then run this again"
     [ -z "$OVERRIDE" ] || echo "   --override not applied: it reaches only a bridge this run starts"
+    [ "$PARALLEL_ANKLE" = 0 ] || echo "   --parallel-ankle not applied: it reaches only a bridge this run starts"
 else
     # --- 1. release /lowcmd ------------------------------------------------
     if [ "$DO_RELEASE" = 1 ]; then
