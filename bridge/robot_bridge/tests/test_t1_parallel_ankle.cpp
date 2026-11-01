@@ -137,6 +137,20 @@ int main()
             expectNear("clip keeps sign", (c.tau[i] >= 0) == (c.tau_raw[i] >= 0), 1.0, 0.0);
     }
 
+    // 3b) with crank speed the applied torque, damping included, stays in the limit
+    {
+        const auto &r = kReference[1];
+        for (double v : {-5.0, 5.0})
+        {
+            const pa::Vec2 dq_m{v, -v};
+            const auto c = pa::crankCommand(static_cast<pa::Side>(r.side), r.q_m, dq_m, r.q_s, r.q_s, {0.0, 0.0}, kp,
+                                            kd, {0.0, 0.0}, 5.0);
+            for (int i = 0; i < 2; ++i)
+                expectNear("applied |kd (0 - dq_m) + tau| <= limit",
+                           std::abs(c.kd[i] * (0.0 - dq_m[i]) + c.tau[i]) <= 5.0 + 1e-9, 1.0, 0.0);
+        }
+    }
+
     // 4) unreachable crank angles are reported, not silently mapped
     {
         pa::Vec2 q_s;

@@ -27,7 +27,7 @@ robot_bridge:
     parallel_ankle_mapping: false
     parallel_ankle_swap_cranks: false        # true if the pitch slot of motor_state_parallel is crank b
     parallel_ankle_crank_sign: [1.0, 1.0]    # XML crank angle = sign * motor angle (crank a, crank b); floats
-    parallel_ankle_crank_tau_limit: 43.0     # [Nm] per crank motor (E4315 peak, forcerange in T1_23dof_parallel.xml)
+    parallel_ankle_crank_tau_limit: 43.0     # [Nm] per crank motor, motor-loop damping included (E4315 peak, forcerange in T1_23dof_parallel.xml)
     parallel_ankle_max_estimate_error: 0.05  # [rad] stop if f^-1(crank angles) and the firmware's serial ankle state disagree
 
     # docs/estop.md. Operator e-stops have a fixed mode; these set the rest.

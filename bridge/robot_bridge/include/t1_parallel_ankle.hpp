@@ -213,7 +213,7 @@ namespace t1_parallel_ankle
     {
         Vec2 q_s{0.0, 0.0};    // f^-1(q_m), serial state estimated from the crank encoders
         Vec2 dq_s{0.0, 0.0};   // J^-1 dq_m
-        Vec2 tau{0.0, 0.0};    // feed-forward crank torque, clipped to +-tau_limit
+        Vec2 tau{0.0, 0.0};    // feed-forward crank torque, clipped so kd .* (0 - dq_m) + tau is in +-tau_limit
         Vec2 tau_raw{0.0, 0.0};
         Vec2 kd{0.0, 0.0};     // crank-side damping gains (diagonal of Kd_m)
         Vec2 tau_s{0.0, 0.0};  // serial torque the law realises (before clipping)
@@ -248,7 +248,12 @@ namespace t1_parallel_ankle
         const Vec2 tau_m = mulT(Ji, tau_s_no_damp);
         out.kd = {Kd_m[0][0], Kd_m[1][1]};
         out.tau_raw = {tau_m[0] - Kd_m[0][1] * dq_m[1], tau_m[1] - Kd_m[1][0] * dq_m[0]};
-        for (int j = 0; j < 2; ++j) out.tau[j] = std::clamp(out.tau_raw[j], -tau_limit, tau_limit);
+        // As gate 4: the motor loop's damping uses up part of the limit (at the measured dq_m).
+        for (int j = 0; j < 2; ++j)
+        {
+            const double damping = out.kd[j] * dq_m[j];
+            out.tau[j] = std::clamp(out.tau_raw[j], damping - tau_limit, damping + tau_limit);
+        }
         out.ok = std::isfinite(out.tau[0]) && std::isfinite(out.tau[1]) && std::isfinite(out.kd[0]) && std::isfinite(out.kd[1]);
         return out;
     }
