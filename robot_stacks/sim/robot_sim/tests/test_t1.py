@@ -7,6 +7,7 @@ import pytest
 
 mujoco = pytest.importorskip("mujoco")
 
+from robot_sim import t1_parallel_ankle as pa  # noqa: E402
 from robot_sim.physics import Command, RobotSim  # noqa: E402
 from robot_sim.robots import t1  # noqa: E402
 
@@ -71,3 +72,58 @@ def test_mode_requests_and_buttons():
     assert t1.mode_request('{"mode":9}') is None
     assert t1.mode_request("not json") is None
     assert set(t1.PAD) >= {"RB", "RT", "LB"}
+
+
+def test_crank_state_maps_back_through_the_bridge_inverse():
+    """motor_state_parallel, float32 on the wire, gives the serial ankles back (f^-1, J^-1)."""
+    rng = np.random.default_rng(0)
+    q, dq = rng.uniform(-0.3, 0.3, t1.NUM_JOINT), rng.uniform(-2.0, 2.0, t1.NUM_JOINT)
+    q_m, dq_m = t1.crank_state(q, dq)
+    others = [i for i in range(t1.NUM_JOINT) if not any(i in s for s in t1.ANKLES.values())]
+    assert np.array_equal(q_m[others], q[others]) and np.array_equal(dq_m[others], dq[others])
+    for side, slots in t1.ANKLES.items():
+        wire = q_m[slots].astype(np.float32).astype(float)
+        q_s, residual = pa.serial_angles(wire, side, q[slots])
+        assert residual < 1e-6
+        np.testing.assert_allclose(q_s, q[slots], atol=1e-5)
+        J = pa.kinematics(q[slots], side)[1]
+        np.testing.assert_allclose(np.linalg.solve(J, dq_m[slots]), dq[slots], atol=1e-9)
+
+
+def test_crank_pd_maps_to_serial_torque():
+    """tau_s = J^T tau_m: equal power at the cranks and the joints; each crank clipped at 43 Nm."""
+    rng = np.random.default_rng(1)
+    q, dq = rng.uniform(-0.3, 0.3, t1.NUM_JOINT), rng.uniform(-2.0, 2.0, t1.NUM_JOINT)
+    q_m, dq_m = t1.crank_state(q, dq)
+    cmd = t1.CrankCommand(t1.NUM_JOINT)
+    cmd.mode[:] = 1
+    cmd.q[:], cmd.dq[:] = q_m + 0.05, rng.uniform(-1.0, 1.0, t1.NUM_JOINT)
+    cmd.kp[:], cmd.kd[:], cmd.tau[:] = 40.0, 2.0, rng.uniform(-3.0, 3.0, t1.NUM_JOINT)
+    out = t1.serial_command(cmd, q, dq)
+    ankles = sum(t1.ANKLES.values(), [])
+    others = [i for i in range(t1.NUM_JOINT) if i not in ankles]
+    for field in ("mode", "q", "dq", "kp", "kd", "tau"):
+        assert np.array_equal(getattr(out, field)[others], getattr(cmd, field)[others])
+    assert not out.kp[ankles].any() and not out.kd[ankles].any()
+    tau_m = cmd.tau + cmd.kp * (cmd.q - q_m) + cmd.kd * (cmd.dq - dq_m)
+    for slots in t1.ANKLES.values():
+        assert out.tau[slots] @ dq[slots] == pytest.approx(tau_m[slots] @ dq_m[slots])
+
+    cmd.tau[ankles] = 500.0
+    out = t1.serial_command(cmd, q, dq)
+    for side, slots in t1.ANKLES.items():
+        J = pa.kinematics(q[slots], side)[1]
+        np.testing.assert_allclose(np.linalg.solve(J.T, out.tau[slots]), t1.CRANK_TAU_MAX)
+
+
+def test_a_crank_pd_holds_the_ankles(sim):
+    target = np.zeros(sim.num_joint)
+    for slots in t1.ANKLES.values():
+        target[slots] = (-0.3, 0.15)
+    cmd = t1.CrankCommand(sim.num_joint)
+    cmd.mode[:], cmd.kp[:], cmd.kd[:] = 1, 80.0, 2.0
+    cmd.q[:] = t1.crank_state(target, np.zeros(sim.num_joint))[0]
+    for _ in range(int(2.0 / sim.dt)):
+        sim.step(t1.serial_command(cmd, sim.data.qpos[sim.qadr], sim.data.qvel[sim.vadr]))
+    ankles = sum(t1.ANKLES.values(), [])
+    assert np.abs(sim.state()["q"][ankles] - target[ankles]).max() < 0.01
