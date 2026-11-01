@@ -53,6 +53,7 @@ Closes roadmap `feat/g1-finish-control-release`.
 | `OK` | a new bridge; after a clear | — |
 | `LOST <s>` | no `/lowstate` for 0.2 s; again once a second | `/lowstate` back |
 | `BACK <gap_s> no_restart` | back after a gap, tick moved on: a link drop | successful `/estop_reset` or arming |
+| `BACK <gap_s> no_tick` | back after a gap on a robot with no tick (T1): a reboot looks the same | successful `/estop_reset` or arming |
 | `RESTARTED <gap_s>` | back after a gap, tick not higher: a reboot | a new bridge only |
 
 - `RESTARTED` while `ARMED`, `STOPPED` or latched: latches `damp robot_restart` (silent by then: the gap went past 1.2 s).
