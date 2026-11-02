@@ -10,6 +10,12 @@ SCRIPT = Path(__file__).resolve().parent.parent / "build.sh"
 
 # Passes the preflight (colcon, ROS_DISTRO, rosidl_generator_dds_idl) and builds nothing.
 FAKE_BIN = "#!/bin/sh\nexit 0\n"
+# colcon builds in the workspace: robot_bridge's rc file moves unless SKIP_BRIDGE is set.
+FAKE_COLCON = (
+    "#!/bin/sh\n"
+    '[ -n "$SKIP_BRIDGE" ] && exit 0\n'
+    "mkdir -p build/robot_bridge && touch build/robot_bridge/colcon_build.rc\n"
+)
 GIT = ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"]
 
 
@@ -24,15 +30,15 @@ def clone_with_build_sh(tmp_path):
     return repo
 
 
-def build(repo, ws):
+def build(repo, ws, workspace_arg=None, cwd=None, **env):
     bin_dir = repo.parent.parent / "bin"
     bin_dir.mkdir(exist_ok=True)
-    for name in ("colcon", "ros2"):
-        (bin_dir / name).write_text(FAKE_BIN)
+    for name, text in (("colcon", FAKE_COLCON), ("ros2", FAKE_BIN)):
+        (bin_dir / name).write_text(text)
         (bin_dir / name).chmod(0o755)
-    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "ROS_DISTRO": "humble"}
-    command = ["bash", str(repo / "tools" / "build.sh"), "--workspace", str(ws)]
-    return subprocess.run(command, capture_output=True, text=True, env=env, timeout=60)
+    env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "ROS_DISTRO": "humble", **env}
+    command = ["bash", str(repo / "tools" / "build.sh"), "--workspace", workspace_arg or str(ws)]
+    return subprocess.run(command, capture_output=True, text=True, env=env, cwd=cwd, timeout=60)
 
 
 def stamp(ws):
@@ -84,3 +90,30 @@ def test_no_install_dir_gives_no_stamp(tmp_path):
     ws = repo.parent.parent
     assert build(repo, ws).returncode == 0
     assert not (ws / "install").exists()
+
+
+def commit_file(repo, name):
+    (repo / name).write_text(name)
+    subprocess.run([*GIT, "-C", str(repo), "add", name], check=True)
+    subprocess.run([*GIT, "-C", str(repo), "commit", "-q", "-m", name], check=True)
+
+
+def test_partial_build_without_robot_bridge_keeps_the_stamp(tmp_path):
+    repo = clone_with_build_sh(tmp_path)
+    ws = repo.parent.parent
+    (ws / "install").mkdir()
+    assert build(repo, ws).returncode == 0
+    first = stamp(ws)
+    commit_file(repo, "b.txt")
+    assert build(repo, ws, SKIP_BRIDGE="1").returncode == 0
+    assert stamp(ws) == first
+    assert build(repo, ws).returncode == 0
+    assert stamp(ws)["build_commit"] != first["build_commit"]
+
+
+def test_relative_workspace_gets_the_stamp(tmp_path):
+    repo = clone_with_build_sh(tmp_path)
+    ws = repo.parent.parent
+    (ws / "install").mkdir()
+    assert build(repo, ws, workspace_arg=ws.name, cwd=ws.parent).returncode == 0
+    assert stamp(ws)["build_commit"] != "unknown"
