@@ -50,7 +50,7 @@ NUM_JOINT = len(JOINT_NAMES)
 EFFORT = {booster: effort for booster, _, effort in JOINTS}
 # ncbf's body names -> Booster's, for the base and the camera mount.
 BODIES = {"Trunk": "trunk", "H2": "aahead_pitch_link"}
-# Stop 0.96 (booster_assets; ncbf 1.22) less 0.01 rad: MuJoCo lets a limp head pass it by 0.008.
+# Stop 0.96 (booster_assets; ncbf 1.22) less 0.01 rad: at damp_kd 0.5 a limp head passes it 0.008.
 HEAD_PITCH_RANGE = (-0.35, 0.95)
 
 # booster_assets T1_23dof.xml head_realsense_rgb_link, an optical frame (z forward, y down) on

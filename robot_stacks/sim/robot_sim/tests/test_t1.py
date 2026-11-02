@@ -69,12 +69,13 @@ def test_a_damped_head_stays_inside_the_bridge_limit(sim):
     head = bridge_head()
     i = t1.JOINT_NAMES.index("aahead_pitch_joint")
     cmd = Command(sim.num_joint)
-    cmd.mode[:], cmd.kd[:] = 1, 0.5  # the head's damp_kd
+    cmd.mode[:], cmd.kd[:] = 1, head["damp_kd"]
     trace = [sim.state()["q"][i]]
     for _ in range(int(3.0 / sim.dt)):
         sim.step(cmd)
         trace.append(sim.state()["q"][i])
-    assert head["q_max"] - 0.1 < max(trace) <= head["q_max"]  # it hit its stop, inside the limit
+    assert max(trace) > head["q_max"] - 0.1, "the head did not reach its stop"
+    assert max(trace) <= head["q_max"], f"damp_kd {head['damp_kd']}: lower HEAD_PITCH_RANGE"
     assert head["q_min"] <= min(trace)
 
 
