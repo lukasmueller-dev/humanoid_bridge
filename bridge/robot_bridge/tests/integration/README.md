@@ -122,7 +122,7 @@ fake_g1 records `/lowcmd` at all.
   run. `pkill -9 -x G1_bridge`. The script starts the bridge with `setsid` and
   kills the process group, because `ros2 run` is a launcher and killing it
   alone orphans the child.
-- `sources` stage, `no .../install/bridge-build.stamp`: the workspace was built with plain `colcon`. Run `tools/build.sh`.
+- `sources` stage SKIP `no .../install/bridge-build.stamp`: plain `colcon` built the workspace, or built `robot_bridge` after the stamp. Run `tools/build.sh`.
 - `sources` stage, `<ws>/src/humanoid_bridge is not this clone`: `g1-bringup.sh` needs the clone at that path in the workspace.
 - `start_control` refused in a fake run: `fake_g1.py` lost its remote header
   (`/fake_g1/remote`), or another `/lowcmd` publisher is up.

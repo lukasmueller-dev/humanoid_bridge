@@ -88,7 +88,7 @@ Options:
   --hands               hand-path integration test only
   --config              broken-config refusal test only
   --controllers         low-level controller selection integration test only
-  --sources             sources.* parameters integration test only; needs a tools/build.sh build
+  --sources             sources.* parameters integration test only; SKIP without a current tools/build.sh stamp
   --sim                 robot_sim stages only (sim, sim-link, sim-t1), not in the default set; needs robot_sim
                         built, $G1_MJCF, $T1_MJCF and unitree_sdk2py, so not with --docker
   --rmw <impl>          cyclonedds | fastrtps | auto (default auto)
@@ -350,6 +350,21 @@ stage_cpp() {
     done
 }
 
+# SKIP, not FAIL, for a workspace built with plain colcon: every other stage is valid for it.
+# A stale build still fails, in stage_integration.
+stage_sources() {
+    local prefix ws stamp
+    if [ -z "$BUILD_PROBLEM" ] && prefix="$(ros2 pkg prefix robot_bridge 2>/dev/null)"; then
+        ws="${prefix%/install/robot_bridge}"
+        stamp="$ws/install/bridge-build.stamp"
+        if [ ! -f "$stamp" ] || [ "$stamp" -ot "$ws/build/robot_bridge/colcon_build.rc" ]; then
+            record sources SKIP "no $stamp from the sourced build; tools/build.sh writes it"
+            return
+        fi
+    fi
+    stage_integration sources "$INTEGRATION/run_sources_test.sh"
+}
+
 BUILD_PROBLEM=""
 if [ "$RUN_CPP$RUN_WIRE$RUN_ESTOP$RUN_LINK$RUN_STATE$RUN_T1$RUN_GO2$RUN_GATES$RUN_HANDS$RUN_CONFIG$RUN_CONTROLLERS$RUN_SOURCES$RUN_SIM" != 0000000000000 ] && command -v ros2 >/dev/null \
    && ros2 pkg prefix robot_bridge >/dev/null 2>&1; then
@@ -397,7 +412,7 @@ if [ "$RUN_CONTROLLERS" = 1 ]; then
     stage_integration controllers "$INTEGRATION/run_fake_controllers_test.sh"
 fi
 if [ "$RUN_SOURCES" = 1 ]; then
-    stage_integration sources "$INTEGRATION/run_sources_test.sh"
+    stage_sources
 fi
 if [ "$RUN_SIM" = 1 ]; then
     if command -v ros2 >/dev/null && ! ros2 pkg prefix robot_sim >/dev/null 2>&1; then
