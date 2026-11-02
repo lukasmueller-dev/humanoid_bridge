@@ -76,7 +76,3 @@ Decided and fake-tested on `g1-web-interface` (`docs/psi0_gates.md`).
 ### Cleanups
 
 - [ ] `--interface sim` does not reach the bridge: MuJoCo listens on `rt/lowcmd`, which the bridge owns. **Done when:** a sim run drives the same client path as hardware, or the limitation is documented as permanent.
-- [ ] `sim-t1` fails: the sim T1 head pitch rests at 0.9612, past the bridge limit 0.960, so the bridge
-  clamps its hold target (`joint 1 target 0.961 outside [-0.314, 0.960]`). Change the sim only: a head stop inside 0.96.
-  **Done when:** a test in `robot_stacks/sim/robot_sim/tests/test_t1.py` shows the head pitch stays at or below 0.960
-  after a 3 s damp, and `tools/test.sh --sim` passes `sim-t1` on the host.
