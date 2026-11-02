@@ -75,6 +75,4 @@ Decided and fake-tested on `g1-web-interface` (`docs/psi0_gates.md`).
 
 ### Cleanups
 
-- [ ] `sim-t1` fails in the `--parallel-ankle` run: `default_position[1] = 1.22` (head pitch) is outside the bridge range. Repair the cause and delete `HANDOFF.md`.
-  **Done when:** `tools/test.sh --unit --cpp --t1 --sim --allow-skip` exits 0 and the PR body names each skipped stage and why.
 - [ ] `--interface sim` does not reach the bridge: MuJoCo listens on `rt/lowcmd`, which the bridge owns. **Done when:** a sim run drives the same client path as hardware, or the limitation is documented as permanent.
