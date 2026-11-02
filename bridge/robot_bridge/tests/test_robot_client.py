@@ -2,6 +2,7 @@
 
 from unittest.mock import MagicMock
 
+import numpy as np
 import pytest
 
 # Not importorskip: see test_cmd_client.py.
@@ -11,7 +12,13 @@ try:
 except ImportError:
     pytest.skip("source the colcon workspace first", allow_module_level=True)
 
-from robot_bridge.robot_client import RobotClient  # noqa: E402
+from robot_bridge.robot_client import RobotClient, rpy_to_quat  # noqa: E402
+
+
+def test_rpy_to_quat_is_w_first():
+    assert rpy_to_quat([0, 0, 0]) == pytest.approx([1, 0, 0, 0])
+    # 90 deg yaw: w = cos(45 deg), z = sin(45 deg).
+    assert rpy_to_quat([0, 0, np.pi / 2]) == pytest.approx([np.sqrt(0.5), 0, 0, np.sqrt(0.5)])
 
 
 def test_g1_defaults_are_29_long():
