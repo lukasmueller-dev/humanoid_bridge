@@ -6,6 +6,7 @@ import types
 
 import numpy as np
 import pytest
+import yaml
 
 mujoco = pytest.importorskip("mujoco")
 
@@ -56,6 +57,18 @@ def test_the_gantry_holds_a_limp_t1_level(sim):
     s = sim.state()
     assert abs(s["rpy"][0]) < 0.05 and abs(s["rpy"][1]) < 0.05
     assert sim.data.qpos[2] == pytest.approx(sim.anchor[2], abs=0.05)
+
+
+def test_a_limp_head_rests_where_arm_accepts_it(sim):
+    """A limp head is a re-arm's default_position: inside T1_config.yaml's range + 0.1 rad."""
+    config = pathlib.Path(__file__).parents[4] / "bridge/robot_bridge/params/T1_config.yaml"
+    head = yaml.safe_load(config.read_text())["robot_bridge"]["ros__parameters"]["HeadPitch"]
+    cmd = Command(sim.num_joint)
+    cmd.mode[:], cmd.kd[:] = 1, 0.5  # the head's damp_kd
+    for _ in range(int(6.0 / sim.dt)):
+        sim.step(cmd)
+    q = sim.state()["q"][t1.JOINT_NAMES.index("aahead_pitch_joint")]
+    assert head["q_max"] - 0.1 < q < head["q_max"] + 0.1  # it falls to its stop
 
 
 def test_pd_holds_a_pose_within_the_effort(sim):

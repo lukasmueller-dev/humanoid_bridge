@@ -50,6 +50,9 @@ NUM_JOINT = len(JOINT_NAMES)
 EFFORT = {booster: effort for booster, _, effort in JOINTS}
 # ncbf's body names -> Booster's, for the base and the camera mount.
 BODIES = {"Trunk": "trunk", "H2": "aahead_pitch_link"}
+# booster_assets stop of the head pitch (ncbf: 1.22). A limp head falls to it; T1_config.yaml's
+# Arm accepts 0.96 + 0.1 rad, so a re-arm after damp needs the Booster stop.
+HEAD_PITCH_RANGE = (-0.35, 0.96)
 
 # booster_assets T1_23dof.xml head_realsense_rgb_link, an optical frame (z forward, y down) on
 # aahead_pitch_link. A MuJoCo camera looks along -z with y up: x kept, y flipped.
@@ -74,11 +77,12 @@ PAD = {"A": "a", "B": "b", "X": "x", "Y": "y", "LB": "lb", "RB": "rb", "LT": "lt
 
 
 def prepare(spec):
-    """ncbf's names to Booster's, the head camera on aahead_pitch_link."""
+    """ncbf's names to Booster's, the Booster head stop, the head camera on aahead_pitch_link."""
     joints = {joint.name: joint for joint in spec.joints}
     for booster, ncbf, _ in JOINTS:
         if ncbf in joints:
             joints[ncbf].name = booster
+    spec.joint("aahead_pitch_joint").range = list(HEAD_PITCH_RANGE)
     for actuator in spec.actuators:  # ncbf's motors name their joint
         renamed = {ncbf: booster for booster, ncbf, _ in JOINTS}
         actuator.target = renamed.get(actuator.target, actuator.target)
