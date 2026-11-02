@@ -74,6 +74,17 @@ def test_changed_file_marks_the_commit_dirty(tmp_path):
     assert values["changed_files"] == "2"
 
 
+def test_untracked_file_marks_the_commit_dirty(tmp_path):
+    repo = clone_with_build_sh(tmp_path)
+    ws = repo.parent.parent
+    (ws / "install").mkdir()
+    (repo / "new.txt").write_text("untracked")
+    assert build(repo, ws).returncode == 0
+    values = stamp(ws)
+    assert values["build_commit"].endswith("-dirty")
+    assert values["changed_files"] == "1"
+
+
 def test_no_git_dir_gives_unknown(tmp_path):
     repo = clone_with_build_sh(tmp_path)
     ws = repo.parent.parent

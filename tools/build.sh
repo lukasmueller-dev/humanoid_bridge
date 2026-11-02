@@ -120,8 +120,10 @@ colcon build "$@" ${T1_ARGS+"${T1_ARGS[@]}"}
 # No stamp when colcon installs elsewhere than install/ (the X2 build).
 rc_after="$(stat -c %y "$BRIDGE_RC" 2>/dev/null || true)"
 if [ -d install ] && [ -n "$rc_after" ] && [ "$rc_after" != "$rc_before" ]; then
-    commit="$(git -C "$REPO" describe --always --dirty 2>/dev/null)" || commit=unknown
+    # -dirty from `status --porcelain`, as the commander's dirty flag: `describe --dirty` skips untracked files.
+    commit="$(git -C "$REPO" describe --always 2>/dev/null)" || commit=unknown
     changed="$(git -C "$REPO" status --porcelain 2>/dev/null | wc -l)" || changed=unknown
+    [ "$changed" -gt 0 ] 2>/dev/null && commit="$commit-dirty"
     printf 'build_commit=%s\nchanged_files=%s\nbuild_time=%s\n' \
         "$commit" "$changed" "$(date --iso-8601=seconds)" > install/bridge-build.stamp
 fi
