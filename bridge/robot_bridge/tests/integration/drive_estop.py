@@ -561,7 +561,7 @@ class Driver(Checks):
             return self.client._call(get, GetParameters.Request(names=[name]), 10.0).values[0]
 
         keys = list(read("override_keys").string_array_value)
-        self.check("override_keys is dq_trip", keys == ["dq_trip"], str(keys))
+        self.check("override_keys is dq_trip, kp, kd", keys == ["dq_trip", "kp", "kd"], str(keys))
         shown = read(f"override.{joint}.dq_trip").double_value
         self.check("override.<joint>.dq_trip shown", shown == self.params["dq_trip"][1], str(shown))
         base = read(f"{joint}.dq_trip").double_value
