@@ -27,6 +27,15 @@ def test_sticks_fill_bytes_4_to_24_and_leave_the_rest():
     assert raw[24:] == [0] * 16
 
 
+def test_sticks_zero_without_a_remote():
+    raw = [0] * 40
+    unitree.set_remote(raw, True)
+    unitree.set_sticks(raw, (0.5, -0.25, 0.75, -1.0))
+    unitree.set_remote(raw, False)
+    unitree.set_sticks(raw, (0.5, -0.25, 0.75, -1.0))
+    assert raw == [0] * 40, "the robot sends every byte 0 without a remote"
+
+
 def test_reads_back_until_the_hold_then_zero():
     sticks = Sticks()
     assert sticks.read(0.0) == ZERO

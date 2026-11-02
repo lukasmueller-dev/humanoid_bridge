@@ -33,8 +33,11 @@ def set_keys(wireless_remote, mask):
 
 
 def set_sticks(wireless_remote, sticks):
-    """[lx, ly, rx, ry] into bytes 4-24 as estop.cpp remoteSticks reads them: lx rx ry L2(0) ly."""
-    lx, ly, rx, ry = sticks
+    """[lx, ly, rx, ry] into bytes 4-24 as estop.cpp remoteSticks reads them: lx rx ry L2(0) ly.
+
+    Header off (no remote): all 0, as the robot sends.
+    """
+    lx, ly, rx, ry = sticks if tuple(wireless_remote[:2]) == REMOTE_HEADER else (0.0,) * 4
     wireless_remote[4:24] = list(struct.pack("<5f", lx, rx, ry, 0.0, ly))
 
 
