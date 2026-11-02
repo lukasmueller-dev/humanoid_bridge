@@ -4,6 +4,8 @@ import os
 import subprocess
 from pathlib import Path
 
+import pytest
+
 SCRIPT = Path(__file__).resolve().parent.parent / "test.sh"
 
 # `ros2 pkg prefix <pkg>` names a workspace with no build dir; any other ros2 call fails.
@@ -13,7 +15,8 @@ exit 1
 """
 
 
-def test_sim_alone_fails_on_a_stale_build(tmp_path):
+@pytest.mark.parametrize("stage", ["--sim", "--sources"])
+def test_stage_alone_fails_on_a_stale_build(tmp_path, stage):
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     ros2 = bin_dir / "ros2"
@@ -21,7 +24,7 @@ def test_sim_alone_fails_on_a_stale_build(tmp_path):
     ros2.chmod(0o755)
     env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}", "WS": str(tmp_path / "ws")}
     result = subprocess.run(
-        ["bash", str(SCRIPT), "--sim"], capture_output=True, text=True, env=env, timeout=60
+        ["bash", str(SCRIPT), stage], capture_output=True, text=True, env=env, timeout=60
     )
     assert result.returncode == 1
     assert "no colcon build dir" in result.stdout

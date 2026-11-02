@@ -29,6 +29,8 @@
 #   controllers  the real G1_bridge against fake_g1: RobotCmd.controller picks bridge_pd for a stream,
 #          an unknown name or a change inside the stream is dropped, hold after it is motor_pd;
 #          example_controller loads by name and gets its kd
+#   sources  g1-bringup.sh --sim starts the real G1_bridge against fake_g1: sources.build_commit|build_time
+#          equal install/bridge-build.stamp (tools/build.sh), sources.params_file|params_sha1 the params file
 #   sim    opt-in (--sim), host only: the real G1_bridge against robot_sim (MuJoCo G1): arm,
 #          hold, /robot_cmd, remote damp; sim-link: link drop, reboot, g1-bringup.sh --sim release;
 #          sim-t1: T1_bridge against robot_sim --robot t1, through robot-bringup.sh --robot t1
@@ -55,6 +57,7 @@ RUN_GATES=0
 RUN_HANDS=0
 RUN_CONFIG=0
 RUN_CONTROLLERS=0
+RUN_SOURCES=0
 RUN_SIM=0
 RMW_CHOICE="auto"
 STALE_AFTER="${STALE_AFTER:-3.5}"
@@ -85,6 +88,7 @@ Options:
   --hands               hand-path integration test only
   --config              broken-config refusal test only
   --controllers         low-level controller selection integration test only
+  --sources             sources.* parameters integration test only; needs a tools/build.sh build
   --sim                 robot_sim stages only (sim, sim-link, sim-t1), not in the default set; needs robot_sim
                         built, $G1_MJCF, $T1_MJCF and unitree_sdk2py, so not with --docker
   --rmw <impl>          cyclonedds | fastrtps | auto (default auto)
@@ -122,6 +126,7 @@ while [ $# -gt 0 ]; do
         --hands) RUN_HANDS=1 ;;
         --config) RUN_CONFIG=1 ;;
         --controllers) RUN_CONTROLLERS=1 ;;
+        --sources) RUN_SOURCES=1 ;;
         --sim)   RUN_SIM=1 ;;
         --rmw)   RMW_CHOICE="${2:?--rmw needs cyclonedds, fastrtps or auto}"; shift ;;
         --python) PYTHON="${2:?--python needs an interpreter path}"; shift ;;
@@ -136,9 +141,9 @@ while [ $# -gt 0 ]; do
     shift
 done
 
-if [ "$RUN_UNIT$RUN_CPP$RUN_WIRE$RUN_ESTOP$RUN_LINK$RUN_STATE$RUN_T1$RUN_GO2$RUN_GATES$RUN_HANDS$RUN_CONFIG$RUN_CONTROLLERS$RUN_SIM" = "0000000000000" ]; then
+if [ "$RUN_UNIT$RUN_CPP$RUN_WIRE$RUN_ESTOP$RUN_LINK$RUN_STATE$RUN_T1$RUN_GO2$RUN_GATES$RUN_HANDS$RUN_CONFIG$RUN_CONTROLLERS$RUN_SOURCES$RUN_SIM" = "00000000000000" ]; then
     RUN_UNIT=1; RUN_CPP=1; RUN_WIRE=1; RUN_ESTOP=1; RUN_LINK=1; RUN_STATE=1; RUN_T1=1; RUN_GO2=1; RUN_GATES=1; RUN_HANDS=1; RUN_CONFIG=1
-    RUN_CONTROLLERS=1
+    RUN_CONTROLLERS=1; RUN_SOURCES=1
 fi
 
 # 3.0 to 4.0 s after start_hand_control: earlier and the left hand never tracks,
@@ -179,6 +184,7 @@ run_in_docker() {
     [ "$RUN_HANDS" = 1 ] && inner+=(--hands)
     [ "$RUN_CONFIG" = 1 ] && inner+=(--config)
     [ "$RUN_CONTROLLERS" = 1 ] && inner+=(--controllers)
+    [ "$RUN_SOURCES" = 1 ] && inner+=(--sources)
     inner+=(--stale-after "$STALE_AFTER" --hot-after "$HOT_AFTER")
     inner+=(--rmw "$RMW_CHOICE")
     [ "$ALLOW_SKIP" = 1 ] && inner+=(--allow-skip)
@@ -345,7 +351,7 @@ stage_cpp() {
 }
 
 BUILD_PROBLEM=""
-if [ "$RUN_CPP$RUN_WIRE$RUN_ESTOP$RUN_LINK$RUN_STATE$RUN_T1$RUN_GO2$RUN_GATES$RUN_HANDS$RUN_CONFIG$RUN_CONTROLLERS$RUN_SIM" != 000000000000 ] && command -v ros2 >/dev/null \
+if [ "$RUN_CPP$RUN_WIRE$RUN_ESTOP$RUN_LINK$RUN_STATE$RUN_T1$RUN_GO2$RUN_GATES$RUN_HANDS$RUN_CONFIG$RUN_CONTROLLERS$RUN_SOURCES$RUN_SIM" != 0000000000000 ] && command -v ros2 >/dev/null \
    && ros2 pkg prefix robot_bridge >/dev/null 2>&1; then
     BUILD_PROBLEM="$(stale_build)"
 fi
@@ -389,6 +395,9 @@ if [ "$RUN_CONFIG" = 1 ]; then
 fi
 if [ "$RUN_CONTROLLERS" = 1 ]; then
     stage_integration controllers "$INTEGRATION/run_fake_controllers_test.sh"
+fi
+if [ "$RUN_SOURCES" = 1 ]; then
+    stage_integration sources "$INTEGRATION/run_sources_test.sh"
 fi
 if [ "$RUN_SIM" = 1 ]; then
     if command -v ros2 >/dev/null && ! ros2 pkg prefix robot_sim >/dev/null 2>&1; then
