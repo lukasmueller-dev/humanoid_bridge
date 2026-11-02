@@ -1,6 +1,8 @@
 """RobotSim on the T1, no ROS. Needs mujoco and a T1 model (fetch_assets.sh t1_ncbf, t1_booster)."""
 
 import pathlib
+import re
+import types
 
 import numpy as np
 import pytest
@@ -127,3 +129,30 @@ def test_a_crank_pd_holds_the_ankles(sim):
         sim.step(t1.serial_command(cmd, sim.data.qpos[sim.qadr], sim.data.qvel[sim.vadr]))
     ankles = sum(t1.ANKLES.values(), [])
     assert np.abs(sim.state()["q"][ankles] - target[ankles]).max() < 0.01
+
+
+def test_crank_slots_are_the_bridge_ankle_slots():
+    """ANKLES is T1_bridge's kAnkleSerialIdx and the ankle joints of the bridge order."""
+    header = pathlib.Path(__file__).parents[4] / "bridge/robot_bridge/include/T1_bridge.hpp"
+    pattern = r"kAnkleSerialIdx\[2\]\[2\] = \{\{(\d+), (\d+)\}, \{(\d+), (\d+)\}\}"
+    a, b, c, d = (int(i) for i in re.search(pattern, header.read_text()).groups())
+    assert t1.ANKLES == {"left": [a, b], "right": [c, d]}
+    names = [t1.JOINT_NAMES[i] for i in (a, b, c, d)]
+    assert names == [f"{s}_ankle_{j}_joint" for s in ("left", "right") for j in ("pitch", "roll")]
+
+
+def test_only_a_parallel_frame_gets_the_crank_pd(sim):
+    """CMD_TYPE_SERIAL: a plain Command, through the filter unchanged. CMD_TYPE_PARALLEL: cranks."""
+    taken = []
+    node = types.SimpleNamespace(take_cmd=taken.append)
+    motors = [types.SimpleNamespace(q=0.1, dq=0.0, tau=1.0, kp=40.0, kd=2.0)] * sim.num_joint
+    wire = types.SimpleNamespace(node=node, sim=sim, mode=t1.CUSTOM, damp=sim.command())
+    ankles = sum(t1.ANKLES.values(), [])
+    for cmd_type in (1, 0):  # CMD_TYPE_SERIAL, CMD_TYPE_PARALLEL
+        msg = types.SimpleNamespace(cmd_type=cmd_type, CMD_TYPE_PARALLEL=0, motor_cmd=motors)
+        t1.Wire._on_cmd(wire, msg)
+    serial, parallel = taken
+    assert type(serial) is Command and t1.Wire.filter(wire, serial) is serial
+    assert type(parallel) is t1.CrankCommand
+    out = t1.Wire.filter(wire, parallel)
+    assert not out.kp[ankles].any() and out.tau[ankles].any()
