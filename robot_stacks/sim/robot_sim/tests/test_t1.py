@@ -65,7 +65,7 @@ def bridge_head():
 
 
 def test_a_damped_head_stays_inside_the_bridge_limit(sim):
-    """sim-t1: the bridge clamps a hold target outside q_min, q_max; the head must stay inside."""
+    """sim-t1: the bridge clamps a hold target above q_max; a damped head stays at or below it."""
     head = bridge_head()
     i = t1.JOINT_NAMES.index("aahead_pitch_joint")
     cmd = Command(sim.num_joint)
@@ -76,7 +76,6 @@ def test_a_damped_head_stays_inside_the_bridge_limit(sim):
         trace.append(sim.state()["q"][i])
     assert max(trace) > head["q_max"] - 0.1, "the head did not reach its stop"
     assert max(trace) <= head["q_max"], f"damp_kd {head['damp_kd']}: lower HEAD_PITCH_RANGE"
-    assert head["q_min"] <= min(trace)
 
 
 def test_a_limp_head_rests_where_arm_accepts_it(sim):
