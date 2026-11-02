@@ -1,17 +1,16 @@
 import importlib.util
-import sys
 from pathlib import Path
 
 import numpy as np
 import pytest
+
+from robot_sim import t1_parallel_ankle as pa
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SCRIPT_DIR = REPO_ROOT / "scripts" / "real"
 
 
 def load_module(name):
-    if str(SCRIPT_DIR) not in sys.path:
-        sys.path.insert(0, str(SCRIPT_DIR))
     spec = importlib.util.spec_from_file_location(name, SCRIPT_DIR / f"{name}.py")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -33,7 +32,6 @@ REFERENCE = [
 
 @pytest.mark.parametrize("side,q_s,q_m,J", REFERENCE)
 def test_kinematics_match_reference(side, q_s, q_m, J):
-    pa = load_module("t1_parallel_ankle")
     got_q_m, got_J, margin = pa.kinematics(np.array(q_s), side)
     assert margin > 0.0
     np.testing.assert_allclose(got_q_m, q_m, atol=1e-12)
@@ -44,7 +42,6 @@ def test_kinematics_match_reference(side, q_s, q_m, J):
 
 
 def test_check_script_recovers_planted_swap_and_sign():
-    pa = load_module("t1_parallel_ankle")
     check = load_module("t1_check_parallel_ankle_mapping")
     rng = np.random.default_rng(0)
     swap, sign = True, (-1.0, 1.0)

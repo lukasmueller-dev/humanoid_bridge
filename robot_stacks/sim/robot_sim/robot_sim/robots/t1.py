@@ -1,7 +1,8 @@
 """The Booster T1 in sim: ncbf's or Booster's model; booster_interface on /low_state, /joint_ctrl.
 
 Its own side: booster_rpc_service (the mode switch; /joint_ctrl drives the motors in custom mode
-only, other modes damp), and the gamepad on /remote_controller_state at 50 Hz.
+only, other modes damp), and the gamepad on /remote_controller_state at 50 Hz. The ankles are
+serial joints; motor_state_parallel and CMD_TYPE_PARALLEL see them as the two cranks.
 """
 
 import json
@@ -10,7 +11,8 @@ import pathlib
 
 import numpy as np
 
-from robot_sim.physics import RobotSpec
+from robot_sim import t1_parallel_ankle as pa
+from robot_sim.physics import Command, RobotSpec
 
 DEFAULT_MJCF = pathlib.Path(
     os.environ.get("T1_MJCF", "~/.local/share/robot_web_commander/t1_ncbf/t1.xml")
@@ -48,12 +50,20 @@ NUM_JOINT = len(JOINT_NAMES)
 EFFORT = {booster: effort for booster, _, effort in JOINTS}
 # ncbf's body names -> Booster's, for the base and the camera mount.
 BODIES = {"Trunk": "trunk", "H2": "aahead_pitch_link"}
+# booster_assets stop of the head pitch (ncbf: 1.22). A limp head falls to it; T1_config.yaml's
+# Arm accepts 0.96 + 0.1 rad, so a re-arm after damp needs the Booster stop.
+HEAD_PITCH_RANGE = (-0.35, 0.96)
 
 # booster_assets T1_23dof.xml head_realsense_rgb_link, an optical frame (z forward, y down) on
 # aahead_pitch_link. A MuJoCo camera looks along -z with y up: x kept, y flipped.
 CAMERA_POS = (0.063961, -0.0115, 0.108406)
 CAMERA_QUAT = (0.46390386, -0.53366035, 0.53366018, -0.46390371)
 CAMERA = "head_rgb"
+
+# (pitch, roll) slots per ankle: crank a, b in motor_state_parallel and CMD_TYPE_PARALLEL, as
+# T1_bridge with parallel_ankle_swap_cranks false and crank_sign [1, 1].
+ANKLES = {"left": [15, 16], "right": [21, 22]}
+CRANK_TAU_MAX = 43.0  # Nm, E4315 crank motor peak (t1_parallel_ankle.hpp kCrankTorqueMax)
 
 # booster_mode.hpp: RobotMode and the change-mode API.
 DAMPING, PREPARE, WALKING, CUSTOM = 0, 1, 2, 3
@@ -67,11 +77,12 @@ PAD = {"A": "a", "B": "b", "X": "x", "Y": "y", "LB": "lb", "RB": "rb", "LT": "lt
 
 
 def prepare(spec):
-    """ncbf's names to Booster's, the head camera on aahead_pitch_link."""
+    """ncbf's names to Booster's, the Booster head stop, the head camera on aahead_pitch_link."""
     joints = {joint.name: joint for joint in spec.joints}
     for booster, ncbf, _ in JOINTS:
         if ncbf in joints:
             joints[ncbf].name = booster
+    spec.joint("aahead_pitch_joint").range = list(HEAD_PITCH_RANGE)
     for actuator in spec.actuators:  # ncbf's motors name their joint
         renamed = {ncbf: booster for booster, ncbf, _ in JOINTS}
         actuator.target = renamed.get(actuator.target, actuator.target)
@@ -93,6 +104,33 @@ SPEC = RobotSpec(
     default_mjcf=DEFAULT_MJCF,
     prepare=prepare,
 )
+
+
+class CrankCommand(Command):
+    """A CMD_TYPE_PARALLEL frame: the ankle slots hold crank targets, the rest serial ones."""
+
+
+def crank_state(q, dq):
+    """motor_state_parallel q, dq: the serial ones, crank angles and speeds in the ankle slots."""
+    q_m, dq_m = q.copy(), dq.copy()
+    for side, slots in ANKLES.items():
+        q_m[slots], J, _ = pa.kinematics(q[slots], side)
+        dq_m[slots] = J @ dq[slots]
+    return q_m, dq_m
+
+
+def serial_command(cmd, q, dq):
+    """The serial Command at state q, dq for a CrankCommand: crank PD torque, tau_s = J^T tau_m."""
+    out = Command(len(q))
+    for field in ("mode", "q", "dq", "kp", "kd", "tau"):
+        getattr(out, field)[:] = getattr(cmd, field)
+    for side, slots in ANKLES.items():
+        q_m, J, _ = pa.kinematics(q[slots], side)
+        tau_m = cmd.tau[slots] + cmd.kp[slots] * (cmd.q[slots] - q_m)
+        tau_m += cmd.kd[slots] * (cmd.dq[slots] - J @ dq[slots])
+        out.tau[slots] = J.T @ np.clip(tau_m, -CRANK_TAU_MAX, CRANK_TAU_MAX)
+        out.q[slots] = out.dq[slots] = out.kp[slots] = out.kd[slots] = 0.0
+    return out
 
 
 def mode_request(body):
@@ -128,7 +166,10 @@ class Wire:
         self.pad = RemoteControllerState()
         self.remote = True
         self.pad_due = 0.0
-        self.state = LowState(motor_state_serial=[MotorState() for _ in range(NUM_JOINT)])
+        self.state = LowState(
+            motor_state_serial=[MotorState() for _ in range(NUM_JOINT)],
+            motor_state_parallel=[MotorState() for _ in range(NUM_JOINT)],
+        )
         damp = sim.command()
         damp.mode[:], damp.kd[:] = 1, DAMP_KD
         self.damp = damp
@@ -136,7 +177,8 @@ class Wire:
         self.describe = "booster_interface on /low_state, /joint_ctrl; mode damping"
 
     def _on_cmd(self, msg):
-        cmd = self.sim.command()
+        parallel = msg.cmd_type == msg.CMD_TYPE_PARALLEL
+        cmd = CrankCommand(NUM_JOINT) if parallel else self.sim.command()
         for i in range(min(len(msg.motor_cmd), NUM_JOINT)):
             m = msg.motor_cmd[i]
             cmd.mode[i] = 1
@@ -157,7 +199,12 @@ class Wire:
 
     def filter(self, cmd):
         """Lock held: /joint_ctrl drives the motors in custom mode only; any other mode damps."""
-        return cmd if self.mode == CUSTOM else self.damp
+        if self.mode != CUSTOM:
+            return self.damp
+        if isinstance(cmd, CrankCommand):  # the crank PD at this step's state
+            d = self.sim.data
+            return serial_command(cmd, d.qpos[self.sim.qadr], d.qvel[self.sim.vadr])
+        return cmd
 
     def set_remote(self, connected):
         self.remote = connected
@@ -181,10 +228,13 @@ class Wire:
             self.pad_publisher.publish(self.pad)
 
     def publish(self, s):
+        q_m, dq_m = crank_state(s["q"], s["dq"])
         for i in range(NUM_JOINT):
             ms = self.state.motor_state_serial[i]
             ms.q, ms.dq = float(s["q"][i]), float(s["dq"][i])
             ms.ddq, ms.tau_est = float(s["ddq"][i]), float(s["tau_est"][i])
+            mp = self.state.motor_state_parallel[i]  # ddq, tau_est stay 0: T1_bridge reads q, dq
+            mp.q, mp.dq = float(q_m[i]), float(dq_m[i])
         imu = self.state.imu_state
         imu.rpy = s["rpy"].astype(np.float32).tolist()
         imu.gyro = s["gyroscope"].astype(np.float32).tolist()
