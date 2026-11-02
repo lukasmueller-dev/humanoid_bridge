@@ -71,7 +71,7 @@ Options:
   --workspace <ws>       colcon workspace that builds this clone (default $BRIDGE_WS or ~/bridge_ws_estop)
   --params <path>        bridge params file (default bridge/robot_bridge/params/<G1|T1|Go2>_config.yaml)
   --override <file>      second params file after --params, only robot_bridge.ros__parameters.override
-                         (dq_trip per joint, at most 2 x dq_limit; docs/estop.md, Overrides);
+                         (dq_trip, kp, kd per joint, each capped; docs/estop.md, Overrides);
                          a missing file or any other key refuses the start (exit 2)
   --parallel-ankle       T1: the bridge maps the ankles to the crank motors (-p parallel_ankle_mapping:=true
                          after the params files); check the cranks first: scripts/real/t1_check_parallel_ankle_mapping.py
