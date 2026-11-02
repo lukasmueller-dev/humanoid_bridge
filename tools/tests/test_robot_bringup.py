@@ -1,6 +1,7 @@
 """tools/robot-bringup.sh: the --override refusals before ROS; the start command."""
 
 import hashlib
+import os
 import shlex
 import subprocess
 from pathlib import Path
@@ -38,8 +39,11 @@ needs_ros = pytest.mark.skipif(
 T1_PARAMS = REPO / "bridge" / "robot_bridge" / "params" / "T1_config.yaml"
 
 
-def sim_start(tmp_path, stamp=None):
-    """The T1 start command's arguments after --ros-args; --sim needs no robot."""
+def sim_start(tmp_path, stamp=None, built_after_stamp=None):
+    """The T1 start command's arguments after --ros-args; --sim needs no robot.
+
+    built_after_stamp: robot_bridge's build is newer (True) or older (False) than the stamp.
+    """
     ws = tmp_path / "ws"
     (ws / "src").mkdir(parents=True)
     (ws / "src" / "humanoid_bridge").symlink_to(REPO)
@@ -47,6 +51,12 @@ def sim_start(tmp_path, stamp=None):
     (ws / "install" / "setup.bash").write_text("")
     if stamp is not None:
         (ws / "install" / "bridge-build.stamp").write_text(stamp)
+    if built_after_stamp is not None:
+        rc = ws / "build" / "robot_bridge" / "colcon_build.rc"
+        rc.parent.mkdir(parents=True)
+        rc.write_text("")
+        moment = (ws / "install" / "bridge-build.stamp").stat().st_mtime
+        os.utime(rc, (moment + (100 if built_after_stamp else -100),) * 2)
     command = ["bash", str(SCRIPT), "--robot", "t1", "--sim", "--parallel-ankle",
                "--workspace", str(ws), "--dry-run"]
     result = subprocess.run(command, capture_output=True, text=True)
@@ -144,3 +154,20 @@ def test_a_key_outside_override_is_refused(tmp_path, content):
     result = bringup(tmp_path, "--override", str(path))
     assert result.returncode == 2
     assert "refusing --override" in result.stderr
+
+
+@needs_ros
+def test_stamp_older_than_the_bridge_build_is_not_passed(tmp_path):
+    stamp = "build_commit=abc1234\nchanged_files=0\nbuild_time=2026-11-02T11:30:49+01:00\n"
+    result, arguments = sim_start(tmp_path, stamp, built_after_stamp=True)
+    assert "older than the robot_bridge build" in result.stderr
+    assert parameters(arguments)["sources.build_commit"] == '"unknown"'
+    assert parameters(arguments)["sources.build_time"] == '"unknown"'
+
+
+@needs_ros
+def test_stamp_newer_than_the_bridge_build_is_passed(tmp_path):
+    stamp = "build_commit=abc1234\nchanged_files=0\nbuild_time=2026-11-02T11:30:49+01:00\n"
+    result, arguments = sim_start(tmp_path, stamp, built_after_stamp=False)
+    assert result.stderr == ""
+    assert parameters(arguments)["sources.build_commit"] == '"abc1234"'

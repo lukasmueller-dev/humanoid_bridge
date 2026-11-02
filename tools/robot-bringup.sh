@@ -34,7 +34,7 @@
 # --parallel-ankle (T1): -p parallel_ankle_mapping:=true after the params files; the bridge maps the ankles.
 #
 # A start passes the bridge sources.build_commit|build_time (install/bridge-build.stamp, written by
-# tools/build.sh; "unknown" plus a warning without it) and sources.params_file|params_sha1 (--params),
+# tools/build.sh; "unknown" plus a warning without it, or when a plain colcon build is newer) and sources.params_file|params_sha1 (--params),
 # for the commander's Sources tab. Quoted: a hash such as 1234567 or 12e4567 must stay a string.
 set -euo pipefail
 
@@ -347,7 +347,12 @@ else
 
     # --- 2. start the bridge -----------------------------------------------
     STAMP="$WS/install/bridge-build.stamp"
-    [ -f "$STAMP" ] || echo "warning: no $STAMP (tools/build.sh writes it): sources.build_commit is unknown" >&2
+    if [ ! -f "$STAMP" ]; then
+        echo "warning: no $STAMP (tools/build.sh writes it): sources.build_commit is unknown" >&2
+    elif [ "$STAMP" -ot "$WS/build/robot_bridge/colcon_build.rc" ]; then   # a plain colcon build since
+        echo "warning: $STAMP is older than the robot_bridge build (tools/build.sh): sources.build_commit is unknown" >&2
+        STAMP=/dev/null
+    fi
     stamped() { sed -n "s/^$1=//p" "$STAMP" 2>/dev/null | grep . || echo unknown; }
     PARAMS_ARGS+=(-p "sources.build_commit:=\"$(stamped build_commit)\""
                   -p "sources.build_time:=\"$(stamped build_time)\""
