@@ -70,12 +70,12 @@ def test_a_damped_head_stays_inside_the_bridge_limit(sim):
     i = t1.JOINT_NAMES.index("aahead_pitch_joint")
     cmd = Command(sim.num_joint)
     cmd.mode[:], cmd.kd[:] = 1, 0.5  # the head's damp_kd
-    peak = sim.state()["q"][i]
+    trace = [sim.state()["q"][i]]
     for _ in range(int(3.0 / sim.dt)):
         sim.step(cmd)
-        peak = max(peak, sim.state()["q"][i])
-    assert head["q_max"] - 0.1 < peak <= head["q_max"]  # it reached its stop, inside the limit
-    assert head["q_min"] <= sim.state()["q"][i]
+        trace.append(sim.state()["q"][i])
+    assert head["q_max"] - 0.1 < max(trace) <= head["q_max"]  # it hit its stop, inside the limit
+    assert head["q_min"] <= min(trace)
 
 
 def test_a_limp_head_rests_where_arm_accepts_it(sim):
