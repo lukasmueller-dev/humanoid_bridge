@@ -24,7 +24,7 @@ See the feature file. 3 conflicts with `origin/main` (63 behind): `robot_sim/rob
 
 ## Milestones
 
-- [ ] Merge `origin/main` and repair the conflicts by the feature's conflict rule — code — done when `git merge-tree --write-tree origin/main HEAD` exits 0 and `tools/test.sh --unit` passes
+- [x] Merge `origin/main` and repair the conflicts by the feature's conflict rule — code — done when `git merge-tree --write-tree origin/main HEAD` exits 0 and `tools/test.sh --unit` passes
 - [ ] End action — code — done when `SPEC.md` and `HANDOFF.md` are gone and the Verify line of `pr.md` names the feature's human test
 
 ## End action
