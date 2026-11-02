@@ -59,10 +59,28 @@ def test_the_gantry_holds_a_limp_t1_level(sim):
     assert sim.data.qpos[2] == pytest.approx(sim.anchor[2], abs=0.05)
 
 
+def bridge_head():
+    config = pathlib.Path(__file__).parents[4] / "bridge/robot_bridge/params/T1_config.yaml"
+    return yaml.safe_load(config.read_text())["robot_bridge"]["ros__parameters"]["HeadPitch"]
+
+
+def test_a_damped_head_stays_inside_the_bridge_limit(sim):
+    """sim-t1: the bridge clamps a hold target outside q_min, q_max; the head must stay inside."""
+    head = bridge_head()
+    i = t1.JOINT_NAMES.index("aahead_pitch_joint")
+    cmd = Command(sim.num_joint)
+    cmd.mode[:], cmd.kd[:] = 1, 0.5  # the head's damp_kd
+    peak = sim.state()["q"][i]
+    for _ in range(int(3.0 / sim.dt)):
+        sim.step(cmd)
+        peak = max(peak, sim.state()["q"][i])
+    assert head["q_max"] - 0.1 < peak <= head["q_max"]  # it reached its stop, inside the limit
+    assert head["q_min"] <= sim.state()["q"][i]
+
+
 def test_a_limp_head_rests_where_arm_accepts_it(sim):
     """A limp head is a re-arm's default_position: inside T1_config.yaml's range + 0.1 rad."""
-    config = pathlib.Path(__file__).parents[4] / "bridge/robot_bridge/params/T1_config.yaml"
-    head = yaml.safe_load(config.read_text())["robot_bridge"]["ros__parameters"]["HeadPitch"]
+    head = bridge_head()
     cmd = Command(sim.num_joint)
     cmd.mode[:], cmd.kd[:] = 1, 0.5  # the head's damp_kd
     for _ in range(int(6.0 / sim.dt)):

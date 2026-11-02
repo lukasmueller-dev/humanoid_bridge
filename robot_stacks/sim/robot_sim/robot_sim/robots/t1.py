@@ -50,9 +50,8 @@ NUM_JOINT = len(JOINT_NAMES)
 EFFORT = {booster: effort for booster, _, effort in JOINTS}
 # ncbf's body names -> Booster's, for the base and the camera mount.
 BODIES = {"Trunk": "trunk", "H2": "aahead_pitch_link"}
-# booster_assets stop of the head pitch (ncbf: 1.22). A limp head falls to it; T1_config.yaml's
-# Arm accepts 0.96 + 0.1 rad, so a re-arm after damp needs the Booster stop.
-HEAD_PITCH_RANGE = (-0.35, 0.96)
+# Stop 0.96 (booster_assets; ncbf 1.22) less 0.01 rad: MuJoCo lets a limp head pass it by 0.008.
+HEAD_PITCH_RANGE = (-0.35, 0.95)
 
 # booster_assets T1_23dof.xml head_realsense_rgb_link, an optical frame (z forward, y down) on
 # aahead_pitch_link. A MuJoCo camera looks along -z with y up: x kept, y flipped.
