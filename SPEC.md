@@ -24,7 +24,7 @@ see the feature file
 
 ## Milestones
 
-- [ ] M1 `tools/build.sh` writes a stamp into `install/` (`git describe --always --dirty`, changed-file count, build time); `robot-bringup.sh` passes `-p sources.build_commit|build_time|params_file|params_sha1`; no C++ change — code — done when a new case in `tools/test.sh` starts `/robot_bridge` and reads `sources.build_commit` equal to the stamp
+- [x] M1 `tools/build.sh` writes a stamp into `install/` (`git describe --always --dirty`, changed-file count, build time); `robot-bringup.sh` passes `-p sources.build_commit|build_time|params_file|params_sha1`; no C++ change — code — done when a new case in `tools/test.sh` starts `/robot_bridge` and reads `sources.build_commit` equal to the stamp
 
 ## End action
 
