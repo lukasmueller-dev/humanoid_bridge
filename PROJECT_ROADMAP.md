@@ -3,7 +3,7 @@
 > One per repo. Planned work only, one item per task. Finished items are
 > deleted; git history is the log.
 
-_Last updated: 2026-11-01 · codebase-health job_
+_Last updated: 2026-11-02 · sim-t1-parallel-ankle review job_
 
 ## Items
 
@@ -75,6 +75,4 @@ Decided and fake-tested on `g1-web-interface` (`docs/psi0_gates.md`).
 
 ### Cleanups
 
-- [ ] Review `sim-t1-parallel-ankle`: crank slots 15/16 and 21/22 against `kAnkleSerialIdx`, the crank PD (`tau_s = J^T tau_m`, 43 Nm per crank), `CMD_TYPE_SERIAL` frames on the old path, imports of the moved kinematics twin. Repair what breaks.
-  **Done when:** `tools/test.sh --unit --cpp --t1 --sim --allow-skip` exits 0 and the PR body names each skipped stage and why.
 - [ ] `--interface sim` does not reach the bridge: MuJoCo listens on `rt/lowcmd`, which the bridge owns. **Done when:** a sim run drives the same client path as hardware, or the limitation is documented as permanent.
