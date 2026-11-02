@@ -24,7 +24,7 @@ see the feature file
 
 ## Milestones
 
-- [ ] M1 add `kp`, `kd` to `OVERRIDE_KEYS` (`bridge_core.cpp:17`); per-key checks: > 0, cap `upper/lower_limbs_kp|kd_min|max` in place of 2 × `dq_limit`; `docs/estop.md` — code — done when `tools/test.sh --config` passes with new `drive_config.py` cases: a `kp`/`kd` inside the cap loads, one above it or 0 refuses the start
+- [x] M1 add `kp`, `kd` to `OVERRIDE_KEYS` (`bridge_core.cpp:17`); per-key checks: > 0, cap `upper/lower_limbs_kp|kd_min|max` in place of 2 × `dq_limit`; `docs/estop.md` — code — done when `tools/test.sh --config` passes with new `drive_config.py` cases: a `kp`/`kd` inside the cap loads, one above it or 0 refuses the start
 
 ## End action
 
