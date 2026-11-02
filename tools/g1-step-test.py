@@ -88,7 +88,8 @@ def main():
     if state["bridge"] != "ARMED" or state["q"] is None:
         print(f"bridge state {state['bridge']!r}, /lowstate {'seen' if state['q'] else 'missing'}: "
               "arm first (tools/g1-bringup.sh --arm-from-measured --robot-is-clear)", file=sys.stderr)
-        node.destroy_node(); rclpy.shutdown()
+        node.destroy_node()
+        rclpy.shutdown()
         return 2
 
     start = list(state["q"])
@@ -97,7 +98,8 @@ def main():
     if not float(joint["q_min"]) <= goal[j] <= float(joint["q_max"]):
         print(f"{args.joint}: {start[j]:.3f} + {args.delta} leaves [{joint['q_min']}, {joint['q_max']}]",
               file=sys.stderr)
-        node.destroy_node(); rclpy.shutdown()
+        node.destroy_node()
+        rclpy.shutdown()
         return 2
 
     print(f"{args.joint}: {start[j]:.3f} -> {goal[j]:.3f} -> back; limit {rate} rad/s")

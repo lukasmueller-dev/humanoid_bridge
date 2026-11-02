@@ -9,11 +9,11 @@ import copy
 import os
 import signal
 import subprocess
-import sys
 import tempfile
 import time
 
 import yaml
+from harness import Checks
 
 LOADED = "E-stop: damp_kd"  # the last line of a load that passed
 REFUSED = "Failed to load parameters."
@@ -151,15 +151,8 @@ def main():
     with open(args.params) as handle:
         config = yaml.safe_load(handle)
     out = tempfile.mkdtemp()
-    failures = []
-
-    def check(name, ok, detail=""):
-        print(
-            "{:<48} {}{}".format(name, "PASS" if ok else "FAIL", "  " + detail if detail else ""),
-            flush=True,
-        )
-        if not ok:
-            failures.append(name)
+    checks = Checks(width=48)
+    check = checks.check
 
     # The copy, unchanged, must load: the round trip through yaml is not what refuses.
     unchanged = os.path.join(out, "unchanged.yaml")
@@ -216,10 +209,7 @@ def main():
             "" if loaded else f"no '{text}', log {out}/valid{i}.log",
         )
 
-    if failures:
-        print("\n{} check(s) failed: {}".format(len(failures), ", ".join(failures)))
-        sys.exit(1)
-    print("\nall checks passed")
+    checks.finish()
 
 
 if __name__ == "__main__":

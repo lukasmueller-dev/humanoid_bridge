@@ -89,6 +89,8 @@ namespace sairol_bridge
         // mutex_ held. Interpolation, gates 1-2, the controller, the tau_limit clamp, gate 4 into
         // frame_; false (invalidFrame_ set) if a field is not finite: send nothing.
         bool trackingFrame_();
+        // Pure: each robot decides its hold (clamp, lastCommand_ seed). Has a body: H1, H1_2 call it.
+        // Hold the measured pose, then ramp to default_cmd (ready_q_ if its size is off).
         virtual bool initControl_(bridge_interface::msg::RobotCmd default_cmd) = 0;
         bool checkCommand_(bridge_interface::msg::RobotCmd::SharedPtr robotCommand);
 

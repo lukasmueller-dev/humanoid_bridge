@@ -5,11 +5,11 @@ Exit 1 on failure. run_fake_estop_test.sh starts the fake, then this driver, the
 
 import argparse
 import bisect
-import sys
 import time
 
 import rclpy
 import yaml
+from harness import Checks, ros_node
 from rcl_interfaces.msg import Parameter, ParameterType, ParameterValue
 from rcl_interfaces.srv import GetParameters, SetParameters
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
@@ -49,9 +49,9 @@ def load_params(path, override_path=None):
     }
 
 
-class Driver:
+class Driver(Checks):
     def __init__(self, node, params, bridge_log):
-        self.node = node
+        super().__init__(node)
         self.params = params
         self.bridge_log = bridge_log
         self.client = RobotCmdClient(node, num_dof=NUM_MOTORS, control_frequency=50.0)
@@ -80,7 +80,6 @@ class Driver:
         self.state = None
         self.last = None
         self.count = 0
-        self.failures = []
         self.changes = []  # (t, state)
         self.frames = []  # (t, kp, q, dq, tau)
 
@@ -104,11 +103,6 @@ class Driver:
 
     # --- helpers ---------------------------------------------------------
 
-    def spin(self, seconds):
-        end = time.monotonic() + seconds
-        while time.monotonic() < end:
-            rclpy.spin_once(self.node, timeout_sec=0.005)
-
     def wait_inputs(self, timeout=5.0):
         # A press published before discovery matched is lost (Fast DDS).
         end = time.monotonic() + timeout
@@ -121,12 +115,7 @@ class Driver:
         return False
 
     def wait_state(self, wanted, timeout=2.0):
-        end = time.monotonic() + timeout
-        while time.monotonic() < end:
-            if self.state == wanted:
-                return True
-            rclpy.spin_once(self.node, timeout_sec=0.005)
-        return False
+        return self.wait(lambda: self.state == wanted, timeout)
 
     def drain(self, quiet=0.1, timeout=2.0):
         """Spin until no /lowcmd frame for `quiet` s; False if frames go on for `timeout` s."""
@@ -149,14 +138,6 @@ class Driver:
                     return True
             self.spin(0.1)
         return False
-
-    def check(self, name, ok, detail=""):
-        print(
-            "{:<44} {}{}".format(name, "PASS" if ok else "FAIL", "  " + detail if detail else ""),
-            flush=True,
-        )
-        if not ok:
-            self.failures.append(name)
 
     def check_state(self, name, wanted):
         self.check(name, self.wait_state(wanted), f"state '{self.state}'")
@@ -665,20 +646,11 @@ def main():
     parser.add_argument("--override", help="the second params file the bridge runs with")
     args = parser.parse_args()
 
-    rclpy.init()
-    node = rclpy.create_node("estop_driver")
-    driver = Driver(node, load_params(args.params, args.override), args.bridge_log)
-    print(HOLDING, flush=True)  # run_fake_estop_test.sh starts the bridge on this line
-    try:
+    with ros_node("estop_driver") as node:
+        driver = Driver(node, load_params(args.params, args.override), args.bridge_log)
+        print(HOLDING, flush=True)  # run_fake_estop_test.sh starts the bridge on this line
         driver.run()
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
-
-    if driver.failures:
-        print("\n{} check(s) failed: {}".format(len(driver.failures), ", ".join(driver.failures)))
-        sys.exit(1)
-    print("\nall checks passed")
+    driver.finish()
 
 
 if __name__ == "__main__":

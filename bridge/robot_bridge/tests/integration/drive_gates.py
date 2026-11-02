@@ -4,11 +4,10 @@ Exit 1 on failure. run_fake_gates_test.sh starts the fake and the bridge first.
 """
 
 import argparse
-import sys
 import time
 
-import rclpy
 import yaml
+from harness import Checks, ros_node
 from std_msgs.msg import Bool
 from unitree_hg.msg import LowCmd
 
@@ -36,9 +35,9 @@ def load_params(path):
     }
 
 
-class Driver:
+class Driver(Checks):
     def __init__(self, node, params):
-        self.node = node
+        super().__init__(node, width=48, poll=0.002)
         self.params = params
         # Order 0: every command is a step, so only gate 2 can make it a ramp.
         self.client = RobotCmdClient(
@@ -47,23 +46,9 @@ class Driver:
         node.create_subscription(LowCmd, "/lowcmd", self._on_cmd, 100)
         self.freeze = node.create_publisher(Bool, "/fake_g1/freeze", 10)
         self.frames = []  # (t, q)
-        self.failures = []
 
     def _on_cmd(self, msg):
         self.frames.append((time.monotonic(), [m.q for m in list(msg.motor_cmd)[:NUM_MOTORS]]))
-
-    def spin(self, seconds):
-        end = time.monotonic() + seconds
-        while time.monotonic() < end:
-            rclpy.spin_once(self.node, timeout_sec=0.002)
-
-    def check(self, name, ok, detail=""):
-        print(
-            "{:<48} {}{}".format(name, "PASS" if ok else "FAIL", "  " + detail if detail else ""),
-            flush=True,
-        )
-        if not ok:
-            self.failures.append(name)
 
     def send(self, q):
         self.client.send_cmd(
@@ -179,19 +164,10 @@ def main():
     parser.add_argument("--start-q", type=float, default=0.2, help="the pose fake_g1 starts in")
     args = parser.parse_args()
 
-    rclpy.init()
-    node = rclpy.create_node("gates_driver")
-    driver = Driver(node, load_params(args.params))
-    try:
+    with ros_node("gates_driver") as node:
+        driver = Driver(node, load_params(args.params))
         driver.run(args.start_q)
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
-
-    if driver.failures:
-        print("\n{} check(s) failed: {}".format(len(driver.failures), ", ".join(driver.failures)))
-        sys.exit(1)
-    print("\nall checks passed")
+    driver.finish()
 
 
 if __name__ == "__main__":

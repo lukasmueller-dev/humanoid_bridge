@@ -12,6 +12,7 @@ import yaml
 from booster_interface.msg import LowCmd
 from bridge_interface.msg import RobotState
 from fake_t1 import NUM_JOINT, RPY
+from harness import Checks, ros_node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import Bool, String
 from std_srvs.srv import Trigger
@@ -37,9 +38,9 @@ def quat(rpy):
             cr * sp * cy + sr * cp * sy, cr * cp * sy - sr * sp * cy]  # fmt: skip
 
 
-class Driver:
+class Driver(Checks):
     def __init__(self, node, params_files):
-        self.node = node
+        super().__init__(node, poll=0.05)
         config = {}  # as ROS merges --params-file: a later file wins per key
         for path in params_files:
             for key, value in yaml.safe_load(open(path))["robot_bridge"]["ros__parameters"].items():
@@ -66,7 +67,6 @@ class Driver:
         self.cmd_motors = None
         self.first_cmd = None
         self.last_cmd = None
-        self.failures = []
 
     def _on_bridge(self, msg):
         self.bridge = msg.data
@@ -84,11 +84,6 @@ class Driver:
             self.first_cmd = msg
         self.last_cmd = msg
 
-    def check(self, name, ok, detail=""):
-        print(f"{name:<44} {'PASS' if ok else 'FAIL'}{'  ' + detail if detail else ''}", flush=True)
-        if not ok:
-            self.failures.append(name)
-
     def frame(self, kd, kp):
         """Waits for a frame: every joint at kd, the head at kp. Returns (ok, its kd)."""
         self.last_cmd = None
@@ -104,14 +99,6 @@ class Driver:
         m, leg = self.last_cmd.motor_cmd, self.names.index("LeftHipPitch")
         head = [round(m[i].kd, 3) for i in self.head]
         return ok, f"head kd {head}, LeftHipPitch kd {m[leg].kd:.3f}"
-
-    def wait(self, predicate, timeout):
-        end = time.monotonic() + timeout
-        while time.monotonic() < end:
-            rclpy.spin_once(self.node, timeout_sec=0.05)
-            if predicate():
-                return True
-        return predicate()
 
     def run(self):
         self.check("/robot_state arrives", self.wait(lambda: self.state is not None, 5.0))
@@ -190,18 +177,10 @@ class Driver:
 
 
 def main():
-    rclpy.init()
-    node = rclpy.create_node("drive_t1")
-    driver = Driver(node, sys.argv[1:])
-    try:
+    with ros_node("drive_t1") as node:
+        driver = Driver(node, sys.argv[1:])
         driver.run()
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
-    if driver.failures:
-        print(f"FAILED: {', '.join(driver.failures)}")
-        sys.exit(1)
-    print("all checks passed")
+    driver.finish()
 
 
 if __name__ == "__main__":

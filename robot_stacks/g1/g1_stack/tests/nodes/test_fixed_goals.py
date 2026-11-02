@@ -144,7 +144,6 @@ def test_asks_again_while_the_controller_says_it_is_not_engaged():
 
 def test_stops_asking_once_the_controller_says_it_is_engaged():
     # Asking again after it took would toggle the legs back off.
-    rec = Recorder()
     status = FakeStatus(engaged=False)
     clock = FakeClock()
     engager = fixed_goals.Engager(status, retry=1.0, out=lambda *_: None)
