@@ -75,4 +75,6 @@ Decided and fake-tested on `g1-web-interface` (`docs/psi0_gates.md`).
 
 ### Cleanups
 
+- [ ] `rpy_to_quat` crashes on the apt scipy 1.8 of the `robot-sim:humble` image: `as_quat(scalar_first=True)` needs scipy >= 1.14. Every T1 policy run in sim fails with `TypeError`.
+  **Done when:** `tools/test.sh --unit --allow-skip --python <venv>/bin/python` exits 0, and a test in `test_robot_client.py` checks `rpy_to_quat` against known `[w, x, y, z]` values (identity, 90 deg yaw).
 - [ ] `--interface sim` does not reach the bridge: MuJoCo listens on `rt/lowcmd`, which the bridge owns. **Done when:** a sim run drives the same client path as hardware, or the limitation is documented as permanent.
