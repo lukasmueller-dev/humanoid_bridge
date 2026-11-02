@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """Print the robot's joint angles from the bridge's /robot_state, one line, space separated.
 
-Needs: a sourced ROS workspace and a running bridge (G1_bridge or T1_bridge; robot or fake).
+Needs: a sourced ROS workspace and a running bridge (G1, T1 or Go2; robot or fake).
 
 This is what `tools/robot-bringup.sh --arm-from-measured` feeds to start_control:
 arming to the pose the robot already holds is the smooth choice, because the
 bridge ramps from wherever it stands to whatever you pass.
 
-    tools/g1-measured-pose.py                    # every joint (G1 29, T1 23)
+    tools/g1-measured-pose.py                    # every joint (G1 29, T1 23, Go2 12)
     tools/g1-bringup.sh --arm-from "$(tools/g1-measured-pose.py)" --robot-is-clear
 """
 

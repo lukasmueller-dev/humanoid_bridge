@@ -5,11 +5,11 @@ Exit 1 on failure. run_fake_estop_test.sh starts the fake, then this driver, the
 
 import argparse
 import bisect
-import sys
 import time
 
 import rclpy
 import yaml
+from harness import Checks, ros_node
 from rcl_interfaces.msg import Parameter, ParameterType, ParameterValue
 from rcl_interfaces.srv import GetParameters, SetParameters
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
@@ -27,27 +27,36 @@ GRACE = 0.05  # /lowcmd and /bridge_state are separate topics: order at a change
 HOLDING = "driver: holding /lowcmd"
 
 
-def load_params(path):
+def load_params(path, override_path=None):
     with open(path) as handle:
         params = yaml.safe_load(handle)["robot_bridge"]["ros__parameters"]
     names = params["joint_names"]
+    trip = [float(params[n].get("dq_trip", params[n]["dq_limit"])) for n in names]
+    override = {}
+    if override_path:
+        with open(override_path) as handle:
+            override = yaml.safe_load(handle)["robot_bridge"]["ros__parameters"]["override"]
     return {
+        "joint_names": names,
         "kp": [float(params[n]["kp"]) for n in names],
         "kd": [float(params[n]["kd"]) for n in names],
         "damp_kd": float(params["estop"]["damp_kd"]),
         "ready_q": [float(v) for v in params["ready_q"]],
         "dq_limit": [float(params[n]["dq_limit"]) for n in names],
+        "dq_trip_base": trip,  # the config's
+        "dq_trip": [float(override.get(n, {}).get("dq_trip", t)) for n, t in zip(names, trip)],
         "parallel": [bool(params[n].get("if_parallel_joint", False)) for n in names],
     }
 
 
-class Driver:
+class Driver(Checks):
     def __init__(self, node, params, bridge_log):
-        self.node = node
+        super().__init__(node)
         self.params = params
         self.bridge_log = bridge_log
         self.client = RobotCmdClient(node, num_dof=NUM_MOTORS, control_frequency=50.0)
         self.ready = node.create_client(Trigger, "/ready_position_control")
+        self.limp_client = node.create_client(Trigger, "/limp_control")
         self.zero = node.create_client(Trigger, "/zero_position_control")
         self.keys = node.create_publisher(UInt16, "/fake_g1/keys", 10)
         self.roll = node.create_publisher(Float32, "/fake_g1/roll", 10)
@@ -55,7 +64,10 @@ class Driver:
         self.pause = node.create_publisher(Bool, "/fake_g1/pause", 10)
         self.nan_q = node.create_publisher(Bool, "/fake_g1/nan_q", 10)
         self.dq = node.create_publisher(Float32, "/fake_g1/dq", 10)
+        self.dq1 = node.create_publisher(Float32, "/fake_g1/dq1", 10)
         self.nan_imu = node.create_publisher(Bool, "/fake_g1/nan_imu", 10)
+        self.freeze = node.create_publisher(Bool, "/fake_g1/freeze", 10)
+        self.move = node.create_publisher(Float32, "/fake_g1/move", 10)
         # Up before the bridge starts: the bridge waits until it is gone.
         self.blocker = node.create_publisher(LowCmd, "/lowcmd", 10)
         latched = QoSProfile(
@@ -68,7 +80,6 @@ class Driver:
         self.state = None
         self.last = None
         self.count = 0
-        self.failures = []
         self.changes = []  # (t, state)
         self.frames = []  # (t, kp, q, dq, tau)
 
@@ -92,29 +103,19 @@ class Driver:
 
     # --- helpers ---------------------------------------------------------
 
-    def spin(self, seconds):
-        end = time.monotonic() + seconds
-        while time.monotonic() < end:
-            rclpy.spin_once(self.node, timeout_sec=0.005)
-
     def wait_inputs(self, timeout=5.0):
         # A press published before discovery matched is lost (Fast DDS).
         end = time.monotonic() + timeout
         while time.monotonic() < end:
             inputs = (self.keys, self.roll, self.remote, self.pause)
-            inputs += (self.nan_q, self.dq, self.nan_imu)
+            inputs += (self.nan_q, self.dq, self.nan_imu, self.freeze, self.move)
             if all(p.get_subscription_count() for p in inputs):
                 return True
             rclpy.spin_once(self.node, timeout_sec=0.01)
         return False
 
     def wait_state(self, wanted, timeout=2.0):
-        end = time.monotonic() + timeout
-        while time.monotonic() < end:
-            if self.state == wanted:
-                return True
-            rclpy.spin_once(self.node, timeout_sec=0.005)
-        return False
+        return self.wait(lambda: self.state == wanted, timeout)
 
     def drain(self, quiet=0.1, timeout=2.0):
         """Spin until no /lowcmd frame for `quiet` s; False if frames go on for `timeout` s."""
@@ -137,14 +138,6 @@ class Driver:
                     return True
             self.spin(0.1)
         return False
-
-    def check(self, name, ok, detail=""):
-        print(
-            "{:<44} {}{}".format(name, "PASS" if ok else "FAIL", "  " + detail if detail else ""),
-            flush=True,
-        )
-        if not ok:
-            self.failures.append(name)
 
     def check_state(self, name, wanted):
         self.check(name, self.wait_state(wanted), f"state '{self.state}'")
@@ -205,6 +198,9 @@ class Driver:
     def start(self, q):
         return self.client.start_control(default_position=[q] * NUM_MOTORS, timeout_sec=30.0)
 
+    def limp(self):
+        return self.client._call(self.limp_client, Trigger.Request(), 30.0)
+
     # --- the run ---------------------------------------------------------
 
     def run(self):
@@ -246,6 +242,7 @@ class Driver:
         now = self.client._call(get, GetParameters.Request(names=[key]), 10.0).values[0]
         kept = now.double_value == self.params["kp"][0]
         self.check(f"{key} unchanged", kept, str(now.double_value))
+        self.override_visible(get)
 
         # Arming needs the remote (estop.require_remote); fake_g1 sends its header by default.
         count = self.count
@@ -254,6 +251,12 @@ class Driver:
         reply = self.start(0.123)
         self.check(
             "start_control refused without the remote",
+            not reply.success and "remote" in reply.message,
+            reply.message,
+        )
+        reply = self.limp()
+        self.check(
+            "limp_control refused without the remote",
             not reply.success and "remote" in reply.message,
             reply.message,
         )
@@ -282,6 +285,12 @@ class Driver:
         reply = self.start(0.123)
         self.check(
             "start_control refused with another /lowcmd publisher",
+            not reply.success and "/lowcmd" in reply.message,
+            reply.message,
+        )
+        reply = self.limp()
+        self.check(
+            "limp_control refused with another /lowcmd publisher",
             not reply.success and "/lowcmd" in reply.message,
             reply.message,
         )
@@ -475,12 +484,99 @@ class Driver:
         self.spin(0.5)
         self.check("estop_reset once /lowstate is back", self.client.estop_reset().success)
         self.check_state("reset from silent -> DISARMED", "DISARMED")
+        self.limp_run(damp_kp, damp_kd)
         self.bad_state(damp_kp, damp_kd)
         self.check_recording()
 
+    def limp_run(self, damp_kp, damp_kd):
+        """/limp_control: kp, kd, tau 0 at the measured q; start, ready, e-stop, stop leave it."""
+        kp, kd, zero = self.params["kp"], self.params["kd"], [0.0] * NUM_MOTORS
+        reply = self.limp()
+        self.check("limp_control from DISARMED", reply.success, reply.message)
+        self.check_state("limp: ARMED limp", "ARMED limp")
+        self.spin(RAMP_SECONDS)
+        since = time.monotonic()
+        self.spin(0.5)
+        window = [f for f in self.frames if f[0] >= since]
+        stiff = sum(any(abs(k) > 1e-6 for k in f[1]) for f in window)
+        limp = bool(window) and stiff == 0
+        self.check("limp: every frame kp 0 after the ramp", limp, f"{stiff} of {len(window)}")
+        self.check("limp: dq 0 and tau 0", *self.feedforward(0.0, 0.0, window))
+        self.check("limp: last frame kp 0, kd 0", *self.frame(zero, zero))
+        self.check("limp: no cmd_timeout", self.state == "ARMED limp", f"state '{self.state}'")
+        self.send(0.2, hold_position=True)
+        self.spin(0.3)
+        self.check("limp: /robot_cmd dropped", *self.frame(zero, zero))
+
+        # A hand moves every joint to 0.05; the limp frame follows the measured q.
+        self.freeze.publish(Bool(data=True))
+        self.spin(0.1)  # two topics: freeze first, or a frame in flight undoes the move
+        self.move.publish(Float32(data=0.05))
+        self.spin(0.3)
+        self.freeze.publish(Bool(data=False))
+        self.spin(0.2)
+        self.check("limp: q follows the hand", *self.frame(zero, zero, q=0.05))
+
+        called = time.monotonic()
+        self.check("start_control from limp", self.start(0.2).success)
+        self.spin(RAMP_SECONDS)
+        first = next((f for f in self.frames if f[0] >= called and any(k > 0 for k in f[1])), None)
+        worst = max(abs(q - 0.05) for q in first[2]) if first else float("inf")
+        detail = f"worst |q - 0.05| {worst:.4f}"
+        self.check("start_control ramps from the measured pose", worst < 1e-2, detail)
+        self.check_state("start_control from limp -> ARMED", "ARMED")
+        self.check("ramp reached 0.2", *self.frame(kp, kd, q=0.2))
+
+        self.check("limp_control from ARMED", self.limp().success)
+        self.check_state("limp again", "ARMED limp")
+        self.client.estop_damp()
+        self.check_state("estop_damp from limp latches", "LATCHED damp service_damp")
+        self.spin(0.2)
+        self.check("limp -> damp frame", *self.frame(damp_kp, damp_kd, q=0.2))
+        self.check("limp_control refused while latched", not self.limp().success)
+        self.check("estop_reset", self.client.estop_reset().success)
+
+        self.check("limp_control from STOPPED", self.limp().success)
+        self.check_state("limp from STOPPED", "ARMED limp")
+        reply = self.client._call(self.ready, Trigger.Request(), 30.0)
+        self.check("ready from limp", reply.success, reply.message)
+        self.check_state("ready from limp -> ARMED", "ARMED")
+        self.spin(RAMP_SECONDS)
+        self.check("ready from limp reached ready_q", *self.at(self.params["ready_q"]))
+
+        self.check("limp_control once more", self.limp().success)
+        self.check_state("limp at ready_q", "ARMED limp")
+        self.spin(0.3)
+        self.client.stop_control()
+        self.check_state("stop_control from limp holds", "STOPPED hold stop")
+        self.spin(0.2)
+        self.check("limp -> hold frame: config gains", *self.frame(kp, kd))
+        self.check("limp -> hold keeps the measured q", *self.at(self.params["ready_q"]))
+
+    def override_visible(self, get):
+        """override_keys, and override.<joint>.dq_trip beside the base <joint>.dq_trip."""
+        joint = self.params["joint_names"][1]
+
+        def read(name):
+            return self.client._call(get, GetParameters.Request(names=[name]), 10.0).values[0]
+
+        keys = list(read("override_keys").string_array_value)
+        self.check("override_keys is dq_trip", keys == ["dq_trip"], str(keys))
+        shown = read(f"override.{joint}.dq_trip").double_value
+        self.check("override.<joint>.dq_trip shown", shown == self.params["dq_trip"][1], str(shown))
+        base = read(f"{joint}.dq_trip").double_value
+        self.check("<joint>.dq_trip is the base", base == self.params["dq_trip_base"][1], str(base))
+
     def bad_state(self, damp_kp, damp_kd):
-        """Bad robot data while ARMED latches damp state_invalid; reset once it is gone."""
+        """Bad robot data while ARMED latches damp state_invalid; reset once it is gone.
+
+        Joint 0 has no dq_trip: it trips at dq_limit. Joint 1 has one (run_fake_estop_test.sh):
+        2 x dq_limit in the config, 1.5 x in the override file. 1.1 x the override is below the
+        config's, so latching there proves the override applies.
+        """
         limit = self.params["dq_limit"][0]
+        limit1, trip1 = self.params["dq_limit"][1], self.params["dq_trip"][1]
+        self.check("joint 1 has a dq_trip above its dq_limit", trip1 > limit1, f"{trip1} vs {limit1}")
         self.check("start_control at 0.2", self.start(0.2).success)
         self.spin(RAMP_SECONDS)
         self.check_state("ARMED", "ARMED")
@@ -489,9 +585,15 @@ class Driver:
         under = self.state == "ARMED"
         self.check("joint 0 at 0.9 dq_limit stays ARMED", under, f"state '{self.state}'")
         self.dq.publish(Float32(data=0.0))
+        self.dq1.publish(Float32(data=0.5 * (limit1 + trip1)))
+        self.spin(0.3)
+        between = self.state == "ARMED"
+        self.check("joint 1 between dq_limit and dq_trip stays ARMED", between, f"state '{self.state}'")
+        self.dq1.publish(Float32(data=0.0))
         faults = (
             ("NaN q", self.nan_q, Bool(data=True), Bool(data=False)),
             ("joint 0 at 1.1 dq_limit", self.dq, Float32(data=1.1 * limit), Float32(data=0.0)),
+            ("joint 1 at 1.1 dq_trip", self.dq1, Float32(data=1.1 * trip1), Float32(data=0.0)),
             ("NaN IMU roll", self.nan_imu, Bool(data=True), Bool(data=False)),
         )
         for i, (name, publisher, on, off) in enumerate(faults):
@@ -541,22 +643,14 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("params", help="the G1_config.yaml the bridge runs with")
     parser.add_argument("bridge_log", help="the bridge's log, read for its /lowcmd check")
+    parser.add_argument("--override", help="the second params file the bridge runs with")
     args = parser.parse_args()
 
-    rclpy.init()
-    node = rclpy.create_node("estop_driver")
-    driver = Driver(node, load_params(args.params), args.bridge_log)
-    print(HOLDING, flush=True)  # run_fake_estop_test.sh starts the bridge on this line
-    try:
+    with ros_node("estop_driver") as node:
+        driver = Driver(node, load_params(args.params, args.override), args.bridge_log)
+        print(HOLDING, flush=True)  # run_fake_estop_test.sh starts the bridge on this line
         driver.run()
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
-
-    if driver.failures:
-        print("\n{} check(s) failed: {}".format(len(driver.failures), ", ".join(driver.failures)))
-        sys.exit(1)
-    print("\nall checks passed")
+    driver.finish()
 
 
 if __name__ == "__main__":

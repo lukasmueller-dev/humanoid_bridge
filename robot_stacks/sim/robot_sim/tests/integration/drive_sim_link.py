@@ -5,10 +5,9 @@ then runs `rebrought`.
 """
 
 import argparse
-import sys
 
-import rclpy
 from drive_link import Driver as LinkDriver
+from harness import ros_node
 from std_msgs.msg import Float32
 from unitree_hg.msg import LowState
 
@@ -93,19 +92,10 @@ def main():
     parser.add_argument("run", choices=("restart", "rebrought"))
     args = parser.parse_args()
 
-    rclpy.init()
-    node = rclpy.create_node("sim_link_driver")
-    driver = Driver(node)
-    try:
+    with ros_node("sim_link_driver") as node:
+        driver = Driver(node)
         getattr(driver, args.run)()
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
-
-    if driver.failures:
-        print("\n{} check(s) failed: {}".format(len(driver.failures), ", ".join(driver.failures)))
-        sys.exit(1)
-    print("\nall checks passed")
+    driver.finish()
 
 
 if __name__ == "__main__":

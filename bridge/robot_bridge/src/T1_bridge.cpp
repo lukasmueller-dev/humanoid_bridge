@@ -1,5 +1,4 @@
 #include "T1_bridge.hpp"
-#include "gates.hpp"
 
 #include <cmath>
 
@@ -24,6 +23,7 @@ sairol_bridge::T1Bridge::T1Bridge(rclcpp::Node::SharedPtr node) : BridgeCore(nod
     lastCommand_.motor_cmd.resize(numJoint_);
     currentState_.motor_state.resize(numJoint_);
     cmdParams_.resize(numJoint_);
+    loadParallelAnkleParameters_();
     remoteOnEventsOnly_ = true;   // /remote_controller_state: one message per button event, none while idle
 
     client_ = nh->create_client<booster_interface::srv::RpcService>("booster_rpc_service");
@@ -101,6 +101,10 @@ void sairol_bridge::T1Bridge::lowStateHandler_(booster_interface::msg::LowState:
         currentState_.motor_state[i].ddq = msg->motor_state_serial[i].ddq;
         currentState_.motor_state[i].tau_est = msg->motor_state_serial[i].tau_est;
     }
+    if (parallelAnkle_)
+    {
+        parallelState_ = msg->motor_state_parallel;
+    }
     imu_.rpy = msg->imu_state.rpy;
     imu_.gyroscope = msg->imu_state.gyro;
     imu_.accelerometer = msg->imu_state.acc;
@@ -172,88 +176,38 @@ void sairol_bridge::T1Bridge::watchJointCtrl_()
 
 void sairol_bridge::T1Bridge::publishLowCommand_()
 {
-    rclcpp::Time current = steadyClock_.now();
-
-    float_t phase = 1.0f;
-    if (tFinal_ - tStart_ > 1e-6) {
-        phase = (current.seconds() - tStart_) / (tFinal_ - tStart_);
+    if (!trackingFrame_())
+    {
+        return;
     }
-    phase = std::clamp(phase, 0.0f, 1.0f);
-
     booster_interface::msg::LowCmd booster_cmd;
     booster_cmd.motor_cmd.resize(numJoint_);
-    booster_cmd.cmd_type = booster_interface::msg::LowCmd::CMD_TYPE_SERIAL;
-
-    bool finite = true;
+    booster_cmd.cmd_type = parallelAnkle_ ? booster_interface::msg::LowCmd::CMD_TYPE_PARALLEL
+                                          : booster_interface::msg::LowCmd::CMD_TYPE_SERIAL;
     for (int i = 0; i < numJoint_; ++i)
     {
         auto &cmd = booster_cmd.motor_cmd[i];
-        auto &last_cmd = lastCommand_.motor_cmd[i];
-        auto &joint_info = joints_[i];
-
         cmd.mode = 0;
         cmd.weight = 1.0;
-
-        if (1e-6 < cmdInterpOrder_ && cmdInterpOrder_ < 1.0 - 1e-6)
-        {
-            cmd.q = last_cmd.q * cmdInterpOrder_ + cmdParams_[i].q_0 * (1 - cmdInterpOrder_);
-            cmd.dq = last_cmd.dq * cmdInterpOrder_ + cmdParams_[i].dq_0 * (1 - cmdInterpOrder_);
-        }
-        else
-        {
-            cmd.q = cmdParams_[i].q_0 + cmdParams_[i].q_1 * phase;
-            cmd.dq = cmdParams_[i].dq_0 + cmdParams_[i].dq_1 * phase;
-        }
-
-        // Gates 1 and 2 (docs/psi0_gates.md): the joint range, then the target speed.
-        if (cmd.q < joint_info.q_min || cmd.q > joint_info.q_max)
-        {
-            RCLCPP_WARN_THROTTLE(nh->get_logger(), steadyClock_, 1000,
-                                 "joint %d target %.3f outside [%.3f, %.3f]: clamped",
-                                 i, cmd.q, joint_info.q_min, joint_info.q_max);
-        }
-        cmd.q = gates::limitTarget(cmd.q, last_cmd.q, joint_info, controlDt_);
-
-        cmd.kp = cmdParams_[i].kp_0 + cmdParams_[i].kp_1 * phase;
-        cmd.kd = cmdParams_[i].kd_0 + cmdParams_[i].kd_1 * phase;
-        cmd.dq = std::clamp(cmd.dq, -joint_info.dq_limit, joint_info.dq_limit);
-
-        if (torqueControl_)
-        {
-            cmd.tau = cmd.kp * (cmd.q - currentState_.motor_state[i].q) +
-                      cmd.kd * (cmd.dq - currentState_.motor_state[i].dq) + cmdParams_[i].tau_0;
-            cmd.tau = std::clamp(cmd.tau, -joint_info.tau_limit, joint_info.tau_limit);
-            cmd.kp = 0.0;
-            cmd.kd = 0.0;
-        }
-        else
-        {
-            cmd.tau = cmdParams_[i].tau_0 + cmdParams_[i].tau_1 * phase;
-        }
-        // Gate 4: the torque window, feedforward included; at kp 0 the measured q, never inf or NaN.
-        const bool parallel = receivedCmd_ && joint_info.if_parallel_joint;
-        cmd.q = gates::torqueWindow(cmd.q, currentState_.motor_state[i].q, currentState_.motor_state[i].dq,
-                                    cmd.dq, cmd.kp, cmd.kd, parallel ? 0.0f : cmd.tau, joint_info.tau_limit);
-
-        last_cmd.q = cmd.q;
-        last_cmd.dq = cmd.dq;
-        last_cmd.kp = cmd.kp;
-        last_cmd.kd = cmd.kd;
-        last_cmd.tau = cmd.tau;
-
-        if (parallel)
-        {
-            cmd.tau = std::clamp((last_cmd.q - currentState_.motor_state[i].q) * cmd.kp,
-                                 -joint_info.tau_limit, joint_info.tau_limit);
-            cmd.q = currentState_.motor_state[i].q;
-            cmd.kp = 0.0;
-        }
-        finite = finite && gates::finiteCommand(cmd.q, cmd.dq, cmd.kp, cmd.kd, cmd.tau);
+        cmd.q = frame_[i].q;
+        cmd.dq = frame_[i].dq;
+        cmd.kp = frame_[i].kp;
+        cmd.kd = frame_[i].kd;
+        cmd.tau = frame_[i].tau;
     }
-    if (!finite)
+    // trackingFrame_ left the ankles serial (robotMapsParallelJoints_); a crank that is not finite fails the map.
+    if (parallelAnkle_)
     {
-        invalidFrame_ = true;   // update_() latches state_invalid once mutex_ is free
-        return;
+        std::array<AnkleMapping, 2> mapping;
+        if (!mapAnklesToCranks_(booster_cmd, mapping))
+        {
+            RCLCPP_ERROR(nh->get_logger(),
+                         "Parallel ankle mapping failed (left ok=%d err=%.3f, right ok=%d err=%.3f rad, limit %.3f)",
+                         mapping[0].ok, mapping[0].estimate_error, mapping[1].ok, mapping[1].estimate_error,
+                         parallelAnkleMaxEstimateError_);
+            invalidFrame_ = true;   // update_() latches state_invalid once mutex_ is free
+            return;
+        }
     }
     lowCommandPublisher_->publish(booster_cmd);
 }
@@ -269,7 +223,7 @@ void sairol_bridge::T1Bridge::publishStopCommand_()
     for (int i = 0; i < numJoint_; ++i)
     {
         const auto frame = estop::stopFrame(mode, joints_[i], currentState_.motor_state[i].q,
-                                            holdQ_[i], estopConfig_.damp_kd);
+                                            holdQ_[i], joints_[i].damp_kd);
         auto &cmd = booster_cmd.motor_cmd[i];
         cmd.mode = 0;
         cmd.weight = 1.0;
@@ -307,6 +261,28 @@ bool sairol_bridge::T1Bridge::initControl_(bridge_interface::msg::RobotCmd defau
             lowCommandDesired_.motor_cmd[i].kp = joints_[i].kp;
             lowCommandDesired_.motor_cmd[i].kd = joints_[i].kd;
         }
+        if (parallelAnkle_)
+        {
+            // The hold above must map to the cranks, else the first tracking frame latches state_invalid.
+            booster_interface::msg::LowCmd hold;
+            hold.motor_cmd.resize(numJoint_);
+            for (int i = 0; i < numJoint_; ++i)
+            {
+                hold.motor_cmd[i].q = currentState_.motor_state[i].q;
+                hold.motor_cmd[i].kp = joints_[i].kp;
+                hold.motor_cmd[i].kd = joints_[i].kd;
+            }
+            std::array<AnkleMapping, 2> mapping;
+            if (!mapAnklesToCranks_(hold, mapping))
+            {
+                RCLCPP_ERROR(nh->get_logger(),
+                             "Parallel ankle mapping failed at start (left ok=%d err=%.3f, right ok=%d err=%.3f rad). "
+                             "Check parallel_ankle_swap_cranks / parallel_ankle_crank_sign with "
+                             "scripts/real/t1_check_parallel_ankle_mapping.py. Not armed.",
+                             mapping[0].ok, mapping[0].estimate_error, mapping[1].ok, mapping[1].estimate_error);
+                return false;
+            }
+        }
     }
     calculateInterpolationParams_(0.0, 1, true);
 
@@ -342,6 +318,99 @@ bool sairol_bridge::T1Bridge::initControl_(bridge_interface::msg::RobotCmd defau
         }
     }
     calculateInterpolationParams_(duration_, 1, true);
+    return true;
+}
+
+void sairol_bridge::T1Bridge::loadParallelAnkleParameters_()
+{
+    // Optional parameters: absent from the YAML means the firmware mapping (CMD_TYPE_SERIAL) as before.
+    nh->get_parameter("parallel_ankle_mapping", parallelAnkle_);
+    nh->get_parameter("parallel_ankle_swap_cranks", parallelAnkleSwapCranks_);
+    nh->get_parameter("parallel_ankle_crank_sign", parallelAnkleCrankSign_);
+    nh->get_parameter("parallel_ankle_crank_tau_limit", parallelAnkleCrankTauLimit_);
+    nh->get_parameter("parallel_ankle_max_estimate_error", parallelAnkleMaxEstimateError_);
+    robotMapsParallelJoints_ = parallelAnkle_;
+    if (parallelAnkleCrankSign_.size() != 2)
+    {
+        RCLCPP_FATAL(nh->get_logger(), "parallel_ankle_crank_sign must have two entries (crank a, crank b)");
+        throw ConfigError("parallel_ankle_crank_sign");
+    }
+    // Only the mapping needs the flag: serial mode starts with any if_parallel_joint, as before.
+    for (int side = 0; parallelAnkle_ && side < 2; ++side)
+    {
+        for (int j = 0; j < 2; ++j)
+        {
+            if (!joints_[kAnkleSerialIdx[side][j]].if_parallel_joint)
+            {
+                RCLCPP_FATAL(nh->get_logger(), "T1 ankle joints 15, 16, 21, 22 must have if_parallel_joint: true");
+                throw ConfigError("if_parallel_joint");
+            }
+        }
+    }
+    RCLCPP_INFO(nh->get_logger(),
+                "Parallel ankle mapping %s (swap_cranks=%d, crank_sign=[%.0f, %.0f], crank_tau_limit=%.1f, "
+                "max_estimate_error=%.3f).",
+                parallelAnkle_ ? "ENABLED: bridge maps ankle commands to the crank motors (CMD_TYPE_PARALLEL)"
+                               : "disabled: firmware maps ankle commands (CMD_TYPE_SERIAL)",
+                parallelAnkleSwapCranks_, parallelAnkleCrankSign_[0], parallelAnkleCrankSign_[1],
+                parallelAnkleCrankTauLimit_, parallelAnkleMaxEstimateError_);
+}
+
+int sairol_bridge::T1Bridge::crankSlot_(int side, int crank) const
+{
+    // Crank a sits in the pitch slot and crank b in the roll slot, unless swapped.
+    return kAnkleSerialIdx[side][parallelAnkleSwapCranks_ ? 1 - crank : crank];
+}
+
+bool sairol_bridge::T1Bridge::mapAnklesToCranks_(booster_interface::msg::LowCmd &cmd,
+                                                 std::array<AnkleMapping, 2> &mapping) const
+{
+    // On entry the four ankle entries of cmd hold the serial command (pitch / roll q, dq, kp, kd, tau); on success
+    // they hold the crank commands: hold the measured angle with kp = 0, damping kd, torque tau (motor convention).
+    namespace pa = t1_parallel_ankle;
+    bool all_ok = true;
+    for (int side = 0; side < 2; ++side)
+    {
+        auto &m = mapping[side];
+        const int ip = kAnkleSerialIdx[side][0], ir = kAnkleSerialIdx[side][1];
+        if (parallelState_.size() <= static_cast<size_t>(ir))
+        {
+            all_ok = false;
+            continue;
+        }
+        for (int c = 0; c < 2; ++c)
+        {
+            const auto &motor = parallelState_[crankSlot_(side, c)];
+            m.q_m[c] = parallelAnkleCrankSign_[c] * motor.q;
+            m.dq_m[c] = parallelAnkleCrankSign_[c] * motor.dq;
+        }
+        m.q_s_firmware = {currentState_.motor_state[ip].q, currentState_.motor_state[ir].q};
+
+        const auto &sp = cmd.motor_cmd[ip];
+        const auto &sr = cmd.motor_cmd[ir];
+        m.crank = pa::crankCommand(static_cast<pa::Side>(side), m.q_m, m.dq_m, m.q_s_firmware,
+                                   {sp.q, sr.q}, {sp.dq, sr.dq}, {sp.kp, sr.kp}, {sp.kd, sr.kd}, {sp.tau, sr.tau},
+                                   parallelAnkleCrankTauLimit_);
+        m.estimate_error = std::max(std::abs(m.crank.q_s[0] - m.q_s_firmware[0]),
+                                    std::abs(m.crank.q_s[1] - m.q_s_firmware[1]));
+        m.ok = m.crank.ok && m.estimate_error <= parallelAnkleMaxEstimateError_;
+        all_ok = all_ok && m.ok;
+    }
+    if (!all_ok) return false;
+
+    for (int side = 0; side < 2; ++side)
+    {
+        for (int c = 0; c < 2; ++c)
+        {
+            const int slot = crankSlot_(side, c);
+            auto &motor_cmd = cmd.motor_cmd[slot];
+            motor_cmd.q = parallelState_[slot].q;
+            motor_cmd.dq = 0.0;
+            motor_cmd.kp = 0.0;
+            motor_cmd.kd = mapping[side].crank.kd[c];
+            motor_cmd.tau = parallelAnkleCrankSign_[c] * mapping[side].crank.tau[c];
+        }
+    }
     return true;
 }
 

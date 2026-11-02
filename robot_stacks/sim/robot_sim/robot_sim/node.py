@@ -3,8 +3,9 @@
 Inputs: /robot_sim/gantry (Bool, hold the base), /robot_sim/remote (Bool, remote connected),
 /robot_sim/buttons (String, held buttons as `R1+R2`, "" releases), /robot_sim/sticks
 (Float32MultiArray [lx, ly, rx, ry], G1 only, zero 0.2 s after the last), /robot_sim/reset (Empty,
-back on the gantry), /robot_sim/link (Float32 s: no state out, no command in; sim time runs on),
-/robot_sim/reboot (Float32 s: as link, then a reset, tick from 0, and the robot's motion service).
+back to the start pose: on the gantry, the Go2 lying), /robot_sim/link (Float32 s: no state out, no
+command in; sim time runs on), /robot_sim/reboot (Float32 s: as link, then a reset, tick from 0,
+and the robot's motion service).
 Parameters (read-only): robot (g1, t1, go2), mjcf, the absolute path of the loaded model.
 """
 

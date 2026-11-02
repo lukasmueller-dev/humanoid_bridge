@@ -46,6 +46,7 @@ def check_estop(node, client, hands, targets):
     Live on /dex3/*/cmd. Returns the names of the failed checks.
     """
     import rclpy
+    from harness import Checks
     from unitree_hg.msg import HandCmd
 
     frames = {side: [] for side in hands}  # (t, kp, kd)
@@ -58,12 +59,8 @@ def check_estop(node, client, hands, targets):
             ),
             100,
         )
-    failures = []
-
-    def check(name, ok, detail=""):
-        print("{:<44} {}{}".format(name, "PASS" if ok else "FAIL", "  " + detail), flush=True)
-        if not ok:
-            failures.append(name)
+    checks = Checks()
+    check = checks.check
 
     def stream(seconds):
         end = time.monotonic() + seconds
@@ -112,7 +109,7 @@ def check_estop(node, client, hands, targets):
     )
     response = client.estop_reset()
     check("e-stop: /estop_reset", response.success, response.message)
-    return failures
+    return checks.failures
 
 
 def main():

@@ -21,6 +21,8 @@
   <depend>sensor_msgs</depend>
   <depend>booster_interface</depend>
   <depend>aimdk_msgs</depend>
+  <depend>pluginlib</depend>
+  <depend>low_level_controller</depend>
 
 
   <depend>unitree_go</depend>

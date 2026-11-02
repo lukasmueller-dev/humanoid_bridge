@@ -5,22 +5,22 @@ Exit 1 on failure. run_sim_bridge_test.sh starts the sim and the bridge first.
 
 import argparse
 import json
-import sys
 import time
 import urllib.request
 
 import rclpy
 import yaml
+from bridge_interface.msg import RobotState
 from rcl_interfaces.srv import GetParameters
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
-from bridge_interface.msg import RobotState
+from sim_harness import Checks, ros_node
 from std_msgs.msg import Float32MultiArray, String
 from unitree_hg.msg import HandState, LowState
 
 from g1_camera import wire
 from g1_camera.client import CameraClient
-from robot_sim.robots.g1 import DEFAULT_MJCF
 from robot_bridge.cmd_client import RobotCmdClient
+from robot_sim.robots.g1 import DEFAULT_MJCF
 
 NUM_MOTORS = 29
 ELBOWS = (18, 25)
@@ -46,9 +46,9 @@ def load_params(path):
     }
 
 
-class Driver:
+class Driver(Checks):
     def __init__(self, node, params):
-        self.node = node
+        super().__init__(node)
         self.params = params
         self.client = RobotCmdClient(node, num_dof=NUM_MOTORS, control_frequency=50.0)
         self.client.set_default_cmd(params["ready_q"], params["kp"], params["kd"])
@@ -70,7 +70,6 @@ class Driver:
         self.state = None
         self.low = None
         self.remote = None  # /robot_state remote, as the bridge decoded it
-        self.failures = []
 
     def _on_state(self, msg):
         self.state = msg.data
@@ -80,17 +79,6 @@ class Driver:
 
     def _on_robot_state(self, msg):
         self.remote = msg.remote
-
-    def spin(self, seconds):
-        end = time.monotonic() + seconds
-        while time.monotonic() < end:
-            rclpy.spin_once(self.node, timeout_sec=0.005)
-
-    def check(self, name, ok, detail=""):
-        suffix = f"  ({detail})" if detail else ""
-        print(f"{'PASS' if ok else 'FAIL'}  {name}{suffix}", flush=True)
-        if not ok:
-            self.failures.append(name)
 
     def error(self, target):
         q = [m.q for m in self.low.motor_state[:NUM_MOTORS]]
@@ -201,18 +189,10 @@ def main():
     parser.add_argument("params", help="G1_config.yaml the bridge runs with")
     args = parser.parse_args()
 
-    rclpy.init()
-    node = rclpy.create_node("drive_sim")
-    driver = Driver(node, load_params(args.params))
-    try:
+    with ros_node("drive_sim") as node:
+        driver = Driver(node, load_params(args.params))
         driver.run()
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
-    if driver.failures:
-        print(f"{len(driver.failures)} failed: {', '.join(driver.failures)}")
-        sys.exit(1)
-    print("all passed")
+    driver.finish()
 
 
 if __name__ == "__main__":

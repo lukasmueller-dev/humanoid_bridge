@@ -5,11 +5,9 @@ a restart is final for a bridge.
 """
 
 import argparse
-import sys
-import time
 
-import rclpy
 from drive_estop import NUM_MOTORS
+from harness import Checks, ros_node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import Bool, Float32, String
 from std_srvs.srv import Trigger
@@ -21,9 +19,9 @@ RAMP_SECONDS = 2.5  # `duration` 2.0 plus margin
 RESTARTED_WHY = "robot restarted: restart the bridge to release /lowcmd"
 
 
-class Driver:
+class Driver(Checks):
     def __init__(self, node):
-        self.node = node
+        super().__init__(node)
         self.client = RobotCmdClient(node, num_dof=NUM_MOTORS, control_frequency=50.0)
         self.ready = node.create_client(Trigger, "/ready_position_control")
         self.pause = node.create_publisher(Bool, "/fake_g1/pause", 10)
@@ -39,7 +37,6 @@ class Driver:
         self.link = None
         self.links = []  # every /robot_link, in order
         self.count = 0
-        self.failures = []
 
     def _on_state(self, msg):
         self.state = msg.data
@@ -52,27 +49,6 @@ class Driver:
         self.count += 1
 
     # --- helpers ---------------------------------------------------------
-
-    def spin(self, seconds):
-        end = time.monotonic() + seconds
-        while time.monotonic() < end:
-            rclpy.spin_once(self.node, timeout_sec=0.005)
-
-    def wait(self, predicate, timeout):
-        end = time.monotonic() + timeout
-        while time.monotonic() < end:
-            if predicate():
-                return True
-            rclpy.spin_once(self.node, timeout_sec=0.005)
-        return predicate()
-
-    def check(self, name, ok, detail=""):
-        print(
-            "{:<44} {}{}".format(name, "PASS" if ok else "FAIL", "  " + detail if detail else ""),
-            flush=True,
-        )
-        if not ok:
-            self.failures.append(name)
 
     def check_state(self, name, wanted, timeout=3.0):
         self.check(name, self.wait(lambda: self.state == wanted, timeout), f"state '{self.state}'")
@@ -182,19 +158,10 @@ def main():
     parser.add_argument("run", choices=("armed", "disarmed"))
     args = parser.parse_args()
 
-    rclpy.init()
-    node = rclpy.create_node("link_driver")
-    driver = Driver(node)
-    try:
+    with ros_node("link_driver") as node:
+        driver = Driver(node)
         getattr(driver, args.run)()
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
-
-    if driver.failures:
-        print("\n{} check(s) failed: {}".format(len(driver.failures), ", ".join(driver.failures)))
-        sys.exit(1)
-    print("\nall checks passed")
+    driver.finish()
 
 
 if __name__ == "__main__":

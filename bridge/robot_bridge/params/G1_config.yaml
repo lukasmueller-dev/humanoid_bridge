@@ -14,8 +14,10 @@ robot_bridge:
     control_dt: 0.001
     empty_joint_index: -1
     num_joint: 29
-    torque_control: false
     imu_rpy_threshold: 1.0 #radians
+
+    # docs/low-level-controllers.md: the names a /robot_cmd may pick; motor_pd always.
+    controllers_allowed: ["motor_pd", "bridge_pd"]
 
     # docs/estop.md. Operator e-stops have a fixed mode; these set the rest.
     estop:
@@ -435,7 +437,7 @@ robot_bridge:
     hand_kd_min: 0.0
     hand_kd_max: 2.0
 
-    # Zero is the open, extended end of every range on both hands.
+    # Zero is the open pose of both hands: an end of the range on every joint but THUMB_0 and THUMB_1.
     hand_ready_q: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
     left_hand_joint_names: ["L_HAND_THUMB_0", "L_HAND_THUMB_1", "L_HAND_THUMB_2", "L_HAND_MIDDLE_0", "L_HAND_MIDDLE_1", "L_HAND_INDEX_0", "L_HAND_INDEX_1"]

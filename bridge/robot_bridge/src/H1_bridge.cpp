@@ -1,4 +1,5 @@
 #include "H1_bridge.hpp"
+#include "gates.hpp"
 
 
 using namespace std::chrono_literals;
@@ -43,7 +44,7 @@ sairol_bridge::H1Bridge::H1Bridge(rclcpp::Node::SharedPtr node) : BridgeCore(nod
         return;
     }
 
-    createArmingServices_();
+    createArmingServices_(false);
 }
 
 
@@ -176,9 +177,8 @@ void sairol_bridge::H1Bridge::publishLowCommand_()
         {
             cmd.tau = cmdParams_[i].tau_0 + cmdParams_[i].tau_1 * phase;
         }  
-        cmd.q = std::clamp(cmd.q, 
-            (cmd.kd * (currentState_.motor_state[i].dq - cmd.dq) - joint_info.tau_limit) / cmd.kp + currentState_.motor_state[i].q, 
-            (cmd.kd * (currentState_.motor_state[i].dq - cmd.dq) + joint_info.tau_limit) / cmd.kp + currentState_.motor_state[i].q);
+        cmd.q = gates::pdWindow(cmd.q, currentState_.motor_state[i].q, currentState_.motor_state[i].dq,
+                                cmd.dq, cmd.kp, cmd.kd, joint_info.tau_limit);
 
         last_cmd.q = cmd.q;
         last_cmd.dq = cmd.dq;
@@ -196,49 +196,6 @@ void sairol_bridge::H1Bridge::publishLowCommand_()
     }
     get_crc(unitree_cmd);
     lowCommandPublisher_->publish(unitree_cmd);
-}
-
-bool sairol_bridge::H1Bridge::initControl_(bridge_interface::msg::RobotCmd default_cmd)
-{
-    last_state_time_ = steadyClock_.now();
-
-    for (int i = 0; i < numJoint_; ++i)
-    {
-        lowCommandDesired_.motor_cmd[i].q = currentState_.motor_state[i].q;
-        lowCommandDesired_.motor_cmd[i].kp = joints_[i].kp;
-        lowCommandDesired_.motor_cmd[i].kd = joints_[i].kd;
-    }
-
-    calculateInterpolationParams_(0.0, 1, true);
-
-    controlStarted_ = true;
-    receivedCmd_ = true;
-    rclcpp::Rate rate(100);
-    rate.sleep();
-    RCLCPP_INFO(nh->get_logger(), "Control initialized successfully.");
-    
-    if (default_cmd.motor_cmd.size() == numJoint_)
-    {
-        for (size_t i = 0; i < numJoint_; ++i)
-        {
-            lowCommandDesired_.motor_cmd[i].q = default_cmd.motor_cmd[i].q;
-            lowCommandDesired_.motor_cmd[i].kp = default_cmd.motor_cmd[i].kp;
-            lowCommandDesired_.motor_cmd[i].kd = default_cmd.motor_cmd[i].kd;
-        }
-    }
-    else 
-    {
-        for (size_t i = 0; i < numJoint_; ++i)
-        {
-            lowCommandDesired_.motor_cmd[i].q = ready_q_[i];
-            lowCommandDesired_.motor_cmd[i].kp = joints_[i].kp;
-            lowCommandDesired_.motor_cmd[i].kd = joints_[i].kd;
-        }
-    }
-
-    calculateInterpolationParams_(duration_, 1, true);
-
-    return true;
 }
 
 void sairol_bridge::H1Bridge::finishControl_() {

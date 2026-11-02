@@ -8,18 +8,18 @@ import math
 import sys
 import time
 
-import rclpy
 import yaml
 from bridge_interface.msg import HandState, RobotState
 from fake_g1 import ACC, GYRO, STICKS, tau_est
+from harness import Checks, ros_node
 from std_msgs.msg import UInt16
 
 KEY_R1, KEY_L2, KEY_A = 1 << 0, 1 << 5, 1 << 8
 
 
-class Driver:
+class Driver(Checks):
     def __init__(self, node, params, start_q):
-        self.node = node
+        super().__init__(node, poll=0.05)
         self.config = yaml.safe_load(open(params))["robot_bridge"]["ros__parameters"]
         self.start_q = start_q
         self.keys = node.create_publisher(UInt16, "/fake_g1/keys", 10)
@@ -29,7 +29,6 @@ class Driver:
             node.create_subscription(HandState, f"/hand_state/{side}", self._hand(side), 10)
         self.state = None
         self.count = 0
-        self.failures = []
 
     def _on_state(self, msg):
         self.state = msg
@@ -40,19 +39,6 @@ class Driver:
             self.hands[side] = msg
 
         return on
-
-    def check(self, name, ok, detail=""):
-        print(f"{name:<44} {'PASS' if ok else 'FAIL'}{'  ' + detail if detail else ''}", flush=True)
-        if not ok:
-            self.failures.append(name)
-
-    def wait(self, predicate, timeout):
-        end = time.monotonic() + timeout
-        while time.monotonic() < end:
-            rclpy.spin_once(self.node, timeout_sec=0.05)
-            if predicate():
-                return True
-        return False
 
     def run(self):
         self.check("/robot_state arrives", self.wait(lambda: self.state is not None, 5.0))
@@ -114,18 +100,10 @@ class Driver:
 
 def main():
     params, start_q = sys.argv[1], float(sys.argv[2])
-    rclpy.init()
-    node = rclpy.create_node("drive_robot_state")
-    driver = Driver(node, params, start_q)
-    try:
+    with ros_node("drive_robot_state") as node:
+        driver = Driver(node, params, start_q)
         driver.run()
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
-    if driver.failures:
-        print(f"FAILED: {', '.join(driver.failures)}")
-        sys.exit(1)
-    print("all checks passed")
+    driver.finish()
 
 
 if __name__ == "__main__":

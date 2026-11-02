@@ -1,6 +1,6 @@
 # G1 e-stop
 
-Status: implemented on `g1-web-interface`; unit, fake and gantry tests pass (gantry 2026-10-19; G6-IMU not run).
+Status: implemented on `main`; unit, fake and gantry tests pass (gantry 2026-10-19; G6-IMU not run).
 Closes roadmap `feat/g1-finish-control-release`.
 
 ## Before this change
@@ -26,10 +26,11 @@ Closes roadmap `feat/g1-finish-control-release`.
 |---|---|---|---|---|
 | `DISARMED` | nothing | dropped | allowed | arm → `ARMED` |
 | `ARMED` | tracking frames (today's path) | accepted | allowed | stop → `STOPPED`, e-stop or fault → `LATCHED` |
+| `ARMED limp` (`/limp_control`; G1, T1, Go2) | kp, kd, tau ramp to 0 over `duration`, then q = measured | dropped | allowed | `start_control`, Ready, Zero ramp from the measured pose → `ARMED`; stop → `STOPPED(estop.mode.stop)`, hold in every shipped config; e-stop or fault → `LATCHED` |
 | `STOPPED(mode)` | stop frame, 1 kHz | dropped | allowed | arm → `ARMED`, e-stop or fault → `LATCHED` |
 | `LATCHED(mode, cause)` | stop frame, 1 kHz (nothing if latched from `DISARMED`, or 1.2 s after `/lowstate` stopped) | dropped | **refused** | `/estop_reset` → `STOPPED`, or `DISARMED` if silent |
 
-- Arming services: `/start_control`, `/ready_position_control`, `/zero_position_control`, `/start_hand_control`.
+- Arming services: `/start_control`, `/limp_control`, `/ready_position_control`, `/zero_position_control`, `/start_hand_control`.
 - `estop.require_remote: true` (the G1 default when the key is missing, with a warning): every arming service is refused unless the remote's header (`0x55 0x51`) arrived in the last 0.5 s. Measured 2026-10-20: remote off = all 40 bytes 0; at rest the bytes stay constant, so only the header counts. Remote lost while armed: open question. Ready and zero count as arming even while `ARMED`: they move every joint, so they also need the remote and a free `/lowcmd`.
 - Latched, `/lowstate` older than 1.2 s (0.2 s `state_loss` + 1 s): the latch goes silent and stays silent until reset (`LATCHED … silent`). A robot that restarts meanwhile runs its own motion service; old frames would fight it (2026-10-20).
 - G1 arming is also refused while any other program publishes `/lowcmd` (a restarted robot's motion service): release it first. One that starts while the bridge publishes latches `damp other_lowcmd` within about 1 s (checked once a second); the damp frames go on until reset or exit.
@@ -53,6 +54,7 @@ Closes roadmap `feat/g1-finish-control-release`.
 | `OK` | a new bridge; after a clear | — |
 | `LOST <s>` | no `/lowstate` for 0.2 s; again once a second | `/lowstate` back |
 | `BACK <gap_s> no_restart` | back after a gap, tick moved on: a link drop | successful `/estop_reset` or arming |
+| `BACK <gap_s> no_tick` | back after a gap on a robot with no tick (T1): a reboot looks the same | successful `/estop_reset` or arming |
 | `RESTARTED <gap_s>` | back after a gap, tick not higher: a reboot | a new bridge only |
 
 - `RESTARTED` while `ARMED`, `STOPPED` or latched: latches `damp robot_restart` (silent by then: the gap went past 1.2 s).
@@ -64,15 +66,15 @@ Closes roadmap `feat/g1-finish-control-release`.
 
 ## Stop frames
 
-Built by a new `publishStopCommand_()`. It does not reuse `publishLowCommand_`: that q clamp divides by `kp`.
+Built by a new `publishStopCommand_()`. It does not reuse `trackingFrame_`: the q clamp there divides by `kp`.
 
 | Field | `damp` | `hold` |
 |---|---|---|
 | `q` | measured q (ignored at `kp=0`) | measured q at trigger, kept fixed |
 | `dq`, `tau` | 0 | 0 |
 | `kp` | 0 | joint `kp` from config |
-| `kd` | `estop.damp_kd` | joint `kd` from config |
-| parallel joints (ankles) | same as above | same tau conversion as `publishLowCommand_` |
+| `kd` | joint `damp_kd` (optional, finite, >= 0), else `estop.damp_kd` | joint `kd` from config |
+| parallel joints (T1 ankles; none on the G1) | same as above | same tau conversion as `trackingFrame_` |
 | rate | `control_dt` (0.001 s) | `control_dt` |
 
 - `damp` is not fully limp: no position spring, but each joint resists speed, so arms sink slowly. `kd=0` would let them drop.
@@ -92,11 +94,12 @@ Built by a new `publishStopCommand_()`. It does not reuse `publishLowCommand_`: 
 | `/stop_control` | `stop` | hold (config) | **no** |
 | IMU roll/pitch over threshold | `imu` | damp (config) | yes |
 | state age > 0.2 s | `state_loss` | damp (config) | yes |
-| state NaN, length, `dq` over limit; a non-finite tracking frame | `state_invalid` | damp (config) | yes |
+| state NaN, length, `dq` over `dq_trip`; a non-finite tracking frame | `state_invalid` | damp (config) | yes |
 | command timeout | `cmd_timeout` | hold (config) | yes |
 | another `/lowcmd` publisher while publishing | `other_lowcmd` | damp (fixed) | yes |
 | `/robot_link` `RESTARTED` while not `DISARMED` | `robot_restart` | damp (fixed) | yes; no reset |
 
+- Speed: measured `|dq|` over a joint's `dq_trip` trips; `dq_limit` only clamps the commanded dq. `dq_trip` is optional (finite, > 0); absent = `dq_limit`. T1 and Go2 set `max(dq_limit, 1.25 × model velocity)`; the G1 and the Dex3 hands trip at `dq_limit`.
 - GEAR sends `duration 0.02`, no `hold_position`: a GEAR stall over 0.22 s latches `cmd_timeout`.
 - `/estop_reset` is refused while its cause is still present: state stale, IMU over threshold, NaN, a combo still held, or another `/lowcmd` publisher.
 - Body arming (`start_control`, `ready`/`zero` while disarmed) is refused while `checkState_` reports a fault (state stale, NaN, `dq`, IMU); the reply names the cause, e.g. `robot state fault: state_loss`.
@@ -147,6 +150,29 @@ estop:
     cmd_timeout: hold
 ```
 
+## Overrides
+
+A second params file sets `dq_trip` per joint at bridge start. Parameters stay read-only at run time (PR #23): change one, restart the bridge.
+
+```yaml
+robot_bridge:
+  ros__parameters:
+    override:
+      L_LEG_KNEE:
+        dq_trip: 30.0
+```
+
+```bash
+tools/robot-bringup.sh --override trip.yaml   # after --params; also with --foreground and --sim
+```
+
+- Keys: `override_keys` is `[dq_trip]` (`ros2 param get /robot_bridge override_keys`). It is a constant in `bridge_core.cpp`, never read from a file: a new key needs a bridge PR.
+- Cap: `0 < value <= 2 × dq_limit` of that joint. A value no higher than the base always passes: the T1 head base trips can be over the cap.
+- The bridge refuses the start (exit 1, one ERROR line) on a key not in the list, an unknown joint, a value that is not a finite number > 0, or a value over the cap.
+- `robot-bringup.sh` refuses (exit 2) a missing file and any key outside `robot_bridge.ros__parameters.override`.
+- Applied after the base load, one WARN each: `Override <joint>.dq_trip: <base> -> <new>`. `<joint>.dq_trip` keeps the base; `override.<joint>.dq_trip` shows the override.
+- The G1, T1 and Go2 nodes all run it (`BridgeCore::loadOverrides_`). The Dex3 hands have no override.
+
 ## Code shape
 
 - `include/estop.hpp`, `src/estop.cpp`: no `rclcpp`. `SafetyLatch` (states, mode rules, reset rules), `stopFrame(...)`, `remoteKeys(...)`, `remoteHeader(...)`, `parseCombo(...)`.
@@ -165,7 +191,10 @@ estop:
 |---|---|
 | `tools/test.sh --cpp`: gtest `test_estop` | frames for both modes incl. parallel joints; latch refuses arming; reset refused while cause present; operator hold after damp; fault never turns damp into hold; both combos → damp; trigger from `DISARMED` stays silent; key parsing; remote header; silence after state loss; shutdown damps and is final; `other_lowcmd` latches damp over hold; `robot_restart` names itself over a silent `state_loss`; `LinkWatch` values and clears |
 | `tools/test.sh --link`: `drive_link.py` against `fake_g1.py` | `/fake_g1/pause` while `DISARMED` and `ARMED`: `LOST`, `BACK … no_restart`, cleared by arming and by reset; `/fake_g1/reboot` while `ARMED`: `RESTARTED`, `LATCHED damp robot_restart silent`, no frame, reset/arm/Ready refused also once `/lowcmd` is free; a fresh bridge starts `OK`, reboot while `DISARMED`: nothing latches, arming refused |
-| `tools/test.sh --estop`: `drive_estop.py` against `fake_g1.py` | no `/start_control` while another node holds `/lowcmd` at start; both combos, both services, `/stop_control`, timeout, IMU escalation, every refusal and reset, live on `/lowcmd` and `/bridge_state`; arming refused without the remote; `ros2 param set` on a joint gain refused, value kept; another `/lowcmd` publisher while armed latches `damp other_lowcmd` within 1.5 s, reset refused while it is there; re-arm after a command with dq and tau: every frame has dq 0 and tau 0 (`initControl_`); `state_loss` → silent after 1.2 s; a NaN q, a joint over its `dq_limit` (0.9× stays armed) and a NaN IMU each latch `damp state_invalid` from `ARMED`, reset refused while present; then `drive_shutdown.py`: SIGINT while armed → damp for 1 s, then silent |
+| `tools/test.sh --estop`: `drive_estop.py` against `fake_g1.py` | no `/start_control` while another node holds `/lowcmd` at start; both combos, both services, `/stop_control`, timeout, IMU escalation, every refusal and reset, live on `/lowcmd` and `/bridge_state`; arming refused without the remote; `ros2 param set` on a joint gain refused, value kept; another `/lowcmd` publisher while armed latches `damp other_lowcmd` within 1.5 s, reset refused while it is there; re-arm after a command with dq and tau: every frame has dq 0 and tau 0 (`initControl_`); `state_loss` → silent after 1.2 s; a NaN q, a joint over its trip (0.9× stays armed; joint 1 has a `dq_trip` of 2× `dq_limit` in a config copy and 1.5× in an override file: between `dq_limit` and the override stays armed, 1.1× the override latches, below the config's; joint 0 has none and trips at `dq_limit`; `override_keys`, `override.<joint>.dq_trip` and the base `<joint>.dq_trip` read back) and a NaN IMU each latch `damp state_invalid` from `ARMED`, reset refused while present; then `drive_shutdown.py`: SIGINT while armed → damp for 1 s, then silent |
+| `tools/test.sh --config`: `drive_config.py` | an override file with a key not in `override_keys`, an unknown joint, 0, a negative, an infinite, NaN or text value, or a value over the cap refuses the start (exit 1, one ERROR line); 2 × `dq_limit`, a lower value and an integer load and log `Override …` |
+| `tools/test.sh --t1`, `--go2` | the bridge starts with an override file; its log shows `Override … -> …` (T1 `HeadYaw`: over the cap, under the base) |
+| `tools/test.sh --unit`: `test_robot_bringup.py` | `robot-bringup.sh --override`: a missing file, any key outside `override`, an empty or scalar `override` and a broken file exit 2; a valid file passes the check |
 | `tools/test.sh --wire` | GEAR's stream ends in a `cmd_timeout` hold |
 | `tools/test.sh --gates`: `drive_no_estop_block.py` | a config without `estop:` still refuses arming without the remote |
 | `tools/test.sh --hands`: `drive_hand_cmd.py --check-estop` | `/estop_damp` mid-stream: both hands get limp frames (kp, kd 0) while commands still arrive; `start_hand_control` refused while latched |

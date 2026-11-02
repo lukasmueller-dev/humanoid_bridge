@@ -5,12 +5,12 @@ Exit 1 on failure. run_fake_go2_test.sh starts the fake and the bridge first.
 
 import json
 import sys
-import time
 
 import rclpy
 import yaml
 from bridge_interface.msg import RobotState
 from fake_go2 import NUM_MOTORS
+from harness import Checks, ros_node
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 from std_msgs.msg import String, UInt16
 
@@ -20,9 +20,9 @@ KEY_R1, KEY_R2 = 1 << 0, 1 << 4
 RAMP_SECONDS = 3.5  # Go2_config.yaml `duration` 3.0 plus margin
 
 
-class Driver:
+class Driver(Checks):
     def __init__(self, node, params):
-        self.node = node
+        super().__init__(node, poll=0.05)
         config = yaml.safe_load(open(params))["robot_bridge"]["ros__parameters"]
         self.names = config["joint_names"]
         self.ready_q = config["ready_q"]
@@ -41,7 +41,6 @@ class Driver:
         self.frame = None
         self.frames = 0
         self.bad_crc = 0
-        self.failures = []
 
     def _on_bridge(self, msg):
         self.bridge = msg.data
@@ -53,19 +52,6 @@ class Driver:
         self.frame = json.loads(msg.data)
         self.frames += 1
         self.bad_crc += 0 if self.frame["crc_ok"] else 1
-
-    def check(self, name, ok, detail=""):
-        print(f"{name:<44} {'PASS' if ok else 'FAIL'}{'  ' + detail if detail else ''}", flush=True)
-        if not ok:
-            self.failures.append(name)
-
-    def wait(self, predicate, timeout):
-        end = time.monotonic() + timeout
-        while time.monotonic() < end:
-            rclpy.spin_once(self.node, timeout_sec=0.05)
-            if predicate():
-                return True
-        return predicate()
 
     def run(self):
         self.check("/robot_state arrives", self.wait(lambda: self.state is not None, 5.0))
@@ -106,18 +92,10 @@ class Driver:
 
 
 def main():
-    rclpy.init()
-    node = rclpy.create_node("drive_go2")
-    driver = Driver(node, sys.argv[1])
-    try:
+    with ros_node("drive_go2") as node:
+        driver = Driver(node, sys.argv[1])
         driver.run()
-    finally:
-        node.destroy_node()
-        rclpy.shutdown()
-    if driver.failures:
-        print(f"FAILED: {', '.join(driver.failures)}")
-        sys.exit(1)
-    print("all checks passed")
+    driver.finish()
 
 
 if __name__ == "__main__":

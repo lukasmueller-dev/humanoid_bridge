@@ -15,10 +15,12 @@ require_ros() { command -v ros2 >/dev/null || { echo "source the ROS workspace f
 kill_group() { if [ -n "$1" ]; then kill -9 -- "-$1" 2>/dev/null || true; fi; }
 kill_pid() { if [ -n "$1" ]; then kill -9 "$1" 2>/dev/null || true; fi; }
 
-# start_bridge <log> [params]: G1_bridge in its own process group; its pid is $!.
+# start_bridge <log> [params] [override]: G1_bridge in its own process group; its pid is $!.
 start_bridge() {
+    local files=(--params-file "${2:-$PARAMS}")
+    [ -z "${3:-}" ] || files+=(--params-file "$3")
     setsid ros2 run robot_bridge G1_bridge --ros-args -r __node:=robot_bridge \
-        --params-file "${2:-$PARAMS}" > "$1" 2>&1 &
+        "${files[@]}" > "$1" 2>&1 &
 }
 
 # bridge_up <log>: exit 1 unless G1_bridge logged its robot type.

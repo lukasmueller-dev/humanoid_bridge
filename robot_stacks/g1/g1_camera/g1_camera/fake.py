@@ -12,7 +12,7 @@ from . import wire
 
 
 def synthetic_rgb(seed: int = 0, size=wire.DEFAULT_SIZE) -> np.ndarray:
-    """A deterministic test image with a different gradient per channel.
+    """A deterministic test image: red a row gradient, green a column gradient, blue flat per seed.
 
     A flat colour would pass a shape check with the channels or rows swapped.
     """
@@ -55,7 +55,6 @@ class FakeCameraServer:
     def _serve(self) -> None:
         import cv2
 
-        width, height = self._size
         while not self._stop.is_set():
             if not self._socket.poll(50, self._zmq.POLLIN):
                 continue
@@ -66,8 +65,7 @@ class FakeCameraServer:
             frame = synthetic_rgb(self._served, self._size)
             ok, jpeg = cv2.imencode(".jpg", frame[:, :, ::-1])
             assert ok
-            depth = np.zeros((height, width), dtype=np.uint16)
-            self._socket.send_multipart([jpeg.tobytes(), jpeg.tobytes(), depth.tobytes()])
+            self._socket.send_multipart([jpeg.tobytes(), b"", b""])
 
     def stop(self) -> None:
         self._stop.set()

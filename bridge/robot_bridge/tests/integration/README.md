@@ -12,11 +12,11 @@ source /opt/ros/humble/setup.bash && tools/build.sh
 source <workspace>/install/setup.bash
 ```
 
-No ROS on the host: `tools/test.sh --docker [--wire|--estop|--link|--state|--t1|--go2|--gates|--hands|--config]`
+No ROS on the host: `tools/test.sh --docker [--wire|--estop|--link|--state|--t1|--go2|--gates|--hands|--config|--controllers]`
 builds and runs them in a container.
 
-`robot_bridge`'s `package.xml` depends on `booster_interface` unconditionally,
-so it builds even with T1 off.
+`robot_bridge`'s `package.xml` depends on `booster_interface` and `aimdk_msgs`
+unconditionally, so both build even with T1 and X2 off.
 
 `tools/test.sh` runs every `run_*.sh` below; each pins DDS to loopback (`loopback_dds.sh`).
 
@@ -47,7 +47,7 @@ bridge echoed mode_machine   PASS  5 wanted 5
 timeout latches hold         PASS  kp[0]=100.0 q[0]=0.0100
 ```
 
-E-stop, `/robot_state`, T1, Go2, target gates, broken configs; each driver ends `all checks passed`:
+E-stop, `/robot_state`, T1, Go2, target gates, broken configs, controllers; each driver ends `all checks passed`:
 
 ```bash
 tools/test.sh --estop      # docs/estop.md
@@ -57,6 +57,7 @@ tools/test.sh --t1         # T1_bridge against fake_t1.py
 tools/test.sh --go2        # Go2_bridge against fake_go2.py
 tools/test.sh --gates      # docs/psi0_gates.md
 tools/test.sh --config
+tools/test.sh --controllers  # docs/low-level-controllers.md
 ```
 
 ## 3. The G1 hand path
@@ -84,7 +85,7 @@ fake_g1 records `/lowcmd` at all.
 | `fake_g1.py` | publishes `/lowstate` at 500 Hz, records `/lowcmd`, tracks commands perfectly; `/fake_g1/pause` drops the link (tick moves on), `/fake_g1/reboot <s>` restarts the tick and holds `/lowcmd` like a motion service, `/fake_g1/release` drops it |
 | `drive_gear_wbc.py` | `start_control`, then 100 commands at 50 Hz through the adapter |
 | `check_lowcmd.py` | asserts the recording, exit 1 on failure |
-| `drive_estop.py` | starts before the bridge (handshake: `driver: holding /lowcmd`) and holds `/lowcmd` until the bridge log shows it was seen and no `/start_control` exists; then drives every e-stop path and checks `/lowcmd` and `/bridge_state` live; `fake_g1.py` takes `/fake_g1/keys`, `/fake_g1/roll`, and bad joint-0 data `/fake_g1/nan_q`, `/fake_g1/dq`, `/fake_g1/nan_imu`; `drive_gates.py` uses `/fake_g1/freeze` (q stops tracking) |
+| `drive_estop.py` | starts before the bridge (handshake: `driver: holding /lowcmd`) and holds `/lowcmd` until the bridge log shows it was seen and no `/start_control` exists; then drives every e-stop path and checks `/lowcmd` and `/bridge_state` live; `fake_g1.py` takes `/fake_g1/keys`, `/fake_g1/roll`, and bad joint-0 data `/fake_g1/nan_q`, `/fake_g1/dq`, `/fake_g1/nan_imu`, joint-1 `/fake_g1/dq1` (the runner gives joint 1 a `dq_trip` in a config copy); `drive_gates.py` uses `/fake_g1/freeze` (q stops tracking); `/fake_g1/move` sets every q (the limp checks) |
 | `drive_link.py` | `armed`: `/fake_g1/pause` while disarmed and armed (`LOST`, `BACK … no_restart`, cleared by arming and reset), then `/fake_g1/reboot` while armed (`RESTARTED`, `robot_restart`, reset/arm/Ready refused, also after `/fake_g1/release`); `disarmed`: reboot on a fresh bridge, nothing latches, arming refused |
 | `run_fake_link_test.sh` | `drive_link.py armed`, SIGINT, then `drive_link.py disarmed` on a fresh bridge: a restart is final for a bridge |
 | `run_fake_robot_state_test.sh`, `drive_robot_state.py` | `/robot_state` and `/hand_state` of a `G1_bridge` against `fake_g1.py` and `fake_dex3.py`: every field once, names and order from `G1_config.yaml` |
@@ -97,13 +98,15 @@ fake_g1 records `/lowcmd` at all.
 | `run_fake_gates_test.sh` | orchestrates the gate run, then `drive_no_estop_block.py` on a second bridge |
 | `loopback_dds.sh` | sourced by every `run_*.sh`: discovery on loopback only |
 | `harness.sh` | sourced by every `run_fake_*_test.sh`: paths, bridge start, cleanup, failure output |
+| `harness.py` | imported by the `drive_*.py` drivers: `Checks` (PASS/FAIL line, `spin`, `wait`, `finish`), `ros_node`; `robot_sim/tests/integration/sim_harness.py` is the sim copy |
 | `fake_dex3.py` | publishes `/dex3/*/state` at 100 Hz, records `/dex3/*/cmd`; `--stale-after`, `--hot-after`, both timed from the first left command; `--silent <side>` never publishes that hand |
 | `drive_hand_cmd.py` | `start_hand_control` refused with another `/lowcmd` publisher and on a tilt, then accepted, then both hands through the hand adapter, then an over-limit and a NaN command, then (`--check-estop`) `/estop_damp` mid-stream with both hands live, then a `/lowcmd` probe; `--phases` writes the NaN phase's times |
 | `check_hand_cmd.py` | asserts the hand recording; pure offline, needs no ROS |
 | `run_fake_hand_test.sh` | orchestrates the hand run |
 | `drive_hand_ready.py` | `/ready_position_control` twice: hands unarmed, then held closed by a client; each live hand opens to `hand_ready_q` and holds at config kp, never slack; `--silent <side>`: that hand gets no frame |
 | `run_fake_hand_ready_test.sh` | orchestrates the Ready run; `--silent left` runs `fake_dex3.py --silent left` |
-| `run_config_test.sh`, `drive_config.py` | `G1_bridge` on broken copies of `G1_config.yaml` (`ready_q` short or out of range, `idx` out of order, inverted limits): each must fail its parameter load. No fake robot |
+| `run_config_test.sh`, `drive_config.py` | `G1_bridge` on broken copies of `G1_config.yaml` (`ready_q` short or out of range, `idx` out of order, inverted limits, a `dq_trip` of zero, a missing controller plugin, `example_controller` without `kd`), and on `--params-file` overrides (refused: a key not in `override_keys`, an unknown joint, a value that is 0, negative, NaN, infinite or text, or above 2 × `dq_limit`; accepted: 2 × `dq_limit`, below the base, an integer): each bad one must fail its load, each good one load with the WARN. No fake robot |
+| `run_fake_controllers_test.sh`, `drive_controllers.py` | `G1_bridge` against `fake_g1.py`, `L_LEG_ANKLE_PITCH` made parallel: an unknown `controller` dropped, a `bridge_pd` stream (`kp = kd = 0`, PD as `tau`, the parallel joint too), `motor_pd` inside it dropped, hold after `/stop_control` is `motor_pd`, then an `example_controller` stream (`tau = −kd·dq`, kd from the config), then `motor_pd` with the parallel ankle at kp 0 (its feedforward tau as is); `/low_level_controller` at each step |
 | `drive_no_estop_block.py` | after `drive_gates.py`, on a second bridge whose config lacks `estop:`: arming refused without the remote, accepted with it |
 
 ## What breaks it
@@ -135,5 +138,5 @@ fake_g1 records `/lowcmd` at all.
   stops. `check_hand_cmd.py` asserts against the last *commanded* frame, and a
   new check that reads `samples[-1]` will be reading the release.
 - CycloneDDS with no `CYCLONEDDS_URI`: multicast is off on loopback, the
-  bridge never sees the fake and prints `Waiting for publisher on /lowstate`.
+  bridge never sees the fake and prints `Waiting for publisher on topic /lowstate...`.
   `tools/test.sh` sets the URI itself; `--rmw fastrtps` is the other way out.

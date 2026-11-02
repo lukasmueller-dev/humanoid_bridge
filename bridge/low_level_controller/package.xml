@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>low_level_controller</name>
+  <version>0.0.0</version>
+  <description>The plugin interface of the bridge's 1 kHz low-level controllers</description>
+  <maintainer email="lukasbmueller@gmail.com">Lukas Mueller</maintainer>
+  <license>TODO: License declaration</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

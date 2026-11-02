@@ -10,10 +10,14 @@
 #include "bridge_interface/srv/set_default_position.hpp"
 #include "std_srvs/srv/trigger.hpp"
 #include "std_msgs/msg/string.hpp"
+#include "low_level_controller/controller.hpp"
+#include "pluginlib/class_loader.hpp"
 #include "joint.hpp"
 #include "estop.hpp"
 
 #include <atomic>
+#include <map>
+#include <memory>
 #include <string>
 #include <vector>
 #include <limits>
@@ -54,15 +58,27 @@ namespace sairol_bridge
 
     protected:
         bool loadParameters_();
+        // Sets override_keys, then checks every override.<joint>.<key> and applies it over the loaded
+        // joints_ (docs/estop.md, Overrides); false logs the one refusal. The parameters stay as loaded.
+        bool loadOverrides_();
+        // motor_pd and every name in controllers_allowed; false names the one that does not load.
+        bool loadControllers_();
+        // mutex_ held. The tick's controller from the next tick on; /low_level_controller on a change.
+        void useController_(const std::string &name);
+        // mutex_ held. The /robot_cmd stream ends: motor_pd until the next stream.
+        void endStream_();
         void calculateInterpolationParams_(float_t duration,
                                            float_t interpolation_order,
                                            bool hold_position = false);
+        // mutex_ held: calculateInterpolationParams_ for a caller that changes more in the same hold.
+        void interpolationParams_(float_t duration, float_t interpolation_order, bool hold_position);
 
         void robotCmdCallBack_(bridge_interface::msg::RobotCmd::SharedPtr message);
 
         // Each robot bridge but X2 (which makes its own three) calls this after its wait
         // loops: DDS stores a call made during the wait and runs it once spin starts.
-        void createArmingServices_();
+        // limp false: no /limp_control (H1, H1_2: no Gate 4, so q does not follow the hand at kp 0).
+        void createArmingServices_(bool limp = true);
 
         void readyPositionControl_();
         void zeroPositionControl_();
@@ -70,6 +86,11 @@ namespace sairol_bridge
         void setPose_(const std::vector<double> &q);
         void update_();
         virtual void publishLowCommand_() = 0;
+        // mutex_ held. Interpolation, gates 1-2, the controller, the tau_limit clamp, gate 4 into
+        // frame_; false (invalidFrame_ set) if a field is not finite: send nothing.
+        bool trackingFrame_();
+        // Pure: each robot decides its hold (clamp, lastCommand_ seed). Has a body: H1, H1_2 call it.
+        // Hold the measured pose, then ramp to default_cmd (ready_q_ if its size is off).
         virtual bool initControl_(bridge_interface::msg::RobotCmd default_cmd) = 0;
         bool checkCommand_(bridge_interface::msg::RobotCmd::SharedPtr robotCommand);
 
@@ -95,7 +116,8 @@ namespace sairol_bridge
         void enterStop_(estop::Cause cause);
         // The only way the arming services start control: refused while latched, on a
         // checkState_ fault, and without the remote when estop.require_remote.
-        bool armControl_(bridge_interface::msg::RobotCmd default_cmd, std::string &why);
+        // limp: ARMED limp, /robot_cmd dropped until start_control, Ready or Zero.
+        bool armControl_(bridge_interface::msg::RobotCmd default_cmd, std::string &why, bool limp = false);
         // False only when estop.require_remote and the remote is not present.
         bool remoteAllowsArming_(std::string &why);
         // A remote header within REMOTE_TIMEOUT_S; with remoteOnEventsOnly_, any message so far.
@@ -120,6 +142,7 @@ namespace sairol_bridge
         virtual void publishStopCommand_() {}
         void syncLatchFlags_();   // mutex_ held
         std::string describeState_();
+        std::string stateText_();   // mutex_ held: latch_.describe, ARMED limp while limp_
         // mutex_ held for every state change, so two threads cannot publish out of order.
         void publishBridgeState_(const std::string &state);
         // /robot_state from currentState_ and imu_, mutex_ held; the robot's state handler fills
@@ -131,6 +154,7 @@ namespace sairol_bridge
         rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr readyPositionService_;
         rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr zeroPositionService_;
         rclcpp::Service<bridge_interface::srv::SetDefaultPosition>::SharedPtr startControlService_;
+        rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr limpControlService_;
         rclcpp::Subscription<bridge_interface::msg::RobotCmd>::SharedPtr desiredSubscriber_;
         rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr estopDampService_;
         rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr estopHoldService_;
@@ -172,9 +196,23 @@ namespace sairol_bridge
         float_t lower_limbs_kp_min_{0}, lower_limbs_kp_max_{0};
         float_t lower_limbs_kd_min_{0}, lower_limbs_kd_max_{0};
 
-        bool torqueControl_{false};
+        bool torqueControl_{false};   // H1, H1_2, X2 only
+        // The loader outlives the controllers it made: members are destroyed in reverse order.
+        std::unique_ptr<pluginlib::ClassLoader<low_level_controller::Controller>> controllerLoader_;
+        // motor_pd and every name in controllers_allowed, made at start: no library load in the loop.
+        std::map<std::string, std::shared_ptr<low_level_controller::Controller>> controllers_;
+        std::shared_ptr<low_level_controller::Controller> controller_;   // the tick's; mutex_
+        std::string controllerName_;   // mutex_
+        std::string stream_;   // mutex_: the stream's controller, empty when no stream runs
+        std::atomic<bool> arming_{false};   // armControl_ runs: a /robot_cmd starts no stream
+        rclcpp::Publisher<std_msgs::msg::String>::SharedPtr controllerPublisher_;   // /low_level_controller
+        low_level_controller::State controllerState_;   // control thread only, sized once
+        std::vector<low_level_controller::MotorCommand> target_, frame_;   // control thread only, sized once
         std::atomic<bool> controlStarted_{false};   // tracking /robot_cmd
         bool receivedCmd_{false}; // Whether the control is initialized
+        // Set at start: the robot maps its parallel joints to their motors (T1 parallel_ankle_mapping).
+        bool robotMapsParallelJoints_{false};
+        bool limp_{false};   // mutex_: armed by /limp_control, frames ramp to kp, kd, tau 0
         float_t imu_rpy_threshold_{1.0}; // Threshold for IMU roll/pitch in radians
 
         // E-stop. latch_ and holdQ_ are guarded by mutex_; the atomics mirror
@@ -210,6 +248,10 @@ namespace sairol_bridge
 
         void startControlServiceCB_(const std::shared_ptr<bridge_interface::srv::SetDefaultPosition::Request> request,
                                           std::shared_ptr<bridge_interface::srv::SetDefaultPosition::Response> response);
+
+        // armControl_ into kp 0, kd 0, tau 0 over duration_: joints move by hand, the e-stop stays active.
+        void limpControlServiceCB_(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
+                                   std::shared_ptr<std_srvs::srv::Trigger::Response> response);
 
         void estopDampServiceCB_(const std::shared_ptr<std_srvs::srv::Trigger::Request> request,
                                  std::shared_ptr<std_srvs::srv::Trigger::Response> response);

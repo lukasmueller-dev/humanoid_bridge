@@ -1,5 +1,5 @@
-#ifndef SAIROL_BRIDGE_G1_BRIDGE_HPP_
-#define SAIROL_BRIDGE_G1_BRIDGE_HPP_
+#ifndef SAIROL_BRIDGE_H1_BRIDGE_HPP_
+#define SAIROL_BRIDGE_H1_BRIDGE_HPP_
 
 #include <memory>
 #include <chrono>
@@ -49,7 +49,7 @@ private:
     void publishLowCommand_();
     void publishLowCommandOLD_();
     void lowStateHandler_(unitree_go::msg::LowState::SharedPtr message);
-    bool initControl_(bridge_interface::msg::RobotCmd default_cmd) override;
+    bool initControl_(bridge_interface::msg::RobotCmd default_cmd) override { return BridgeCore::initControl_(default_cmd); }
     void finishControl_() override; 
     bool checkExternalPublisher_(std::string topic_name);
 

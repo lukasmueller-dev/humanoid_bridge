@@ -5,6 +5,8 @@
 # (Ready, Arm, the e-stop hold); its policy sends its own (kp 20 / kd 0.5) on /robot_cmd.
 # Ready: the stand-up ramp from lying to ready_q over `duration`; a limp Go2 lies on the floor.
 # Release before the bridge: tools/robot-bringup.sh --robot go2 (sport StandDown, then ReleaseMode).
+# dq_trip: the trip on measured |dq|, 1.25 x dq_limit (Unitree spec); dq_limit only clamps commands.
+# The old trip at dq_limit fired on calf spikes at dq 15.74-17.46 against 15.70.
 
 
 robot_bridge:
@@ -14,8 +16,10 @@ robot_bridge:
     control_dt: 0.002
     empty_joint_index: -1
     num_joint: 12
-    torque_control: false
     imu_rpy_threshold: 1.0 #radians
+
+    # docs/low-level-controllers.md: the names a /robot_cmd may pick; motor_pd always.
+    controllers_allowed: ["motor_pd", "bridge_pd"]
 
     # docs/estop.md. Operator e-stops have a fixed mode; these set the rest.
     estop:
@@ -53,6 +57,7 @@ robot_bridge:
       q_min: -1.0472
       q_max: 1.0472
       dq_limit: 30.1
+      dq_trip: 37.63
       tau_limit: 23.7
       kp: 70.0
       kd: 3.0
@@ -63,6 +68,7 @@ robot_bridge:
       q_min: -1.5708
       q_max: 3.4907
       dq_limit: 30.1
+      dq_trip: 37.63
       tau_limit: 23.7
       kp: 70.0
       kd: 3.0
@@ -73,6 +79,7 @@ robot_bridge:
       q_min: -2.7227
       q_max: -0.83776
       dq_limit: 15.7
+      dq_trip: 19.63
       tau_limit: 45.43
       kp: 70.0
       kd: 3.0
@@ -83,6 +90,7 @@ robot_bridge:
       q_min: -1.0472
       q_max: 1.0472
       dq_limit: 30.1
+      dq_trip: 37.63
       tau_limit: 23.7
       kp: 70.0
       kd: 3.0
@@ -93,6 +101,7 @@ robot_bridge:
       q_min: -1.5708
       q_max: 3.4907
       dq_limit: 30.1
+      dq_trip: 37.63
       tau_limit: 23.7
       kp: 70.0
       kd: 3.0
@@ -103,6 +112,7 @@ robot_bridge:
       q_min: -2.7227
       q_max: -0.83776
       dq_limit: 15.7
+      dq_trip: 19.63
       tau_limit: 45.43
       kp: 70.0
       kd: 3.0
@@ -113,6 +123,7 @@ robot_bridge:
       q_min: -1.0472
       q_max: 1.0472
       dq_limit: 30.1
+      dq_trip: 37.63
       tau_limit: 23.7
       kp: 70.0
       kd: 3.0
@@ -123,6 +134,7 @@ robot_bridge:
       q_min: -0.5236
       q_max: 4.5379
       dq_limit: 30.1
+      dq_trip: 37.63
       tau_limit: 23.7
       kp: 70.0
       kd: 3.0
@@ -133,6 +145,7 @@ robot_bridge:
       q_min: -2.7227
       q_max: -0.83776
       dq_limit: 15.7
+      dq_trip: 19.63
       tau_limit: 45.43
       kp: 70.0
       kd: 3.0
@@ -143,6 +156,7 @@ robot_bridge:
       q_min: -1.0472
       q_max: 1.0472
       dq_limit: 30.1
+      dq_trip: 37.63
       tau_limit: 23.7
       kp: 70.0
       kd: 3.0
@@ -153,6 +167,7 @@ robot_bridge:
       q_min: -0.5236
       q_max: 4.5379
       dq_limit: 30.1
+      dq_trip: 37.63
       tau_limit: 23.7
       kp: 70.0
       kd: 3.0
@@ -163,6 +178,7 @@ robot_bridge:
       q_min: -2.7227
       q_max: -0.83776
       dq_limit: 15.7
+      dq_trip: 19.63
       tau_limit: 45.43
       kp: 70.0
       kd: 3.0

@@ -28,7 +28,8 @@ bridge_interface/msg/HandCmd.msg
 No `interpolation_order`: hands always ramp linearly from the last published
 frame. The body's order-0 low-pass buys nothing at 100 Hz.
 
-Hand state is consumed by the bridge for its own guards and not republished.
+Hand state is consumed by the bridge for its own guards and republished as
+`/hand_state/<left|right>` (`bridge_interface/HandState`).
 `g1_stack` keeps reading `rt/dex3/*/state` on raw DDS; both subscribers coexist.
 
 ## Joint order
@@ -62,7 +63,7 @@ hand_state_timeout: 0.2
 hand_temperature_limit: 80.0
 hand_kp_min/max: 0.0 / 10.0
 hand_kd_min/max: 0.0 / 2.0
-hand_ready_q: [0.0 x7]        # zero is the open, extended end on both hands
+hand_ready_q: [0.0 x7]        # zero is the open pose on both hands
 left_hand_joint_names:  [L_HAND_THUMB_0, ...]   # 7 blocks, idx 0-6
 right_hand_joint_names: [R_HAND_THUMB_0, ...]   # 7 blocks, idx 0-6
 ```
@@ -79,7 +80,7 @@ untouched, so older configs and the H1 still work.
 | cmd size | 29 or reject | 7 or reject |
 | cmd NaN/Inf, absurd magnitude | reject | reject |
 | `kp`/`kd` | clamped by strong/weak class | clamped by `hand_kp_*`/`hand_kd_*` |
-| `q` | torque-implied bound in `publishLowCommand_` | clamped to `[q_min, q_max]` |
+| `q` | range clamp, rate limit and torque-implied bound in `trackingFrame_` | clamped to `[q_min, q_max]` |
 | watchdog | `duration + 0.2 s`, then latches `hold cmd_timeout` | `duration + 0.2 s`, then limp |
 
 `BridgeCore::checkMotorCmd_` is the shared per-motor half; both loops call it.
@@ -125,7 +126,9 @@ GEAR's own gains, because it is a drop-in and its caller passes none.
 ## Verify
 
 Verified against the fake and `robot_sim` only. Dex3 is mounted on the lab G1
-(2026-10-20); no hand command has gone through the bridge on hardware yet.
+(2026-10-20); the bridge's hand path has run on it. "What breaks it" has the
+2026-10-23 state drop; the `G1_config.yaml` hand block has the 2026-10-26 `dq_limit`
+spike. This doc's behaviour is verified on the fakes only.
 
 ```bash
 tools/test.sh --hands               # plain, hands-stale, hands-hot, hands-ready, hands-ready-one
@@ -154,7 +157,7 @@ getting limp frames.
 - **The real left hand drops state for up to 1 s** (G1 gantry, 2026-10-23). The
   0.2 s guard releases it limp; Ready skips it if the gap is at the call. Press
   Ready again; cause open (roadmap).
-- **`checkExternalPublisher_` will not see `dex3_probe --command`.** It queries
+- **`checkExternalPublisher_` will not see `dex3_probe command`.** It queries
   the ROS graph; `unitree_sdk2py` publishers are not ROS 2 nodes. The
   two-publisher guard is partial on the hand topics, and warns rather than
   blocking so a contested hand topic cannot stop the body bridge.
