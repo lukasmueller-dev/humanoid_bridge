@@ -22,6 +22,7 @@ A new robot: `robot_sim/robots/<name>.py` with `SPEC` (`physics.RobotSpec`) and 
 | Gantry | spring on the pelvis, feet 5 cm up; on at start |
 | Guard | refuses to start unless DDS stays on loopback (`CYCLONEDDS_URI` names only `lo`, or `ROS_LOCALHOST_ONLY=1`) |
 | Inputs | `/robot_sim/gantry` (Bool), `/robot_sim/remote` (Bool), `/robot_sim/buttons` (String `R1+R2`, `""` releases; names as the bridge YAML's combos), `/robot_sim/reset` (Empty) |
+| Sticks | `/robot_sim/sticks` (`Float32MultiArray` `[lx, ly, rx, ry]`, clipped to ±1), G1 only → `wireless_remote` bytes 4-24 as the bridge's `remoteSticks` reads them; zero 0.2 s after the last message |
 | Link drop | `/robot_sim/link` (Float32 s): no state out, no command in; sim time and `tick` run on |
 | Reboot | `/robot_sim/reboot` (Float32 s): as a link drop, then a reset, `tick` from 0, motion service `ai` on `/lowcmd` (mode-0 frames, 100 Hz) |
 | Motion switcher | `CheckMode`, `SelectMode`, `ReleaseMode` on `/api/motion_switcher/{request,response}` (`unitree_api`), as unitree_sdk2py calls them; release drops the `/lowcmd` publisher. No motion service at start |
@@ -58,7 +59,7 @@ ros2 topic pub -1 /robot_sim/gantry std_msgs/msg/Bool "{data: false}"   # drop i
 
 ```bash
 pytest robot_stacks/sim/robot_sim/tests/     # no ROS; skips without mujoco or g1.xml
-tools/test.sh --sim                      # bridge arms the sim, holds, /robot_cmd, camera, remote damp;
+tools/test.sh --sim                      # sticks, bridge arms the sim, holds, /robot_cmd, camera, remote damp;
                                          # sim-link: link drop, reboot, restart via g1-bringup.sh --sim
 G1_MJCF=~/.local/share/robot_web_commander/g1_description/g1_29dof_with_hand.xml tools/test.sh --sim   # plus: Ready opens both Dex3
 robot_stacks/sim/robot_sim/tests/integration/run_sim_amo_test.sh   # AMO stands the sim 30 s, gantry off; own netns, psi0 venv + mujoco
