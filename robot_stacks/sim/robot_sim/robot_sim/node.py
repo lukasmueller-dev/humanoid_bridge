@@ -154,19 +154,28 @@ class RobotSimNode(Node):
 
 
 def start_viewer(node):
-    """The MuJoCo window, synced on its own thread; None, logged, when it cannot open."""
+    """The MuJoCo window on a copy of the sim data, synced on its own thread; None if it fails."""
     try:
+        import mujoco
         import mujoco.viewer
 
-        viewer = mujoco.viewer.launch_passive(node.sim.model, node.sim.data)
+        model = node.sim.model
+        shown = mujoco.MjData(model)
+        viewer = mujoco.viewer.launch_passive(model, shown)
     except Exception as exc:  # noqa: BLE001
         node.get_logger().error(f"viewer off: {exc!r}")
         return None
 
     def sync():
         while node.running and viewer.is_running():
+            data = node.sim.data
+            # Only the copy holds the lock: a sync under it (software GL) stalled /low_state 0.1 s.
             with node.lock:
-                viewer.sync()
+                shown.time = data.time
+                for name in ("qpos", "qvel", "act", "mocap_pos", "mocap_quat"):
+                    getattr(shown, name)[:] = getattr(data, name)
+            mujoco.mj_forward(model, shown)
+            viewer.sync()
             time.sleep(VIEWER_PERIOD_S)
 
     threading.Thread(target=sync, daemon=True).start()
