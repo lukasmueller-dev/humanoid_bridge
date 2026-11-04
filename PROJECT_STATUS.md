@@ -3,7 +3,7 @@
 > One per repo. The *current* picture: goal, architecture, decisions, open
 > questions. Finished work is removed; git history is the log.
 
-_Last updated: 2026-11-01 · t1-ankle-core job_
+_Last updated: 2026-11-01 · sim-t1-parallel-ankle job_
 
 ## Goal
 
@@ -47,6 +47,8 @@ _One line each, dated, with a pointer (commit or PR)._
 - 2026-10-20: the bridge holds one robot envelope for every model (range clamp, speed limit, gains, speed trip); model-specific shaping lives in each model's adapter node — `docs/psi0_gates.md`
 - 2026-10-30: the speed trip is per joint: `dq_trip` trips on measured dq (absent = `dq_limit`), `dq_limit` only clamps commands; T1 and Go2 trip at max(`dq_limit`, 1.25 × model velocity), G1 unchanged — `docs/estop.md`
 - 2026-10-30: `dq_trip` can be overridden per joint at bridge start from a second params file (`override.<joint>.<key>`, keys in one constant, cap 2 × `dq_limit`, base kept beside it); run-time changes (they break the read-only rule of PR #23) and a plain merged second file (base and override indistinguishable, any key open) rejected — `docs/estop.md` § Overrides
+- 2026-11-02: the bridge publishes `sources.build_commit|build_time|params_file|params_sha1` as read-only parameters with no C++ change: `tools/build.sh` writes `install/bridge-build.stamp`, `robot-bringup.sh` passes `-p sources.*` (double-quoted: a hash like `12e4567` parses as a float) — feature `sources`, PR `agent(sources-params)`
+- 2026-11-02: `kp` and `kd` are override keys too; the cap is the joint's limb gain range (`lower|upper_limbs_kp|kd_min|max`), the base not exempt — `docs/estop.md` § Overrides
 - 2026-11-01: the damp kd is per joint: `<joint>.damp_kd` (finite, >= 0), absent = `estop.damp_kd`; T1 head kd and damp_kd 0.5 are first values, tuned on the robot — `docs/estop.md` § Stop frames
 - 2026-10-20: G1 arming needs the remote's header; a latch goes silent 1.2 s after `/lowstate` stops, so a restarted robot gets no old frames — `docs/estop.md`
 - 2026-10-22: upstream syncs land as merge commits, never rebase or squash, so upstream commit IDs stay and later syncs and upstream PRs stay simple — PR "Merge DFKI-SAIROL/humanoid_bridge main"
@@ -70,6 +72,7 @@ _One line each, dated, with a pointer (commit or PR)._
 - 2026-09-09: `examples/` sits inside `robot_bridge`, the package it demonstrates, so a subtree split of `bridge/` carries it; excluded from lint as vendored upstream code — same commit
 - 2026-11-01: T1 leg limits in `T1_config.yaml` are Siwei's measured stops, not the old ones: ankle pitch -0.87..0.35, where the old 0.855 lies 0.5 rad past the measured stop — `6806406` on `t1-parallel-ankle` (#61)
 - 2026-11-01: `main` takes only the T1 ankle mapping; the T1 examples move to robots_web_commander `workspaces/scratch/` (#59), the joint-response tools stay on `t1-parallel-ankle` (#61, closed without a merge) until Siwei decides — PR from `t1-ankle-core`
+- 2026-11-01: the T1 ankle kinematics twin lives in `robot_sim/t1_parallel_ankle.py` (the sim needs it, `scripts/real/` is not installed); the check script imports it from there. The sim shares the bridge's formula: it cannot check the real crank order or sign — PR from `sim-t1-parallel-ankle`
 
 ## Roadmap
 

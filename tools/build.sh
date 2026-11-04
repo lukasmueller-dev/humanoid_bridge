@@ -8,6 +8,9 @@
 #   - colcon never removes what it installed, so a renamed or deleted node keeps
 #     being offered by `ros2 run` until its build/ and install/ trees go.
 #     --clean <pkg> is that.
+#   - the bridge binaries carry no commit: a build that reaches robot_bridge writes
+#     install/bridge-build.stamp (commit, changed-file count, time), and
+#     tools/robot-bringup.sh passes it to the bridge as sources.*.
 #
 # Safe to re-run.
 set -euo pipefail
@@ -107,7 +110,23 @@ cd "$WORKSPACE"
 # what follows it. Your own --cmake-args (the X2 build) replaces it.
 T1_ARGS=(--cmake-args -DBUILD_BOOSTER_T1=ON)
 for arg in "$@"; do [ "$arg" = --cmake-args ] && T1_ARGS=(); done
+BRIDGE_RC=build/robot_bridge/colcon_build.rc   # colcon rewrites it on every robot_bridge build, a no-op one too
+rc_before="$(stat -c %y "$BRIDGE_RC" 2>/dev/null || true)"
 colcon build "$@" ${T1_ARGS+"${T1_ARGS[@]}"}
+
+# --- stamp -----------------------------------------------------------------
+# Only when this build reached robot_bridge: --packages-select example_controller leaves the old binary.
+# "unknown" without a git dir (a tarball, or a worktree mounted into a container).
+# No stamp when colcon installs elsewhere than install/ (the X2 build).
+rc_after="$(stat -c %y "$BRIDGE_RC" 2>/dev/null || true)"
+if [ -d install ] && [ -n "$rc_after" ] && [ "$rc_after" != "$rc_before" ]; then
+    # -dirty from `status --porcelain`, as the commander's dirty flag: `describe --dirty` skips untracked files.
+    commit="$(git -C "$REPO" describe --always 2>/dev/null)" || commit=unknown
+    changed="$(git -C "$REPO" status --porcelain 2>/dev/null | wc -l)" || changed=unknown
+    [ "$changed" -gt 0 ] 2>/dev/null && commit="$commit-dirty"
+    printf 'build_commit=%s\nchanged_files=%s\nbuild_time=%s\n' \
+        "$commit" "$changed" "$(date --iso-8601=seconds)" > install/bridge-build.stamp
+fi
 
 echo
 echo "done. Source it, then test:"

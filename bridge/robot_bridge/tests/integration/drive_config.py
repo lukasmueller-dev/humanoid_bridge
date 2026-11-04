@@ -79,42 +79,108 @@ def variants(params):
 
 
 def refused_overrides(params):
-    """(name, text the refusal must log, override values) per override file that is refused."""
-    joint = params["joint_names"][3]
+    """(name, text the refusal must log, override values, config change or None) per refusal."""
+    joint = params["joint_names"][3]  # a lower limb
+    arm = params["joint_names"][R_ELBOW]  # an upper limb: a narrower kp range
     limit = params[joint]["dq_limit"]
+
+    def raised_kp_min(p):
+        p["lower_limbs_kp_min"] = 120.0
+
     return [
         (
             "override of a key not in override_keys",
             "is not an override key",
             {joint: {"dq_limit": 1.0}},
+            None,
         ),
         (
             "override of an unknown joint",
             "no joint 'no_such_joint'",
             {"no_such_joint": {"dq_trip": 1.0}},
+            None,
         ),
-        ("override of zero", "needs a finite number > 0", {joint: {"dq_trip": 0.0}}),
-        ("negative override", "needs a finite number > 0", {joint: {"dq_trip": -1.0}}),
-        ("infinite override", "needs a finite number > 0", {joint: {"dq_trip": float("inf")}}),
-        ("NaN override", "needs a finite number > 0", {joint: {"dq_trip": "nan"}}),
-        ("override that is text", "needs a finite number > 0", {joint: {"dq_trip": "fast"}}),
-        ("override above 2 x dq_limit", "is above 2 x dq_limit", {joint: {"dq_trip": 2.1 * limit}}),
+        ("override of zero", "needs a finite number > 0", {joint: {"dq_trip": 0.0}}, None),
+        ("negative override", "needs a finite number > 0", {joint: {"dq_trip": -1.0}}, None),
+        (
+            "infinite override",
+            "needs a finite number > 0",
+            {joint: {"dq_trip": float("inf")}},
+            None,
+        ),
+        ("NaN override", "needs a finite number > 0", {joint: {"dq_trip": "nan"}}, None),
+        ("override that is text", "needs a finite number > 0", {joint: {"dq_trip": "fast"}}, None),
+        (
+            "override above 2 x dq_limit",
+            "is above 2 x dq_limit",
+            {joint: {"dq_trip": 2.1 * limit}},
+            None,
+        ),
+        ("kp of zero", "needs a finite number > 0", {joint: {"kp": 0.0}}, None),
+        ("kd of zero", "needs a finite number > 0", {joint: {"kd": 0.0}}, None),
+        (
+            "kp above the lower limbs cap",
+            "outside the lower limbs kp range",
+            {joint: {"kp": 1.1 * params["lower_limbs_kp_max"]}},
+            None,
+        ),
+        (
+            "kd above the lower limbs cap",
+            "outside the lower limbs kd range",
+            {joint: {"kd": 1.1 * params["lower_limbs_kd_max"]}},
+            None,
+        ),
+        (  # over the arm's cap, under the legs': the cap follows the joint's limb group
+            "kp above the upper limbs cap",
+            "outside the upper limbs kp range",
+            {arm: {"kp": 1.1 * params["upper_limbs_kp_max"]}},
+            None,
+        ),
+        (
+            "kp below the lower limbs minimum",
+            "outside the lower limbs kp range",
+            {joint: {"kp": 100.0}},
+            raised_kp_min,
+        ),
     ]
 
 
 def valid_overrides(params):
     """(name, WARN the load must log, override values) per override file that loads."""
     joint = params["joint_names"][3]
+    arm = params["joint_names"][R_ELBOW]
     limit = params[joint]["dq_limit"]
     base = params[joint].get("dq_trip", limit)  # absent = dq_limit
 
-    def warn(new):
-        return f"Override {joint}.dq_trip: {base:.3f} -> {new:.3f}"
+    def warn(new, key="dq_trip", name=joint, was=base):
+        return f"Override {name}.{key}: {was:.3f} -> {new:.3f}"
 
+    kp_cap, kd_cap = params["lower_limbs_kp_max"], params["lower_limbs_kd_max"]
+    arm_cap = params["upper_limbs_kp_max"]
     return [
         ("override at 2 x dq_limit", warn(2 * limit), {joint: {"dq_trip": 2 * limit}}),
         ("override below the base", warn(0.5 * limit), {joint: {"dq_trip": 0.5 * limit}}),
         ("override as an integer", warn(int(limit)), {joint: {"dq_trip": int(limit)}}),
+        (
+            "kp at the lower limbs cap",
+            warn(kp_cap, "kp", was=params[joint]["kp"]),
+            {joint: {"kp": kp_cap}},
+        ),
+        (
+            "kd at the lower limbs cap",
+            warn(kd_cap, "kd", was=params[joint]["kd"]),
+            {joint: {"kd": kd_cap}},
+        ),
+        (
+            "kp at the upper limbs cap",
+            warn(arm_cap, "kp", arm, params[arm]["kp"]),
+            {arm: {"kp": arm_cap}},
+        ),
+        (
+            "kp below the base",
+            warn(0.5 * params[joint]["kp"], "kp", was=params[joint]["kp"]),
+            {joint: {"kp": 0.5 * params[joint]["kp"]}},
+        ),
     ]
 
 
@@ -185,9 +251,16 @@ def main():
             yaml.safe_dump({"robot_bridge": {"ros__parameters": {"override": values}}}, handle)
         return override
 
-    for i, (name, text, values) in enumerate(refused_overrides(params)):
+    for i, (name, text, values, change) in enumerate(refused_overrides(params)):
         override = override_file(f"refused{i}", values)
-        code, log = start([unchanged, override], os.path.join(out, f"refused{i}.log"))
+        base_file = unchanged
+        if change:
+            changed = copy.deepcopy(config)
+            change(changed["robot_bridge"]["ros__parameters"])
+            base_file = os.path.join(out, f"refused{i}-config.yaml")
+            with open(base_file, "w") as handle:
+                yaml.safe_dump(changed, handle)
+        code, log = start([base_file, override], os.path.join(out, f"refused{i}.log"))
         # One ERROR line names the override: the refusal, not a second complaint after it.
         errors = [line for line in log.splitlines() if "ERROR" in line and "override." in line]
         refused = code == 1 and REFUSED in log and text in log and len(errors) == 1

@@ -15,8 +15,8 @@ from robot_bridge.robot_tables import ROBOT_TABLES, KeyMap
 
 def rpy_to_quat(rpy):
     r = R.from_euler("xyz", rpy)
-    quat = r.as_quat(scalar_first=True)  # return [w, x, y, z]
-    return quat
+    # [w, x, y, z]. No scalar_first=True: it needs scipy >= 1.14, Humble has 1.8.
+    return np.roll(r.as_quat(), 1)
 
 
 class RemoteController:

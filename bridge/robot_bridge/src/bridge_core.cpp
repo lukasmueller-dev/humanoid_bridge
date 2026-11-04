@@ -14,7 +14,9 @@ namespace sairol_bridge
 
         // The keys an override.<joint>.<key> parameter may set, each with the Joint field it replaces.
         // Never read from a params file: a new key needs a bridge PR (docs/estop.md, Overrides).
-        const std::map<std::string, float_t Joint::*> OVERRIDE_KEYS{{"dq_trip", &Joint::dq_trip}};
+        // A list, not a map: override_keys keeps this order.
+        const std::vector<std::pair<std::string, float_t Joint::*>> OVERRIDE_KEYS{
+            {"dq_trip", &Joint::dq_trip}, {"kp", &Joint::kp}, {"kd", &Joint::kd}};
 
         // controllers.<name>.* as plain numbers; false names the key that is not a number or a number list.
         bool controllerParameters(rclcpp::Node &node, const std::string &name,
@@ -429,7 +431,8 @@ namespace sairol_bridge
             const size_t dot = name.find('.');
             const std::string joint = dot == std::string::npos ? "" : name.substr(0, dot);
             const std::string key = name.substr(dot == std::string::npos ? 0 : dot + 1);
-            const auto field = OVERRIDE_KEYS.find(key);
+            const auto field = std::find_if(OVERRIDE_KEYS.begin(), OVERRIDE_KEYS.end(),
+                                            [&key](const auto &entry) { return entry.first == key; });
             if (field == OVERRIDE_KEYS.end())
             {
                 RCLCPP_ERROR(nh->get_logger(), "override.%s: '%s' is not an override key (%s)",
@@ -461,13 +464,32 @@ namespace sairol_bridge
             }
             const size_t index = static_cast<size_t>(at - jointNames_.begin());
             const float_t base = joints_[index].*(field->second);
-            // Compared as float, as dq_limit is stored: 2 x it written out in decimal passes.
-            // A value no higher than the base is always fine: a T1 head base trip can be over the cap.
-            if (value > 2 * joints_[index].dq_limit && value > base)
+            if (key == "dq_trip")
             {
-                RCLCPP_ERROR(nh->get_logger(), "override.%s: %.3f is above 2 x dq_limit (%.3f) and the base (%.3f)",
-                             name.c_str(), number, 2 * joints_[index].dq_limit, base);
-                return false;
+                // Compared as float, as dq_limit is stored: 2 x it written out in decimal passes.
+                // A value no higher than the base is always fine: a T1 head base trip can be over the cap.
+                if (value > 2 * joints_[index].dq_limit && value > base)
+                {
+                    RCLCPP_ERROR(nh->get_logger(), "override.%s: %.3f is above 2 x dq_limit (%.3f) and the base (%.3f)",
+                                 name.c_str(), number, 2 * joints_[index].dq_limit, base);
+                    return false;
+                }
+            }
+            else
+            {
+                // kp, kd: the gain range of the joint's limb group, the one checkCommand_ clamps a command to.
+                const bool strong = joints_[index].if_strong_joint;
+                const bool isKp = key == "kp";
+                const float_t low = isKp ? (strong ? lower_limbs_kp_min_ : upper_limbs_kp_min_)
+                                         : (strong ? lower_limbs_kd_min_ : upper_limbs_kd_min_);
+                const float_t high = isKp ? (strong ? lower_limbs_kp_max_ : upper_limbs_kp_max_)
+                                          : (strong ? lower_limbs_kd_max_ : upper_limbs_kd_max_);
+                if (value < low || value > high)
+                {
+                    RCLCPP_ERROR(nh->get_logger(), "override.%s: %.3f is outside the %s limbs %s range [%.3f, %.3f]",
+                                 name.c_str(), number, strong ? "lower" : "upper", key.c_str(), low, high);
+                    return false;
+                }
             }
             changes.push_back({index, key, field->second, value});
         }

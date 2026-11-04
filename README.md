@@ -98,6 +98,10 @@ The Python client installs with the package, so there is no `pip install` step
 and every Python change needs a rebuild. `tools/build.sh --clean <pkg>` drops a
 stale package tree.
 
+A `tools/build.sh` build that reaches `robot_bridge` also writes `install/bridge-build.stamp` (commit, changed files, time).
+`tools/robot-bringup.sh` passes it and the params file to the bridge as read-only
+`sources.build_commit|build_time|params_file|params_sha1` for the commander's Sources tab.
+
 ## 2. Launch the bridge
 
 `BRIDGE_IFACE` is the NIC CycloneDDS binds, default `enp4s0`. Set it to match
@@ -119,7 +123,7 @@ tools/g1-bringup.sh --arm-from-measured --robot-is-clear
 tools/g1-bringup.sh --stop                           # every robot bridge; SIGKILL if SIGINT hangs
 tools/robot-bringup.sh --robot t1                    # the T1: T1_bridge, no release; custom mode on arming
 tools/robot-bringup.sh --robot go2                   # the Go2: StandDown + release, Go2_bridge; Ready stands it up
-tools/robot-bringup.sh --robot t1 --override trip.yaml  # a second params file: dq_trip per joint (docs/estop.md, Overrides)
+tools/robot-bringup.sh --robot t1 --override trip.yaml  # a second params file: dq_trip, kp, kd per joint (docs/estop.md, Overrides)
 ```
 
 It sources ROS and `setup_unitree.sh` itself. The release runs on
