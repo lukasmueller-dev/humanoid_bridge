@@ -12,7 +12,7 @@ source /opt/ros/humble/setup.bash && tools/build.sh
 source <workspace>/install/setup.bash
 ```
 
-No ROS on the host: `tools/test.sh --docker [--wire|--estop|--link|--state|--t1|--go2|--gates|--hands|--config|--controllers|--sources]`
+No ROS on the host: `tools/test.sh --docker [--wire|--estop|--link|--state|--t1|--go2|--gates|--hands|--config|--controllers|--gains|--sources]`
 builds and runs them in a container.
 
 `robot_bridge`'s `package.xml` depends on `booster_interface` and `aimdk_msgs`
@@ -58,6 +58,7 @@ tools/test.sh --go2        # Go2_bridge against fake_go2.py
 tools/test.sh --gates      # docs/psi0_gates.md
 tools/test.sh --config
 tools/test.sh --controllers  # docs/low-level-controllers.md
+tools/test.sh --gains        # /active_gains
 tools/test.sh --sources      # sources.* parameters from tools/build.sh's stamp
 ```
 
@@ -108,6 +109,7 @@ fake_g1 records `/lowcmd` at all.
 | `run_fake_hand_ready_test.sh` | orchestrates the Ready run; `--silent left` runs `fake_dex3.py --silent left` |
 | `run_config_test.sh`, `drive_config.py` | `G1_bridge` on broken copies of `G1_config.yaml` (`ready_q` short or out of range, `idx` out of order, inverted limits, a `dq_trip` of zero, a missing controller plugin, `example_controller` without `kd`), and on `--params-file` overrides (refused: a key not in `override_keys`, an unknown joint, a value that is 0, negative, NaN, infinite or text, above 2 × `dq_limit`, or a `kp`/`kd` above its limb cap or below a raised minimum; accepted: 2 × `dq_limit`, below the base, an integer, a `kp`/`kd` at its cap): each bad one must fail its load, each good one load with the WARN. No fake robot |
 | `run_fake_controllers_test.sh`, `drive_controllers.py` | `G1_bridge` against `fake_g1.py`, `L_LEG_ANKLE_PITCH` made parallel: an unknown `controller` dropped, a `bridge_pd` stream (`kp = kd = 0`, PD as `tau`, the parallel joint too), `motor_pd` inside it dropped, hold after `/stop_control` is `motor_pd`, then an `example_controller` stream (`tau = −kd·dq`, kd from the config), then `motor_pd` with the parallel ankle at kp 0 (its feedforward tau as is); `/low_level_controller` at each step |
+| `run_fake_gains_test.sh`, `drive_gains.py` | `G1_bridge` against `fake_g1.py`, with an override file and one joint's own `damp_kd`: `/active_gains` kp, kd and source DISARMED, armed (`config`, `override`; a `dq_trip` override stays `config`), in a stream (`robot_cmd`), after Ready and the next stream, in damp latched and reset (`damp`), through the limp ramp (`limp`), after `/stop_control`; armed values against `/lowcmd`; 2 Hz, and on a source change within 0.2 s |
 | `run_sources_test.sh`, `drive_sources.py` | `tools/g1-bringup.sh --sim --no-release --foreground` starts `G1_bridge` against `fake_g1.py` (CycloneDDS, as `--sim` pins it); `drive_sources.py` reads `sources.build_commit`, `build_time`, `params_file`, `params_sha1` and checks each is the string in `install/bridge-build.stamp` or the params file |
 | `drive_no_estop_block.py` | after `drive_gates.py`, on a second bridge whose config lacks `estop:`: arming refused without the remote, accepted with it |
 
