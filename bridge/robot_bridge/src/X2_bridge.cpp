@@ -73,6 +73,7 @@ sairol_bridge::X2Bridge::X2Bridge(rclcpp::Node::SharedPtr node) : BridgeCore(nod
             throw std::invalid_argument("Invalid or missing damping_kd for " + name);
         }
         dampingKd_[index] = kd;
+        joints_[index].damp_kd = kd;   // /active_gains: the kd publishDamping_ sends
     }
     if (std::any_of(dampingKd_.begin(), dampingKd_.end(), [](double kd) { return kd <= 0.0; }))
     {
@@ -631,6 +632,7 @@ void sairol_bridge::X2Bridge::finishControl_() {
         RCLCPP_WARN(nh->get_logger(), "X2 stop damping active: posture hold released. Restart required to resume motion.");
     }
     publishDamping_();
+    noteGainSource_();
 }
 
 void sairol_bridge::X2Bridge::stopControlServiceCB_(

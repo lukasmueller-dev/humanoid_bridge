@@ -101,6 +101,15 @@ namespace sairol_bridge
         estopResetService_ = nh->create_service<std_srvs::srv::Trigger>(
             "estop_reset", std::bind(&BridgeCore::estopResetServiceCB_, this, _1, _2));
 
+        // Transient-local, before the first publishBridgeState_: it publishes the first /active_gains.
+        activeGainsPublisher_ = nh->create_publisher<bridge_interface::msg::ActiveGains>(
+            "/active_gains", rclcpp::QoS(1).reliable().transient_local());
+        activeGainsTimer_ = nh->create_wall_timer(std::chrono::milliseconds(500), [this]()
+                                                  {
+                                                      std::lock_guard<std::mutex> lock(mutex_);
+                                                      publishActiveGains_();
+                                                  });
+
         // Transient-local: a late subscriber still gets the current state.
         bridgeStatePublisher_ = nh->create_publisher<std_msgs::msg::String>(
             "/bridge_state", rclcpp::QoS(1).reliable().transient_local());
@@ -500,6 +509,7 @@ namespace sairol_bridge
             RCLCPP_WARN(nh->get_logger(), "Override %s.%s: %.3f -> %.3f",
                         jointNames_[change.joint].c_str(), change.key.c_str(), target, change.value);
             target = change.value;
+            joints_[change.joint].gain_override |= change.key != "dq_trip";
         }
         return true;
     }
@@ -725,7 +735,7 @@ namespace sairol_bridge
         stream_ = controller;
         lowCommandDesired_.motor_cmd = message->motor_cmd;
         receivedCmd_ = true;
-        interpolationParams_(duration, interpolation_order, hold_position);
+        interpolationParams_(duration, interpolation_order, hold_position, true);
         useController_(controller);   // again after Ready, which runs motor_pd
     }
 
@@ -953,7 +963,8 @@ namespace sairol_bridge
         interpolationParams_(duration, interpolation_order, hold_position);
     }
 
-    void BridgeCore::interpolationParams_(float_t duration, float_t interpolation_order, bool hold_position)
+    void BridgeCore::interpolationParams_(float_t duration, float_t interpolation_order, bool hold_position,
+                                          bool from_cmd)
     {
         cmdInterpOrder_ = interpolation_order;
         if (0.0 <= cmdInterpOrder_ && cmdInterpOrder_ < 1.0)
@@ -1005,6 +1016,8 @@ namespace sairol_bridge
         {
             tValid_ = tFinal_ + 0.2;
         }
+        gainsFromCmd_ = from_cmd;
+        noteGainSource_();
     }
 
     bool BridgeCore::checkStateFreshness_()
@@ -1120,6 +1133,53 @@ namespace sairol_bridge
         std_msgs::msg::String message;
         message.data = state;
         bridgeStatePublisher_->publish(message);
+        noteGainSource_();
+    }
+
+    std::string BridgeCore::gainSource_()
+    {
+        // A silent damp latch stays damp: /bridge_state names it, and the arming gains do not apply.
+        if (robotDamps_() || (latch_.state() != estop::SafetyLatch::State::Idle && latch_.mode() == estop::Mode::Damp))
+        {
+            return "damp";
+        }
+        if (limp_)
+        {
+            return "limp";
+        }
+        return controlStarted_ && gainsFromCmd_ ? "robot_cmd" : "config";
+    }
+
+    void BridgeCore::noteGainSource_()
+    {
+        if (gainSource_() != lastGainSource_)
+        {
+            publishActiveGains_();
+        }
+    }
+
+    void BridgeCore::publishActiveGains_()
+    {
+        lastGainSource_ = gainSource_();
+        const bool damp = lastGainSource_ == "damp";
+        const bool tracking = controlStarted_ && !damp;
+        // The tick's own phase: a ramp shows its gains now. Hold frames and DISARMED use the joint's.
+        float_t phase = 1.0f;
+        if (tracking && tFinal_ - tStart_ > 1e-6)
+        {
+            phase = std::clamp<float_t>((steadyClock_.now().seconds() - tStart_) / (tFinal_ - tStart_), 0.0f, 1.0f);
+        }
+        bridge_interface::msg::ActiveGains gains;
+        gains.joint = jointNames_;
+        for (int i = 0; i < numJoint_; ++i)
+        {
+            const auto &params = cmdParams_[i];
+            const auto &joint = joints_[i];
+            gains.kp.push_back(damp ? 0.0f : tracking ? params.kp_0 + params.kp_1 * phase : joint.kp);
+            gains.kd.push_back(damp ? joint.damp_kd : tracking ? params.kd_0 + params.kd_1 * phase : joint.kd);
+            gains.source.push_back(lastGainSource_ == "config" && joint.gain_override ? "override" : lastGainSource_);
+        }
+        activeGainsPublisher_->publish(gains);
     }
 
     void BridgeCore::enterStop_(estop::Cause cause)
