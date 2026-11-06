@@ -76,3 +76,4 @@ Decided and fake-tested on `g1-web-interface` (`docs/psi0_gates.md`).
 ### Cleanups
 
 - [ ] `--interface sim` does not reach the bridge: MuJoCo listens on `rt/lowcmd`, which the bridge owns. **Done when:** a sim run drives the same client path as hardware, or the limitation is documented as permanent.
+- [ ] Roadmap cleanup: delete each item the repo proves done or dead; keep the ones that need the owner. **Done when:** `git diff --stat origin/main` names only `PROJECT_ROADMAP.md`, and each deletion has one proof line in the PR.
