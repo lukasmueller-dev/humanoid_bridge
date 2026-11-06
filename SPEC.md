@@ -20,7 +20,7 @@ See the feature file.
 
 ## Milestones
 
-- [ ] Add `bridge_interface/ActiveGains` and the `/active_gains` publisher on `BridgeCore` — code — done when a `tools/test.sh --docker` stage reads kp, kd and source in each of `config`, `override`, `robot_cmd`, `damp`, `limp`
+- [x] Add `bridge_interface/ActiveGains` and the `/active_gains` publisher on `BridgeCore` — code — done when a `tools/test.sh --docker` stage reads kp, kd and source in each of `config`, `override`, `robot_cmd`, `damp`, `limp`
 - [ ] End action — code — done when `SPEC.md` and `HANDOFF.md` are gone and each decision is in `pr.md`
 
 ## End action

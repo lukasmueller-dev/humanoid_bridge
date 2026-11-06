@@ -198,6 +198,7 @@ ros2 topic echo /bridge_state                                # G1, T1, Go2
 ros2 topic echo /robot_link                                  # G1, T1, Go2: OK, LOST, BACK, RESTARTED (docs/estop.md)
 ros2 topic echo /robot_state                                 # G1, T1, Go2: bridge_interface/RobotState, names + q/dq/tau, IMU, remote by name
 ros2 topic echo /low_level_controller                        # the tick's controller, picked by RobotCmd.controller (docs/low-level-controllers.md)
+ros2 topic echo /active_gains                                # bridge_interface/ActiveGains: kp, kd, source per joint; DISARMED: what Arm uses
 ros2 topic echo /hand_state/left                             # G1 Dex3: bridge_interface/HandState
 ```
 
