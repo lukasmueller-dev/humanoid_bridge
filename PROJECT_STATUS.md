@@ -3,7 +3,7 @@
 > One per repo. The *current* picture: goal, architecture, decisions, open
 > questions. Finished work is removed; git history is the log.
 
-_Last updated: 2026-11-01 · sim-t1-parallel-ankle job_
+_Last updated: 2026-11-06 · gains-bridge job_
 
 ## Goal
 
@@ -48,6 +48,7 @@ _One line each, dated, with a pointer (commit or PR)._
 - 2026-10-30: the speed trip is per joint: `dq_trip` trips on measured dq (absent = `dq_limit`), `dq_limit` only clamps commands; T1 and Go2 trip at max(`dq_limit`, 1.25 × model velocity), G1 unchanged — `docs/estop.md`
 - 2026-10-30: `dq_trip` can be overridden per joint at bridge start from a second params file (`override.<joint>.<key>`, keys in one constant, cap 2 × `dq_limit`, base kept beside it); run-time changes (they break the read-only rule of PR #23) and a plain merged second file (base and override indistinguishable, any key open) rejected — `docs/estop.md` § Overrides
 - 2026-11-02: the bridge publishes `sources.build_commit|build_time|params_file|params_sha1` as read-only parameters with no C++ change: `tools/build.sh` writes `install/bridge-build.stamp`, `robot-bringup.sh` passes `-p sources.*` (double-quoted: a hash like `12e4567` parses as a float) — feature `sources`, PR `agent(sources-params)`
+- 2026-11-06: `/active_gains` (`bridge_interface/ActiveGains`, transient-local, 2 Hz and on a source change) shows kp, kd, source per joint; ramps show the tick's value, hold frames and DISARMED the joint's, so `hold` reads `config` or `override` — feature b3-gains, PR from `gains-bridge`
 - 2026-11-02: `kp` and `kd` are override keys too; the cap is the joint's limb gain range (`lower|upper_limbs_kp|kd_min|max`), the base not exempt — `docs/estop.md` § Overrides
 - 2026-11-01: the damp kd is per joint: `<joint>.damp_kd` (finite, >= 0), absent = `estop.damp_kd`; T1 head kd and damp_kd 0.5 are first values, tuned on the robot — `docs/estop.md` § Stop frames
 - 2026-10-20: G1 arming needs the remote's header; a latch goes silent 1.2 s after `/lowstate` stops, so a restarted robot gets no old frames — `docs/estop.md`
