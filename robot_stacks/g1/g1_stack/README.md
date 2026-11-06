@@ -57,6 +57,6 @@ Everything, including the bridge against a fake robot: `tools/test.sh`.
   wants 28 and the waist belongs to the legs. Run the loop with `--enable-waist`.
 - **Hand joint order is unconfirmed against hardware.** Move one left-hand
   finger and watch which half of the 14-vector changes.
-- **`--interface sim` does not reach the bridge**: MuJoCo listens on `rt/lowcmd`.
+- **`--interface sim` does not reach the bridge**, permanently: root `README.md`, What breaks it.
 - **`amo_controller` needs psi0's venv**: CUDA torch (the traced AMO allocates on `cuda:0`), `pin<4`, pyzmq.
   `pin` 4 pulls numpy 2, and numpy 2 breaks the ROS messages: install with `numpy==1.26.4` pinned.
