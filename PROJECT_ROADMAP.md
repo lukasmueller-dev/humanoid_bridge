@@ -3,7 +3,7 @@
 > One per repo. Planned work only, one item per task. Finished items are
 > deleted; git history is the log.
 
-_Last updated: 2026-11-02 · sim-t1-parallel-ankle review job_
+_Last updated: 2026-11-06 · roadmap-cleanup job_
 
 ## Items
 
@@ -71,7 +71,6 @@ Decided and fake-tested on `g1-web-interface` (`docs/psi0_gates.md`).
 ### Upstream fixes — one branch each
 
 - [ ] `fix/config-keymaps`: the keymap headers in `params/*.yaml` are corrected here: each key names its handler, `robot_client.py` or the bridge. Still to send upstream. **Done when:** the PR is open.
-- [ ] `feat/g1-finish-control-release`: e-stop latch built on `g1-web-interface` (`docs/estop.md`), fake-tested only. **Done when:** gantry tests G0–G6 in `docs/estop.md` pass and the branch is merged.
 
 ### Cleanups
 
