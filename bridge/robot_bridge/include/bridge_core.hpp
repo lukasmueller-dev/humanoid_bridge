@@ -2,6 +2,7 @@
 #pragma once
 
 #include "rclcpp/rclcpp.hpp"
+#include "bridge_interface/msg/active_gains.hpp"
 #include "bridge_interface/msg/robot_cmd.hpp"
 #include "bridge_interface/msg/low_cmd.hpp"
 #include "bridge_interface/msg/low_state.hpp"
@@ -71,7 +72,9 @@ namespace sairol_bridge
                                            float_t interpolation_order,
                                            bool hold_position = false);
         // mutex_ held: calculateInterpolationParams_ for a caller that changes more in the same hold.
-        void interpolationParams_(float_t duration, float_t interpolation_order, bool hold_position);
+        // from_cmd: lowCommandDesired_ holds a /robot_cmd's gains.
+        void interpolationParams_(float_t duration, float_t interpolation_order, bool hold_position,
+                                  bool from_cmd = false);
 
         void robotCmdCallBack_(bridge_interface::msg::RobotCmd::SharedPtr message);
 
@@ -145,6 +148,14 @@ namespace sairol_bridge
         std::string stateText_();   // mutex_ held: latch_.describe, ARMED limp while limp_
         // mutex_ held for every state change, so two threads cannot publish out of order.
         void publishBridgeState_(const std::string &state);
+        // mutex_ held. config (or override, per joint), robot_cmd, damp or limp.
+        std::string gainSource_();
+        // mutex_ held. /active_gains now; the 2 Hz timer calls it.
+        void publishActiveGains_();
+        // mutex_ held. /active_gains if gainSource_ changed; every state change calls it.
+        void noteGainSource_();
+        // True while a robot damps outside the latch (X2). Called with mutex_ held.
+        virtual bool robotDamps_() { return false; }
         // /robot_state from currentState_ and imu_, mutex_ held; the robot's state handler fills
         // remote and publishes it on robotStatePublisher_ after unlocking.
         bridge_interface::msg::RobotState robotState_(uint32_t tick);
@@ -162,6 +173,8 @@ namespace sairol_bridge
         rclcpp::Publisher<std_msgs::msg::String>::SharedPtr bridgeStatePublisher_;
         rclcpp::Publisher<std_msgs::msg::String>::SharedPtr robotLinkPublisher_;   // null: no link watch
         rclcpp::Publisher<bridge_interface::msg::RobotState>::SharedPtr robotStatePublisher_;
+        rclcpp::Publisher<bridge_interface::msg::ActiveGains>::SharedPtr activeGainsPublisher_;
+        rclcpp::TimerBase::SharedPtr activeGainsTimer_;
         rclcpp::TimerBase::SharedPtr linkTimer_;
         estop::LinkWatch link_;   // executor thread only
 
@@ -213,6 +226,8 @@ namespace sairol_bridge
         // Set at start: the robot maps its parallel joints to their motors (T1 parallel_ankle_mapping).
         bool robotMapsParallelJoints_{false};
         bool limp_{false};   // mutex_: armed by /limp_control, frames ramp to kp, kd, tau 0
+        bool gainsFromCmd_{false};   // mutex_: the ramp's gains are a /robot_cmd's
+        std::string lastGainSource_;   // mutex_: the last /active_gains'
         float_t imu_rpy_threshold_{1.0}; // Threshold for IMU roll/pitch in radians
 
         // E-stop. latch_ and holdQ_ are guarded by mutex_; the atomics mirror

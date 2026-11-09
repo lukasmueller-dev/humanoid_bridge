@@ -41,6 +41,7 @@ private:
 
     bool checkJointStateMessage_(aimdk_msgs::msg::JointStateArray::SharedPtr message, size_t message_count, size_t state_offset, size_t active_count, std::string group_name);
     bool checkStateFreshness_() override;
+    bool robotDamps_() override { return dampingActive_; }
 
     bool initControl_(bridge_interface::msg::RobotCmd default_cmd) override;
     void finishControl_() override;
