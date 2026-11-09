@@ -260,6 +260,10 @@ tests that need `bridge_interface` skip. `tools/test.sh` prints what it ran.
 - **`kp = 0` makes the torque clamp a no-op for that joint** (`upper_limbs_kp_min: 0.0`).
 - **G1: `/robot_bridge` parameters are read-only.** `ros2 param set` is refused:
   the bridge reads them once at start. Edit the config and restart.
+- **GEAR `--interface sim` never reaches the bridge, and will not.** Its MuJoCo
+  listens on `rt/lowcmd`, the topic the bridge owns. The sim stays as it is.
+  Rehearse through the bridge with `robot_sim` and `tools/g1-bringup.sh --sim`
+  (`robot_stacks/sim/robot_sim/README.md`).
 - **`robot_bridge/package.xml` depends on `booster_interface` and `aimdk_msgs`
   unconditionally**, so both build even with T1 and X2 off.
 - **X2: never run on a robot in this fork.** Every stop damps and latches in
