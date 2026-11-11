@@ -66,6 +66,7 @@ class Watcher:
         self._state = None  # (LowState, time)
         self._handled = None  # time of the bridge frame whose silence was decided
         self._own = set()  # frames this watcher sent: their echo on rt/lowcmd is not the bridge
+        self._motion = (None, None)  # (last vendor-mode report, start of the released reports)
         self._frame = None
         self._damp_until = 0.0
 
@@ -77,6 +78,11 @@ class Watcher:
     def on_lowstate(self, msg, now: float) -> None:
         self._state = (msg, now)
 
+    def on_motion_mode(self, name: str, now: float) -> None:
+        """MotionSwitcherClient.CheckMode's name, polled: "" released, else a vendor mode."""
+        held, since = self._motion
+        self._motion = (now, None) if name else (held, now if since is None else since)
+
     def step(self, now: float) -> None:
         bridge, state = self._bridge, self._state
         if self.mode == "watch":
@@ -84,6 +90,10 @@ class Watcher:
                 return
             self._handled = bridge[1]  # one decision per silence
             if not holds(bridge[0]):
+                return
+            held, since = self._motion
+            if held is not None and (since is None or since > bridge[1]):
+                log.warning("a vendor mode held rt/lowcmd at the last frame: no hold")
                 return
             if state is None or now - state[1] > STATE_FRESH_S:
                 log.warning("bridge silent after kp > 0 frames, rt/lowstate stale: no hold")

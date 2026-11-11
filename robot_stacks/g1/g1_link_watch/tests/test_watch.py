@@ -73,7 +73,7 @@ class Run:
     def _written(self):
         return sum(len(w.frames) for w in self.writers)
 
-    def for_(self, seconds, cmd=None, state=STILL):
+    def for_(self, seconds, cmd=None, state=STILL, mode=None):
         for _ in range(round(seconds / PERIOD_S)):
             now = self.tick * PERIOD_S
             if self.echo is not None:  # a DDS reader sees its own process's writer
@@ -83,6 +83,8 @@ class Run:
                 self.watcher.on_lowstate(state, now)
             if cmd is not None:
                 self.watcher.on_lowcmd(cmd, now)
+            if mode is not None:
+                self.watcher.on_motion_mode(mode, now)
             before = self._written()
             self.watcher.step(now)
             open_ = self.watcher.writer is not None
@@ -117,6 +119,18 @@ def test_a_stale_lowstate_at_the_trigger_gives_no_hold_even_once_it_returns():
     run = Run().for_(0.5, cmd=ARMED).for_(0.2, cmd=ARMED, state=None).for_(0.5, state=None)
     run.for_(1.0)
     assert run.writers == []
+
+
+@pytest.mark.parametrize("lag", [0.0, 0.3], ids=["poll-in-time", "poll-late"])
+def test_the_motion_service_going_quiet_at_its_release_gives_no_hold(lag):
+    run = Run().for_(0.5, cmd=ARMED, mode="ai").for_(lag, mode="ai").for_(1.0, mode="")
+    assert run.writers == []
+
+
+def test_bridge_frames_after_the_release_get_the_hold():
+    run = Run().for_(0.5, mode="ai").for_(0.5, mode="").for_(0.5, cmd=ARMED, mode="")
+    run.for_(0.5, mode="")
+    assert len(run.writers) == 1
 
 
 def test_returning_bridge_frames_stop_the_hold_at_once():
