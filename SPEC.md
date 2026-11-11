@@ -34,7 +34,7 @@ Roadmap: "Jetson link watcher" (`PROJECT_ROADMAP.md`, Link loss).
 
 ## Milestones
 
-- [ ] Watcher core — code — done when unit tests on fake frames show: a trigger after 0.1 s of silence after kp > 0 frames; no action after damp or mode-0 frames; a stop on returning bridge frames; `R1+R2` gives damp for 1 s, then silence; the writer exists only while it sends.
+- [x] Watcher core — code — done when unit tests on fake frames show: a trigger after 0.1 s of silence after kp > 0 frames; no action after damp or mode-0 frames; a stop on returning bridge frames; `R1+R2` gives damp for 1 s, then silence; the writer exists only while it sends.
 - [ ] `sim-watch` stage in `tools/test.sh` — code — done when the stage passes against robot_sim: 0 watcher frames while the bridge runs; 0 after a SIGINT stop; armed + `SIGSTOP` of the bridge: every joint within 0.05 rad of its pose for 5 s; `R1+R2` gives damp, then silence; the bridge starts and arms while the watcher runs.
 - [ ] Unit file, install script, docs — code — done when `systemd-analyze verify` passes on the unit, the install script's `--dry-run` prints its steps, and `docs/estop.md` has a "Jetson link watcher" section.
 - [ ] End action — code — done when this file is gone and `docs/estop.md` describes the watcher.
