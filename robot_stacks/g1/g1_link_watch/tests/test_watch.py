@@ -4,10 +4,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from g1_link_watch.watch import DAMP_KD, DAMP_S, PERIOD_S, R1_R2, Watcher
+from g1_link_watch.watch import DAMP_KD, DAMP_S, PERIOD_S, Watcher
 
 SLOTS = 35  # LowCmd_.motor_cmd; the G1 bridge drives the first 29
 BODY = 29
+# wireless_remote bytes 2-3 key bits, as estop.hpp and robot_sim name them
+R1, L1, R2 = 0x01, 0x02, 0x10
 
 
 def lowcmd(kp=60.0, mode=1):
@@ -133,7 +135,7 @@ def test_r1_r2_damps_for_1_s_then_silence():
     [writer] = run.writers
     hold = writer.frames[-1]
     sent = len(writer.frames)
-    run.for_(3.0, state=lowstate(keys=R1_R2))  # held past the damp: no new hold
+    run.for_(3.0, state=lowstate(keys=R1 | R2))  # held past the damp: no new hold
     assert writer.closed and len(run.writers) == 1
     damp = writer.frames[sent:]
     assert len(damp) == pytest.approx(DAMP_S / PERIOD_S, abs=1)
@@ -143,6 +145,16 @@ def test_r1_r2_damps_for_1_s_then_silence():
         assert (out.kp, out.kd) == (0.0, DAMP_KD if held.mode else 0.0)
 
 
+@pytest.mark.parametrize(
+    "keys, damps",
+    [(R1 | R2, True), (L1 | R1 | R2, True), (R1, False), (R2, False), (L1 | R1, False)],
+    ids=["R1+R2", "L1+R1+R2", "R1", "R2", "L1+R1"],
+)
+def test_only_r1_and_r2_together_end_the_hold(keys, damps):
+    run = Run().for_(0.5, cmd=ARMED).for_(0.5).for_(0.1, state=lowstate(keys=keys))
+    assert run.watcher.mode == ("damp" if damps else "hold")
+
+
 def test_the_writer_exists_only_while_it_sends():
     run = (
         Run()
@@ -150,7 +162,7 @@ def test_the_writer_exists_only_while_it_sends():
         .for_(0.5)  # hold
         .for_(0.2, cmd=ARMED)  # bridge back
         .for_(0.5)  # hold again
-        .for_(2.0, state=lowstate(keys=R1_R2))  # damp, then silence
+        .for_(2.0, state=lowstate(keys=R1 | R2))  # damp, then silence
         .for_(0.5)
     )
     assert len(run.writers) == 2 and all(w.closed for w in run.writers)
