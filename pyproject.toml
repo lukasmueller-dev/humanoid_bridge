@@ -12,7 +12,7 @@ extend-exclude = ["thirdparty", "examples", "*.md"]
 select = ["E", "F", "W", "I", "UP", "B"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["robot_bridge", "g1_stack", "g1_camera", "robot_sim"]
+known-first-party = ["robot_bridge", "g1_stack", "g1_camera", "g1_link_watch", "robot_sim"]
 
 [tool.pytest.ini_options]
 testpaths = ["bridge", "robot_stacks", "tools", "tests"]
