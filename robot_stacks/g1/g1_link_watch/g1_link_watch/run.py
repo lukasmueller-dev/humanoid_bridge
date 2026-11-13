@@ -55,6 +55,25 @@ def poll_mode(switcher, watcher, stop) -> None:
             watcher.on_motion_mode(mode.get("name", ""), time.monotonic())
 
 
+def spin(watcher, stop) -> None:
+    """`watcher.step` at 500 Hz until `stop`; a crash closes the writer and ends the process."""
+    due = time.monotonic()
+    try:
+        while not stop.is_set():
+            watcher.step(time.monotonic())
+            due += PERIOD_S
+            delay = due - time.monotonic()
+            if delay > 0:
+                time.sleep(delay)
+            else:
+                due = time.monotonic()
+    except Exception:
+        log.exception("crash in mode %s: exit", watcher.mode)
+        if watcher.writer is not None:
+            watcher.writer.close()
+        os._exit(1)  # a plain exit hung after a crash in Writer.__init__, its writer matched
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -103,21 +122,7 @@ def main(argv=None) -> int:
     threading.Thread(target=poll_mode, args=(switcher, watcher, stop), daemon=True).start()
 
     log.info("watching %s on %s, domain %d", LOWCMD, args.iface, args.domain)
-    due = time.monotonic()
-    try:
-        while not stop.is_set():
-            watcher.step(time.monotonic())
-            due += PERIOD_S
-            delay = due - time.monotonic()
-            if delay > 0:
-                time.sleep(delay)
-            else:
-                due = time.monotonic()
-    except Exception:
-        log.exception("crash in mode %s: exit", watcher.mode)
-        if watcher.writer is not None:
-            watcher.writer.close()
-        os._exit(1)  # a plain exit hung after a crash in Writer.__init__, its writer matched
+    spin(watcher, stop)
     log.info("stopped in mode %s", watcher.mode)  # a hold ends here: the robot drops 0.4 s later
     return 0
 
