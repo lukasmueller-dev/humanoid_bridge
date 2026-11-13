@@ -28,15 +28,12 @@ log = logging.getLogger("g1_link_watch")
 class Writer:
     """A rt/lowcmd writer from open to close: each Frame copied into a LowCmd_, CRC set."""
 
-    def __init__(self, participant, topic):
+    def __init__(self, participant, topic, cmd, crc):
         from cyclonedds.pub import DataWriter
-        from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
-        from unitree_sdk2py.utils.crc import CRC
 
+        self._cmd, self._crc = cmd, crc
         # A raw DataWriter: the SDK's ChannelPublisher.Init sleeps 0.2 s of the 0.4 s budget.
         self._writer = DataWriter(participant, topic)
-        self._cmd = unitree_hg_msg_dds__LowCmd_()
-        self._crc = CRC()
 
     def write(self, frame) -> None:
         cmd = self._cmd
@@ -75,8 +72,12 @@ def main(argv=None) -> int:
     from cyclonedds.domain import DomainParticipant
     from cyclonedds.topic import Topic
     from unitree_sdk2py.comm.motion_switcher.motion_switcher_client import MotionSwitcherClient
+    from unitree_sdk2py.idl.default import unitree_hg_msg_dds__LowCmd_
     from unitree_sdk2py.idl.unitree_hg.msg.dds_ import LowCmd_, LowState_
+    from unitree_sdk2py.utils.crc import CRC
 
+    # Before DDS: a missing utils/lib/crc_<arch>.so fails here, not at the first hold.
+    cmd, crc = unitree_hg_msg_dds__LowCmd_(), CRC()
     if args.iface == "lo":
         # robot_sim: lo has no MULTICAST flag; with multicast="default" nothing is discovered.
         channel.ChannelConfigHasInterface = channel.ChannelConfigHasInterface.replace(
@@ -85,7 +86,7 @@ def main(argv=None) -> int:
     channel.ChannelFactoryInitialize(args.domain, args.iface)
     participant = DomainParticipant(args.domain)
     topic = Topic(participant, LOWCMD, LowCmd_)
-    watcher = Watcher(lambda: Writer(participant, topic))
+    watcher = Watcher(lambda: Writer(participant, topic, cmd, crc))
 
     # queueLen 0: the handler runs on the DDS thread and only stores the sample.
     lowcmd = channel.ChannelSubscriber(LOWCMD, LowCmd_)

@@ -38,7 +38,7 @@ def test_each_frame_echoes_equal_with_the_sdk_crc(monkeypatch):
     for i, m in enumerate(state.motor_state):
         m.q = 0.123456789 * i
     hold = hold_frame(frame_of(on_the_wire(bridge)), on_the_wire(state))
-    writer = Writer(None, None)
+    writer = Writer(None, None, unitree_hg_msg_dds__LowCmd_(), CRC())
     for frame in (hold, damp_frame(hold)):
         writer.write(frame)
         echo = writer._writer.echoes[-1]
