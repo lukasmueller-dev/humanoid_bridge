@@ -61,6 +61,7 @@ ros2 topic pub -1 /robot_sim/gantry std_msgs/msg/Bool "{data: false}"   # drop i
 pytest robot_stacks/sim/robot_sim/tests/     # no ROS; skips without mujoco or g1.xml
 tools/test.sh --sim                      # sticks, bridge arms the sim, holds, /robot_cmd, camera, remote damp;
                                          # sim-link: link drop, reboot, restart via g1-bringup.sh --sim
+                                         # sim-watch: g1_link_watch holds on a bridge SIGSTOP, R1+R2 damps; $UNITREE_PYTHON
 G1_MJCF=~/.local/share/robot_web_commander/g1_description/g1_29dof_with_hand.xml tools/test.sh --sim   # plus: Ready opens both Dex3
 robot_stacks/sim/robot_sim/tests/integration/run_sim_amo_test.sh   # AMO stands the sim 30 s, gantry off; own netns, psi0 venv + mujoco
 ```

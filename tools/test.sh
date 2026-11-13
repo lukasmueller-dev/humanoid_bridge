@@ -35,7 +35,8 @@
 #          equal install/bridge-build.stamp (tools/build.sh), sources.params_file|params_sha1 the params file
 #   sim    opt-in (--sim), host only: the real G1_bridge against robot_sim (MuJoCo G1): sticks, arm,
 #          hold, /robot_cmd, remote damp; sim-link: link drop, reboot, g1-bringup.sh --sim release;
-#          sim-t1: T1_bridge against robot_sim --robot t1, through robot-bringup.sh --robot t1, then --parallel-ankle
+#          sim-t1: T1_bridge against robot_sim --robot t1, through robot-bringup.sh --robot t1, then --parallel-ankle;
+#          sim-watch: g1_link_watch silent beside a running or stopped bridge, holds on its SIGSTOP, R1+R2 damps
 #
 # No stage touches hardware. Nothing here opens a real NIC: the DDS settings
 # below pin discovery to loopback, overriding any inherited CYCLONEDDS_URI.
@@ -93,7 +94,7 @@ Options:
   --controllers         low-level controller selection integration test only
   --gains               /active_gains integration test only
   --sources             sources.* parameters integration test only; SKIP without a current tools/build.sh stamp
-  --sim                 robot_sim stages only (sim, sim-link, sim-t1), not in the default set; needs robot_sim
+  --sim                 robot_sim stages only (sim, sim-link, sim-t1, sim-watch), not in the default set; needs robot_sim
                         built, $G1_MJCF, $T1_MJCF and unitree_sdk2py, so not with --docker
   --rmw <impl>          cyclonedds | fastrtps | auto (default auto)
   --python <path>       interpreter for the unit stage (default python3, or $PYTHON)
@@ -430,6 +431,7 @@ if [ "$RUN_SIM" = 1 ]; then
         stage_integration sim "$REPO/robot_stacks/sim/robot_sim/tests/integration/run_sim_bridge_test.sh"
         stage_integration sim-link "$REPO/robot_stacks/sim/robot_sim/tests/integration/run_sim_link_test.sh"
         stage_integration sim-t1 "$REPO/robot_stacks/sim/robot_sim/tests/integration/run_sim_t1_test.sh"
+        stage_integration sim-watch "$REPO/robot_stacks/sim/robot_sim/tests/integration/run_sim_watch_test.sh"
     fi
 fi
 
