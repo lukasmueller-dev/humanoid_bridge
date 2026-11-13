@@ -104,14 +104,20 @@ def main(argv=None) -> int:
 
     log.info("watching %s on %s, domain %d", LOWCMD, args.iface, args.domain)
     due = time.monotonic()
-    while not stop.is_set():
-        watcher.step(time.monotonic())
-        due += PERIOD_S
-        delay = due - time.monotonic()
-        if delay > 0:
-            time.sleep(delay)
-        else:
-            due = time.monotonic()
+    try:
+        while not stop.is_set():
+            watcher.step(time.monotonic())
+            due += PERIOD_S
+            delay = due - time.monotonic()
+            if delay > 0:
+                time.sleep(delay)
+            else:
+                due = time.monotonic()
+    except Exception:
+        log.exception("crash in mode %s: exit", watcher.mode)
+        if watcher.writer is not None:
+            watcher.writer.close()
+        os._exit(1)  # a plain exit hung after a crash in Writer.__init__, its writer matched
     log.info("stopped in mode %s", watcher.mode)  # a hold ends here: the robot drops 0.4 s later
     return 0
 
