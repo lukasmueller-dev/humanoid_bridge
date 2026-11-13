@@ -3,7 +3,7 @@
 - **Repo:** humanoid_bridge
 - **Branch:** `link-watcher`
 - **Worktree:** `.claude/worktrees/link-watcher`
-- **Last updated:** 2026-11-11 · turing
+- **Last updated:** 2026-11-13 · turing
 
 ## State
 
@@ -17,15 +17,16 @@ Milestone 2 of `SPEC.md` has its code but never ran against robot_sim, so it is 
 
 ## Next action
 
-Run the stage on a host with ROS, robot_sim built and `$G1_MJCF`:
+The owner ran `run_sim_watch_test.sh` on turing in the `robot-sim:humble` container (2026-11-13): 5 FAIL from one cause.
+`Writer.__init__` → `CRC()` raised `OSError`: the image's `unitree_sdk2py` has no `utils/lib/crc_amd64.so`.
 
-```bash
-tools/test.sh --sim    # or only: robot_stacks/sim/robot_sim/tests/integration/run_sim_watch_test.sh
-```
+1. Make the image's SDK ship its CRC libs (`robot_stacks/sim/robot_sim/Dockerfile`).
+2. Load the IDL and CRC at watcher start, so a missing lib fails at start, not at the first hold.
+3. Make a crash in the main loop end the process, so no `/lowcmd` writer stays.
 
-- Pass: tick milestone 2 in `SPEC.md`, then make milestone 3 the next action here.
-- Fail: the run prints the watcher, bridge and sim logs.
-- Read the `note  /lowcmd publishers in the hold: N` line: 2 means the bridge counts a raw SDK writer (the spec's open question).
+- The `/lowcmd publishers in the hold: 2` line is not valid: the crashed watcher left a half-open writer.
+- Bridge 3 refused to start: 1 publisher on `/lowcmd` (likely the crashed watcher, kept alive by the `poll_mode` thread).
+- After this job, the owner rebuilds the image and runs sim-watch again.
 
 ## Blockers
 
