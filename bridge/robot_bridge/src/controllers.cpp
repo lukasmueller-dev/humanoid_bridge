@@ -19,7 +19,7 @@ namespace sairol_bridge
         }
     };
 
-    // bridge_pd: the PD here at 1 kHz, sent as tau with kp = kd = 0.
+    // bridge_pd: the PD here at the tick rate (`control_dt`), sent as tau with kp = kd = 0.
     class BridgePd : public low_level_controller::Controller
     {
     public:

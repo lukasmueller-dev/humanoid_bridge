@@ -2,12 +2,12 @@
 
 ROS 2 bridge between a control client and Unitree (G1, H1, H1_2), Booster (T1)
 or AgiBot (X2) humanoids, and the Unitree Go2 quadruped. It takes commands on `/robot_cmd`, interpolates them, runs safety
-checks on command and state, and publishes motor commands at 1 kHz.
+checks on command and state, and publishes motor commands every `control_dt` (1 kHz on the G1).
 
 ```
 bridge/           the bridge and its Python client, upstream-bound
   bridge_interface/   messages and services
-  low_level_controller/  header-only plugin interface of the 1 kHz low-level controllers (docs/low-level-controllers.md)
+  low_level_controller/  header-only plugin interface of the per-tick low-level controllers (docs/low-level-controllers.md)
   examples/example_controller/  a template low-level controller plugin
   robot_bridge/       C++ bridge, robot_bridge/ Python client, adapters, motor_pd and bridge_pd plugins
     examples/           reference clients per robot (not built or installed)
