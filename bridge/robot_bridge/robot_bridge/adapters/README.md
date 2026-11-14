@@ -2,7 +2,7 @@
 
 An adapter makes an external controller publish `/robot_cmd` instead of
 opening its own `rt/lowcmd`. The bridge then applies its own checks,
-interpolation, 1 kHz publish and watchdog.
+interpolation, `control_dt` publish and watchdog.
 
 ## The contract
 

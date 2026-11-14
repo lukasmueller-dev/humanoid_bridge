@@ -27,8 +27,8 @@ Closes roadmap `feat/g1-finish-control-release`.
 | `DISARMED` | nothing | dropped | allowed | arm → `ARMED` |
 | `ARMED` | tracking frames (today's path) | accepted | allowed | stop → `STOPPED`, e-stop or fault → `LATCHED` |
 | `ARMED limp` (`/limp_control`; G1, T1, Go2) | kp, kd, tau ramp to 0 over `duration`, then q = measured | dropped | allowed | `start_control`, Ready, Zero ramp from the measured pose → `ARMED`; stop → `STOPPED(estop.mode.stop)`, hold in every shipped config; e-stop or fault → `LATCHED` |
-| `STOPPED(mode)` | stop frame, 1 kHz | dropped | allowed | arm → `ARMED`, e-stop or fault → `LATCHED` |
-| `LATCHED(mode, cause)` | stop frame, 1 kHz (nothing if latched from `DISARMED`, or 1.2 s after `/lowstate` stopped) | dropped | **refused** | `/estop_reset` → `STOPPED`, or `DISARMED` if silent |
+| `STOPPED(mode)` | stop frame, every `control_dt` | dropped | allowed | arm → `ARMED`, e-stop or fault → `LATCHED` |
+| `LATCHED(mode, cause)` | stop frame, every `control_dt` (nothing if latched from `DISARMED`, or 1.2 s after `/lowstate` stopped) | dropped | **refused** | `/estop_reset` → `STOPPED`, or `DISARMED` if silent |
 
 - Arming services: `/start_control`, `/limp_control`, `/ready_position_control`, `/zero_position_control`, `/start_hand_control`.
 - `estop.require_remote: true` (the G1 default when the key is missing, with a warning): every arming service is refused unless the remote's header (`0x55 0x51`) arrived in the last 0.5 s. Measured 2026-10-20: remote off = all 40 bytes 0; at rest the bytes stay constant, so only the header counts. Remote lost while armed: open question. Ready and zero count as arming even while `ARMED`: they move every joint, so they also need the remote and a free `/lowcmd`.
