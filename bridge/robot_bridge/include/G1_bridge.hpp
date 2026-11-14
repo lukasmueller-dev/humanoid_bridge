@@ -145,4 +145,4 @@ private:
     float_t handTemperatureLimit_{80.0};
 };
 }
-#endif // SAIROL_BRIDGE_T1_BRIDGE_HPP_
+#endif // SAIROL_BRIDGE_G1_BRIDGE_HPP_
