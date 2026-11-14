@@ -223,7 +223,7 @@ on a sourced `robot_bridge` built from another clone or before the newest file
 under `bridge/`: rebuild and source again.
 
 ```bash
-tools/test.sh --docker              # every stage in a ROS 2 Humble container; needs only docker
+tools/test.sh --docker              # every stage but --sim in a ROS 2 Humble container; needs only docker
 tools/test.sh                       # the same on a sourced workspace
 tools/test.sh --unit                # needs no ROS
 tools/test.sh --hands --stale-after 3.9   # move the left hand's stale release (3.0 to 4.0)

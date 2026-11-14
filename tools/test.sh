@@ -6,7 +6,7 @@
 # workspace for the other stages. Stages that cannot run are skipped with the
 # reason. Exit: 0 every requested stage passed, 1 a stage failed, 2 a stage was
 # skipped (--allow-skip: a skip passes). --docker needs only docker: it builds
-# and runs every stage in tools/Dockerfile.test with the container network off.
+# and runs every stage but --sim in tools/Dockerfile.test with the container network off.
 # Every stage but unit fails on a sourced robot_bridge built from another clone,
 # or older than the newest file under bridge/.
 #
@@ -74,7 +74,7 @@ usage() {
     cat <<'EOF'
 Usage: tools/test.sh [options]
 
-Run the no-hardware test stages. With no stage flag, runs all of them.
+Run the no-hardware test stages. With no stage flag, runs all of them except --sim.
 Exit 0: every requested stage passed; 1: a stage failed; 2: a stage was skipped (it did not run).
 
 Options:
