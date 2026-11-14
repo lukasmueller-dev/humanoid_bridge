@@ -67,9 +67,10 @@ fake_camera_server                          # stand-in on the wire
   `--source videohub`, the default, for colour.
 - **Geometry looks stretched** → videohub serves 16:9. `--fit crop` (default)
   takes the centre 4:3; `--fit squash` keeps the full view and distorts it.
-- **A preview left open slows a run** → only with `--capture-hz 0` (the default 30
-  serves one cached frame to every reader): raise `--max-age`. Below it the preview
-  grabs its own frames and takes the source lock.
+- **A preview left open slows a run** → raise `--max-age`. The preview grabs its own
+  frame and takes the source lock whenever the cached one is older than `--max-age`
+  (0.2 s). The default `--capture-hz 30` keeps the cache younger; a rate under 5 Hz,
+  or `--capture-hz 0` with requests slower than `--max-age`, does not.
 - **No depth, no IR, no exposure control** on either path. `pyrealsense2` has
   no aarch64 wheel.
 - **Frame size is the camera's, not a policy's.** A caller that needs a
