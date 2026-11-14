@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Gantry check for gate 2: one target step on one joint, out and back; prints how fast the target moved.
 
-MOVES THE ROBOT. Needs an ARMED bridge (tools/g1-bringup.sh --arm-from-measured) and the robot in the gantry.
+MOVES THE ROBOT. Needs an ARMED bridge (tools/g1-bringup.sh --arm-from-measured --robot-is-clear) and the robot in the gantry.
 Every other joint gets its measured pose; the step is a single /robot_cmd with interpolation_order 0,
 so only the bridge's rate limit makes it a ramp.
 
