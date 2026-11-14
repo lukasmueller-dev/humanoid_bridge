@@ -107,7 +107,7 @@ def format_state(msg, side="left") -> str:
 
 
 def summarise(msg, baseline) -> str:
-    """A one-line q vector plus how far each motor has moved from baseline."""
+    """A one-line q vector plus the largest move of any motor from baseline."""
     q = [m.q for m in msg.motor_state[:NUM_MOTORS]]
     moved = max(abs(a - b) for a, b in zip(q, baseline)) if baseline else 0.0
     return "q [{}]  moved {:+.4f}".format(" ".join(f"{v:+7.4f}" for v in q), moved)

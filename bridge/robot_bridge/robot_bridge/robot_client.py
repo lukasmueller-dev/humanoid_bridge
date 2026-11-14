@@ -663,8 +663,9 @@ class RobotClient:
         Stop the control loop by calling the stop_control service.
 
         X2 returns the pending future; its done-callback handles the response.
-        The Unitree and Booster joystick handlers drop the result (fire-and-forget):
-        awaiting inside a subscription callback blocks the executor that delivers the response.
+        The Booster joystick handler drops the result (fire-and-forget): awaiting inside a
+        subscription callback blocks the executor that delivers the response. The Unitree
+        handler does not call it: the bridge stops itself.
         """
         if self.robot_type == "X2" and not self.stop_control_client.service_is_ready():
             raise RuntimeError("stop_control_client service is unavailable.")

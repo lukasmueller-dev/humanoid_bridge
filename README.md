@@ -2,12 +2,12 @@
 
 ROS 2 bridge between a control client and Unitree (G1, H1, H1_2), Booster (T1)
 or AgiBot (X2) humanoids, and the Unitree Go2 quadruped. It takes commands on `/robot_cmd`, interpolates them, runs safety
-checks on command and state, and publishes motor commands at 1 kHz.
+checks on command and state, and publishes motor commands every `control_dt` (1 kHz on the G1).
 
 ```
 bridge/           the bridge and its Python client, upstream-bound
   bridge_interface/   messages and services
-  low_level_controller/  header-only plugin interface of the 1 kHz low-level controllers (docs/low-level-controllers.md)
+  low_level_controller/  header-only plugin interface of the per-tick low-level controllers (docs/low-level-controllers.md)
   examples/example_controller/  a template low-level controller plugin
   robot_bridge/       C++ bridge, robot_bridge/ Python client, adapters, motor_pd and bridge_pd plugins
     examples/           reference clients per robot (not built or installed)
@@ -15,7 +15,7 @@ robot_stacks/     per-robot deploy layers
   g1/                 g1_stack, g1_camera
   sim/                robot_sim: the MuJoCo sim of G1, T1 and Go2
   t1/                 placeholder; the T1 stack has not been written
-scripts/          environment setup, sourced not run
+scripts/          environment setup, sourced not run; real/ holds a robot check you run
 tools/            helpers, run not sourced
 thirdparty/       vendored unitree_ros2, booster_ros2_interface and aimdk_msgs (X2)
 ```
@@ -223,7 +223,7 @@ on a sourced `robot_bridge` built from another clone or before the newest file
 under `bridge/`: rebuild and source again.
 
 ```bash
-tools/test.sh --docker              # every stage in a ROS 2 Humble container; needs only docker
+tools/test.sh --docker              # every stage but --sim in a ROS 2 Humble container; needs only docker
 tools/test.sh                       # the same on a sourced workspace
 tools/test.sh --unit                # needs no ROS
 tools/test.sh --hands --stale-after 3.9   # move the left hand's stale release (3.0 to 4.0)

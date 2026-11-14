@@ -100,7 +100,7 @@ fake_g1 records `/lowcmd` at all.
 | `run_fake_gates_test.sh` | orchestrates the gate run, then `drive_no_estop_block.py` on a second bridge |
 | `loopback_dds.sh` | sourced by every `run_*.sh`: discovery on loopback only |
 | `harness.sh` | sourced by every `run_fake_*_test.sh`: paths, bridge start, cleanup, failure output |
-| `harness.py` | imported by the `drive_*.py` drivers: `Checks` (PASS/FAIL line, `spin`, `wait`, `finish`), `ros_node`; `robot_sim/tests/integration/sim_harness.py` is the sim copy |
+| `harness.py` | imported by every `drive_*.py` driver but `drive_gear_wbc.py`: `Checks` (PASS/FAIL line, `spin`, `wait`, `finish`), `ros_node`; `robot_sim/tests/integration/sim_harness.py` is the sim copy |
 | `fake_dex3.py` | publishes `/dex3/*/state` at 100 Hz, records `/dex3/*/cmd`; `--stale-after`, `--hot-after`, both timed from the first left command; `--silent <side>` never publishes that hand |
 | `drive_hand_cmd.py` | `start_hand_control` refused with another `/lowcmd` publisher and on a tilt, then accepted, then both hands through the hand adapter, then an over-limit and a NaN command, then (`--check-estop`) `/estop_damp` mid-stream with both hands live, then a `/lowcmd` probe; `--phases` writes the NaN phase's times |
 | `check_hand_cmd.py` | asserts the hand recording; pure offline, needs no ROS |

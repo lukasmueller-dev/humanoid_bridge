@@ -263,12 +263,12 @@ namespace sairol_bridge::estop
             return frame;   // load rejects this; no spring rather than a division by zero
         }
 
-        // Same torque window as publishLowCommand_, with dq terms at 0.
+        // Same torque window as trackingFrame_, with dq terms at 0.
         const float_t window = joint.tau_limit / joint.kp;
         frame.q = std::clamp(q_hold, q_meas - window, q_meas + window);
         frame.kp = joint.kp;
 
-        // Same conversion as publishLowCommand_ for parallel joints.
+        // Same conversion as trackingFrame_ for parallel joints.
         if (joint.if_parallel_joint)
         {
             frame.tau = std::clamp((frame.q - q_meas) * joint.kp, -joint.tau_limit, joint.tau_limit);

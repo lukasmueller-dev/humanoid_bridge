@@ -1392,8 +1392,7 @@ namespace sairol_bridge
             {
                 return false;
             }
-            // q is deliberately not clamped here; publishLowCommand_ bounds it by
-            // the torque that reaching it would take.
+            // q is deliberately not clamped here; see checkMotorCmd_ in bridge_core.hpp.
         }
 
         if (clipped)
