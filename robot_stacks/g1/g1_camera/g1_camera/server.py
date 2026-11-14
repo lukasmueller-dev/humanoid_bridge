@@ -339,7 +339,7 @@ def parse_args(argv=None):
         "--preview-port",
         type=int,
         default=wire.DEFAULT_PREVIEW_PORT,
-        help="HTTP preview: /frame.jpg and /health",
+        help="HTTP preview: /frame.jpg, /stream.mjpeg and /health",
     )
     parser.add_argument(
         "--no-preview", action="store_true", help="do not open the HTTP preview port"

@@ -2,8 +2,8 @@
 
 **This node commands.** Run it against the MuJoCo rehearsal, not the robot.
 
-What it is for: the unit tests prove that psi0 column i and goal slot j agree
-about a joint *name*. They cannot prove the name list matches this robot. Only
+What it is for: the unit tests prove the goal array is built by joint *name*
+(`pose_from_named`). They cannot prove the name list matches this robot. Only
 watching a named slot move the joint it claims can do that, and this drives one
 slot at a time so the answer is unambiguous.
 

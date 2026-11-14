@@ -22,7 +22,7 @@ class ArmJointsFromLowState:
     """The 14 arm joints out of a `unitree_hg/LowState`.
 
     Takes a callable returning the newest message, not a subscription, so the
-    node owns the ROS 2 lifecycle.
+    caller owns the DDS subscription (`dds.LatestFromDds`).
     """
 
     def __init__(self, latest_low_state):
