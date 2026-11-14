@@ -47,7 +47,7 @@ resolves it. Pass `module=` to target a different module.
 ### 2. Start control, then run
 
 ```python
-client.start_control(default_position=[0.0] * 29)  # ramps over 2 s, blocks
+client.start_control(default_position=[0.0] * 29)  # starts the `duration` ramp, returns once armed
 ```
 
 The bridge drops every `/robot_cmd` until this returns.
@@ -120,5 +120,5 @@ the two orderings side by side.
   fixture instead.
 - Hands need `start_hand_control`, not `start_control`; the two are independent.
 - `HandCommandSender` opens its own `rt/dex3/<side>/cmd` publisher. The adapter
-  must not, and the bridge cannot see it if it does: `checkExternalPublisher_`
-  queries the ROS graph, and `unitree_sdk2py` publishers are not in it.
+  must not, and the bridge cannot see it if it does: its `count_publishers` check
+  on `/dex3/<side>/cmd` queries the ROS graph, and `unitree_sdk2py` publishers are not in it.

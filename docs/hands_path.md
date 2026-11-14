@@ -107,13 +107,13 @@ client.send_hand_cmd("left", q, kp=..., kd=...)   # 7 long, DDS order
 client.stop_hand_control()
 ```
 
-`client.ready_position_control()` opens the hands too: after the body is granted,
+`client.ready_position_control()` (`goto_default_position()` on `RobotClient`) opens the hands too: after the body is granted,
 each hand with fresh state ramps to `hand_ready_q` over `duration` and holds, even
 under a client's `/hand_cmd`. A live hand ramps from its last frame, an unarmed one
 from its measured q at zero gain. The reply ends `; hands: left, right`, or
 `; hands: none (<why>)`; a refused body moves no hand.
 
-On both `RobotCmdClient` and `RobotClient`. There are no baked-in hand gains —
+The hand calls exist on both `RobotCmdClient` and `RobotClient`. There are no baked-in hand gains —
 pass them, or set them once with `set_default_hand_cmd()`. `start_hand_control`
 answers `success: false` when no hand is publishing state, and names any hand it
 skipped. Like body arming, it is refused on a body state fault (`checkState_`:
@@ -146,8 +146,8 @@ tools/test.sh --hands --stale-after 3.9 --hot-after 3.2
 node publishes `/lowcmd` and while the body is tilted, drives both hands through the adapter and then sends a
 deliberately bad command; `check_hand_cmd.py` asserts the mode bits, the
 left/right split, the ramp, the clamps, that NaN commands leave the last good
-target in force, and that the body stayed idle (a `/lowcmd` probe proves the
-fake records). The plain run then re-arms both hands and checks that
+target in force. `run_fake_hand_test.sh` asserts that the body stayed idle (a
+`/lowcmd` probe proves the fake records). The plain run then re-arms both hands and checks that
 `/estop_damp` mid-stream sends both limp frames and refuses `start_hand_control`.
 The stale and hot runs check that only the left hand releases; a hot hand keeps
 getting limp frames.
@@ -157,8 +157,8 @@ getting limp frames.
 - **The real left hand drops state for up to 1 s** (G1 gantry, 2026-10-23). The
   0.2 s guard releases it limp; Ready skips it if the gap is at the call. Press
   Ready again; cause open (roadmap).
-- **`checkExternalPublisher_` will not see `dex3_probe command`.** It queries
-  the ROS graph; `unitree_sdk2py` publishers are not ROS 2 nodes. The
+- **The constructor's `count_publishers` check on `/dex3/<side>/cmd` will not see
+  `dex3_probe command`.** It queries the ROS graph; `unitree_sdk2py` publishers are not ROS 2 nodes. The
   two-publisher guard is partial on the hand topics, and warns rather than
   blocking so a contested hand topic cannot stop the body bridge.
 - **`unitree_hg/HandCmd.motor_cmd` is an unbounded sequence**, unlike
