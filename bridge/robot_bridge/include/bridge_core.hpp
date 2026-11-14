@@ -99,9 +99,9 @@ namespace sairol_bridge
 
         // One motor's command, against one joint's limits. Rejects what cannot be
         // salvaged (NaN/Inf, absurd magnitudes) and clamps what can (kp, kd, dq,
-        // tau), setting `clipped` when it did. Does not touch q: the body path
-        // bounds q by implied torque in trackingFrame_ (H1, H1_2: publishLowCommand_), the hand path clamps
-        // it to [q_min, q_max] itself.
+        // tau), setting `clipped` when it did. Does not touch q: the body path bounds q
+        // by implied torque in trackingFrame_ (G1, Go2, T1) or in the robot's own
+        // publishLowCommand_ (H1, H1_2, X2); the hand path clamps it to [q_min, q_max] itself.
         bool checkMotorCmd_(bridge_interface::msg::MotorCmd &cmd,
                             const Joint &joint_info,
                             float_t kp_min, float_t kp_max,

@@ -1392,8 +1392,8 @@ namespace sairol_bridge
             {
                 return false;
             }
-            // q is deliberately not clamped here; trackingFrame_ bounds it by
-            // the torque that reaching it would take.
+            // q is deliberately not clamped here; trackingFrame_ (G1, Go2, T1) or the robot's
+            // publishLowCommand_ (H1, H1_2, X2) bounds it by the torque that reaching it would take.
         }
 
         if (clipped)
