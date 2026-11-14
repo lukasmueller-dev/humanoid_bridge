@@ -1392,7 +1392,7 @@ namespace sairol_bridge
             {
                 return false;
             }
-            // q is deliberately not clamped here; publishLowCommand_ bounds it by
+            // q is deliberately not clamped here; trackingFrame_ bounds it by
             // the torque that reaching it would take.
         }
 

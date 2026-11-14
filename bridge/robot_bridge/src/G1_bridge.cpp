@@ -329,7 +329,7 @@ bool sairol_bridge::G1Bridge::initControl_(bridge_interface::msg::RobotCmd defau
     return true;
 }
 
-// mutex_ held (update_). Bypasses publishLowCommand_: its q clamp divides by kp.
+// mutex_ held (update_). Bypasses trackingFrame_: its q clamp divides by kp.
 void sairol_bridge::G1Bridge::publishStopCommand_()
 {
     unitree_hg::msg::LowCmd unitree_cmd;

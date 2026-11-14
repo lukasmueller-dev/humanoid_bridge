@@ -125,8 +125,8 @@ namespace sairol_bridge::estop
         float_t q{0}, dq{0}, kp{0}, kd{0}, tau{0};
     };
 
-    // One motor's stop command. Never divides by kp: hold needs joint.kp > 0,
-    // which BridgeCore checks at load. A non-finite q_meas (or q_hold in hold)
+    // One motor's stop command. Hold divides by joint.kp, so it needs joint.kp > 0,
+    // which BridgeCore checks at load; a non-positive kp gets no spring. A non-finite q_meas (or q_hold in hold)
     // never reaches the wire: that joint gets damp at q 0.
     MotorFrame stopFrame(Mode mode, const Joint &joint, float_t q_meas, float_t q_hold, float_t damp_kd);
 

@@ -173,7 +173,7 @@ void sairol_bridge::Go2Bridge::publishLowCommand_()
     lowCommandPublisher_->publish(unitree_cmd);
 }
 
-// mutex_ held (update_). Bypasses publishLowCommand_: its q clamp divides by kp.
+// mutex_ held (update_). Bypasses trackingFrame_: its q clamp divides by kp.
 void sairol_bridge::Go2Bridge::publishStopCommand_()
 {
     unitree_go::msg::LowCmd unitree_cmd;
