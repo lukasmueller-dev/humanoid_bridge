@@ -246,7 +246,7 @@ $C/g1-commander.sh --workspace <ws> --adapter humanoid_locoman_vla   # own tmux 
 | 2b | after a robot restart, before the release: Arm | refused "other /lowcmd publisher" |
 | 3 | remote on, Arm at measured pose | pill `remote`; armed, nothing moves |
 | 4 | `ros2 service call /start_control bridge_interface/srv/SetDefaultPosition "{default_position: [0.0, 0.0]}"` | `success: false`, nothing moves |
-| 5 | armed, no jog: `$B/g1-step-test.py --joint R_ELBOW --delta 0.5` | elbow ramps, no snap; both lines PASS (<= 3 rad/s) |
+| 5 | armed, no jog: `$B/g1-step-test.py --joint R_ELBOW --delta 0.5` | elbow ramps, no snap; both lines PASS (target max <= 1.25 × the joint's `q_rate_limit`, 3.75 rad/s for the elbow) |
 | 6 | page DAMP, HOLD; remote `R1+R2` (damp), `L1+R1` (hold); RESET | as on 2026-10-19, combos swapped |
 | 7 | armed, pull the Ethernet cable 5 s, plug it in | log `No /lowstate for 1.2 s: … silent`; robot stays passive after the cable is back; RESET -> `DISARMED` |
 | 8 | `$B/g1-bringup.sh --stop` | `stopped`, no SIGKILL line |
