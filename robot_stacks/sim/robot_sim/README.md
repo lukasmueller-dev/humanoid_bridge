@@ -20,7 +20,7 @@ A new robot: `robot_sim/robots/<name>.py` with `SPEC` (`physics.RobotSpec`) and 
 | Camera | `d435` rendered at 30 Hz, served by `g1_camera.CameraServer` (source `robot_sim g1 d435`): ZMQ 5556, preview `:5557/frame.jpg`, on 127.0.0.1 (`--camera-bind`); `--no-camera` |
 | Viewer | MuJoCo window when `$DISPLAY` is set; in docker: `-e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix:ro` |
 | Gantry | spring on the pelvis, feet 5 cm up; on at start |
-| Guard | refuses to start unless DDS stays on loopback (`CYCLONEDDS_URI` names only `lo`, or `ROS_LOCALHOST_ONLY=1`) |
+| Guard | refuses to start unless DDS stays on loopback (`CYCLONEDDS_URI` names only `lo` under `rmw_cyclonedds_cpp`; under another RMW, `ROS_LOCALHOST_ONLY=1`) |
 | Inputs | `/robot_sim/gantry` (Bool), `/robot_sim/remote` (Bool), `/robot_sim/buttons` (String `R1+R2`, `""` releases; names as the bridge YAML's combos), `/robot_sim/reset` (Empty) |
 | Sticks | `/robot_sim/sticks` (`Float32MultiArray` `[lx, ly, rx, ry]`, clipped to ±1), G1 only → `wireless_remote` bytes 4-24 as the bridge's `remoteSticks` reads them; zero 0.2 s after the last message |
 | Link drop | `/robot_sim/link` (Float32 s): no state out, no command in; sim time and `tick` run on |
