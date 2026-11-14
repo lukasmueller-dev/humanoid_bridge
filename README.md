@@ -15,7 +15,7 @@ robot_stacks/     per-robot deploy layers
   g1/                 g1_stack, g1_camera
   sim/                robot_sim: the MuJoCo sim of G1, T1 and Go2
   t1/                 placeholder; the T1 stack has not been written
-scripts/          environment setup, sourced not run
+scripts/          environment setup, sourced not run; real/ holds a robot check you run
 tools/            helpers, run not sourced
 thirdparty/       vendored unitree_ros2, booster_ros2_interface and aimdk_msgs (X2)
 ```
