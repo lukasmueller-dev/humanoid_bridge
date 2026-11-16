@@ -71,8 +71,3 @@ Decided and fake-tested on `g1-web-interface` (`docs/psi0_gates.md`).
 ### Upstream fixes — one branch each
 
 - [ ] `fix/config-keymaps`: the keymap headers in `params/*.yaml` are corrected here: each key names its handler, `robot_client.py` or the bridge. Still to send upstream. **Done when:** the PR is open.
-
-### Codebase health
-
-- [ ] No target builds `src/bridge.cpp`, `src/release_node.cpp`, `src/key_event_handler.cpp`, `src/common/ros2_sport_client.cpp` or their headers (README, "upstream leftovers"); `CMakeLists.txt:170-240` keeps their targets and the unitree_sdk2 import commented out. Check that DFKI has not changed them, then delete them and the README sentence.
-  **Done when:** `git ls-files bridge/robot_bridge | grep -c 'src/bridge.cpp\|include/bridge.hpp\|release_node\|key_event_handler\|ros2_sport_client'` prints 0, `grep -c 'release_node\|unitree_sdk2' bridge/robot_bridge/CMakeLists.txt` prints 0, and `tools/test.sh --docker` passes.
