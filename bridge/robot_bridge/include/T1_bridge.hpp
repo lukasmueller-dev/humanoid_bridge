@@ -67,7 +67,6 @@ private:
     rclcpp::Publisher<booster_interface::msg::LowCmd>::SharedPtr lowCommandPublisher_;
     rclcpp::Client<booster_interface::srv::RpcService>::SharedPtr client_;
     rclcpp::TimerBase::SharedPtr jointCtrlWatchTimer_;
-    estop::Cause lastRemote_{estop::Cause::None};          // executor thread only
     estop::Cause lastJointCtrlFault_{estop::Cause::None};  // executor thread only
     bool stateLogged_{false};
 };

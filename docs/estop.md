@@ -179,7 +179,7 @@ tools/robot-bringup.sh --override trip.yaml   # after --params; also with --fore
 
 - `include/estop.hpp`, `src/estop.cpp`: no `rclcpp`. `SafetyLatch` (states, mode rules, reset rules), `stopFrame(...)`, `remoteKeys(...)`, `remoteHeader(...)`, `parseCombo(...)`.
 - `BridgeCore`: owns a `SafetyLatch` beside `controlStarted_` (tracking, now atomic); `enterStop_`; `armControl_` gates the arming services (ready/zero while `ARMED` run its remote and `/lowcmd` checks themselves); each robot bridge creates the body ones with `createArmingServices_()` after its startup waits, except X2, which makes its own three there; `checkState_` returns the fault; new services `/estop_damp`, `/estop_hold`, `/estop_reset`; virtual `publishStopCommand_()` with an empty default.
-- `G1Bridge`: implements `publishStopCommand_`; remote parsing in `lowStateHandler_`, which now copies state under `mutex_`; `finishControl_` stays a log line.
+- `G1Bridge`: implements `publishStopCommand_`; remote parsing in `BridgeCore::remoteFromLowState_`, called from `lowStateHandler_`, which now copies state under `mutex_`; `finishControl_` stays a log line.
 - `include/joint.hpp`: `Joint` moved out of `bridge_core.hpp` so the pure code needs no ROS.
 - `RobotCmdClient`: `estop_damp()`, `estop_hold()`, `estop_reset()`.
 - T1 (2026-10-25): as the G1: stop frames, gates, `/robot_link`, the gamepad on `/remote_controller_state` (`estop.remote_keys: t1`, damp RB+RT, hold LB+RB); custom mode on arming, damping mode at shutdown (`booster_mode.hpp`). Measured 2026-10-27: the T1 gamepad sends one latched message per button event and none while idle, so any message since the bridge started (the latched one included) counts as connected. A gamepad that switches off later is not detected.

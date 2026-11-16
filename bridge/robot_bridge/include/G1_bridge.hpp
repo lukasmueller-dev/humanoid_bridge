@@ -127,7 +127,6 @@ private:
     rclcpp::Subscription<unitree_hg::msg::LowState>::SharedPtr lowStateSubscriber_;
     rclcpp::Publisher<unitree_hg::msg::LowCmd>::SharedPtr lowCommandPublisher_;
     int mode_machine_{0};
-    estop::Cause lastRemote_{estop::Cause::None};   // executor thread only
     rclcpp::TimerBase::SharedPtr lowcmdWatchTimer_;
     estop::Cause lastLowcmdFault_{estop::Cause::None};   // executor thread only
 

@@ -140,6 +140,35 @@ namespace sairol_bridge
         return state;
     }
 
+    void BridgeCore::noteRemoteKeys_(uint16_t keys)
+    {
+        remoteKeys_ = keys;
+        const estop::Cause remote = estop::remoteOnset(estop::remoteCause(keys, estopConfig_), lastRemote_);
+        if (remote != estop::Cause::None)
+        {
+            enterStop_(remote);
+        }
+    }
+
+    void BridgeCore::remoteFromLowState_(const uint8_t *raw, size_t size, bridge_interface::msg::RobotState &state)
+    {
+        const uint16_t keys = estop::remoteKeys(raw, size);
+        const bool header = estop::remoteHeader(raw, size);
+        if (header)
+        {
+            lastRemoteHeader_ = steadyClock_.now().seconds();
+        }
+        noteRemoteKeys_(keys);
+
+        state.remote.connected = header;
+        state.remote.pressed = estop::keyNames(keys, *keyTable_);
+        const estop::Sticks sticks = estop::remoteSticks(raw, size);
+        state.remote.lx = sticks.lx;
+        state.remote.ly = sticks.ly;
+        state.remote.rx = sticks.rx;
+        state.remote.ry = sticks.ry;
+    }
+
     void BridgeCore::createArmingServices_(bool limp)
     {
         if (limp)

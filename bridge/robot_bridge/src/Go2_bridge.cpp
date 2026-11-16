@@ -128,28 +128,7 @@ void sairol_bridge::Go2Bridge::lowStateHandler_(unitree_go::msg::LowState::Share
     noteLink_(msg->tick);
 
     // The remote rides on LowState, as on the G1: same header and key bytes.
-    const uint8_t *raw = msg->wireless_remote.data();
-    const size_t raw_size = msg->wireless_remote.size();
-    const uint16_t keys = estop::remoteKeys(raw, raw_size);
-    remoteKeys_ = keys;
-    const bool header = estop::remoteHeader(raw, raw_size);
-    if (header)
-    {
-        lastRemoteHeader_ = steadyClock_.now().seconds();
-    }
-    const estop::Cause remote = estop::remoteOnset(estop::remoteCause(keys, estopConfig_), lastRemote_);
-    if (remote != estop::Cause::None)
-    {
-        enterStop_(remote);
-    }
-
-    state.remote.connected = header;
-    state.remote.pressed = estop::keyNames(keys, *keyTable_);
-    const estop::Sticks sticks = estop::remoteSticks(raw, raw_size);
-    state.remote.lx = sticks.lx;
-    state.remote.ly = sticks.ly;
-    state.remote.rx = sticks.rx;
-    state.remote.ry = sticks.ry;
+    remoteFromLowState_(msg->wireless_remote.data(), msg->wireless_remote.size(), state);
     robotStatePublisher_->publish(state);
 }
 
