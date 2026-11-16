@@ -24,8 +24,7 @@ thirdparty/       vendored unitree_ros2, booster_ros2_interface and aimdk_msgs (
 lets either layer be split out with `git subtree split --prefix=<layer>`.
 
 Built targets are `G1_bridge`, `H1_bridge`, `H1_2_bridge`, `Go2_bridge`, `T1_bridge`,
-`X2_bridge` (only with `-DBUILD_AGIBOT_X2=ON`) and `test_node` (only with `-DBUILD_TEST_NODE=ON`). Other sources under `src/` are upstream leftovers that no target
-builds.
+`X2_bridge` (only with `-DBUILD_AGIBOT_X2=ON`) and `test_node` (only with `-DBUILD_TEST_NODE=ON`).
 
 ## Fork or upstream
 
