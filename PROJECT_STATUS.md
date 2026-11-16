@@ -15,9 +15,10 @@ deploy layers stay independent of it.
 
 ```
 bridge/           upstream-bound: bridge_interface (msgs, srvs), robot_bridge (C++ + Python client),
-                  low_level_controller (plugin interface of the 1 kHz controllers)
+                  low_level_controller (plugin interface of the per-tick controllers)
 robot_stacks/     per-robot deploy layers; g1/ holds g1_stack and g1_camera; sim/robot_sim: the MuJoCo sim of G1, T1 and Go2
-scripts/          environment setup, sourced not run
+scripts/          environment setup, sourced not run; real/ holds a robot check you run
+tools/            build, test and bring-up helpers, run not sourced
 thirdparty/       vendored unitree_ros2, booster_ros2_interface, aimdk_msgs
 ```
 

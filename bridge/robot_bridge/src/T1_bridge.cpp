@@ -212,7 +212,7 @@ void sairol_bridge::T1Bridge::publishLowCommand_()
     lowCommandPublisher_->publish(booster_cmd);
 }
 
-// mutex_ held (update_). Bypasses publishLowCommand_: its q clamp divides by kp.
+// mutex_ held (update_). Bypasses trackingFrame_: its q clamp divides by kp.
 void sairol_bridge::T1Bridge::publishStopCommand_()
 {
     booster_interface::msg::LowCmd booster_cmd;

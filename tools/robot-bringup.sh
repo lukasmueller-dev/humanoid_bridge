@@ -10,7 +10,7 @@
 # this script with --robot g1.
 #
 # ARMING MOVES THE ROBOT. start_control ramps every joint (G1 29, T1 23, Go2 12), legs
-# included, to the pose you pass, over `duration` (2 s). It is off unless you
+# included, to the pose you pass, over `duration` (G1, T1: 2 s; Go2: 3 s). It is off unless you
 # ask for it twice: an --arm-* flag and --robot-is-clear.
 #
 # The bridge refuses a default_position of another length (empty = ready_q_);
@@ -21,7 +21,7 @@
 # --sim: against robot_sim on loopback DDS (robot_stacks/sim/robot_sim/README.md); still
 # releases, from robot_sim's fake motion switcher.
 #
-# Safe to re-run: with one G1_bridge already up it only arms; with two or more
+# Safe to re-run: with one robot bridge (G1, T1 or Go2) already up it only arms; with two or more
 # it refuses (each writes /lowcmd). Only bridges in this network namespace
 # count: a test's bridge in its own namespace cannot reach the robot.
 #
@@ -90,7 +90,7 @@ Options:
   --sim                  robot_sim instead of the robot: DDS on loopback only (--iface lo),
                          no robot_sim refusal; the G1 still releases /lowcmd
   --wait <s>             seconds to wait for the bridge (default 20)
-  --dry-run              print every command, run none
+  --dry-run              print the commands that start, release or arm; read-only checks still run
   -h, --help             this text
 
 Environment: UNITREE_PYTHON (interpreter with unitree_sdk2py; default

@@ -1,4 +1,4 @@
-# ROS 2 Humble for `tools/test.sh --docker`: every stage on a host without ROS.
+# ROS 2 Humble for `tools/test.sh --docker`: every stage but --sim on a host without ROS.
 # Python deps as tools/install-build-deps.sh; pip with --no-deps keeps apt's numpy, which ROS is built against.
 FROM docker.io/library/ros:humble-ros-base
 

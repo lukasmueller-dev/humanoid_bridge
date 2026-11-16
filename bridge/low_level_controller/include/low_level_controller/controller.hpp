@@ -1,5 +1,5 @@
 // controller.hpp -------------------------------------------------------------
-// A low-level controller: the bridge's 1 kHz tick runs one, loaded by name with pluginlib.
+// A low-level controller: the bridge's tick (`control_dt`) runs one, loaded by name with pluginlib.
 // No ROS or vendor types, so a controller builds and tests without the bridge.
 #pragma once
 

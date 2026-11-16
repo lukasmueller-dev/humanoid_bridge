@@ -3,6 +3,6 @@
     <description>The target as is: the motor runs the PD.</description>
   </class>
   <class name="bridge_pd" type="sairol_bridge::BridgePd" base_class_type="low_level_controller::Controller">
-    <description>The PD in the bridge at 1 kHz, sent as tau with kp = kd = 0.</description>
+    <description>The PD in the bridge at the tick rate (control_dt), sent as tau with kp = kd = 0.</description>
   </class>
 </library>
