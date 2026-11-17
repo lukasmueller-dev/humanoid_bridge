@@ -20,8 +20,9 @@ Translate moves the hand in the torso frame. Torso: clamped to the stats' q01..q
 follows vyaw; released, AMO stands. A / F1 released: the hand holds.
 The left stick is not read (broken on the lab's remote, 2026-10-26). A held D-pad button is a full
 stick. Any shoulder button held (L1, R1, L2, R2: the bridge's e-stop combos) masks every button.
-Deadzone 0.1. The first `--ramp-seconds` take the left arm from measured to the stats' mean; the
-sticks wait. Right arm: `g1_stack.ik.arm`; a target outside the reach box is clamped. A failed
+Deadzone 0.1. The first `--ramp-seconds` take the left arm from measured, and the left hand from
+open (the tab's Ready opens both hands), to the stats' mean; the sticks wait. The right hand starts
+open. Right arm: `g1_stack.ik.arm`; a target outside the reach box is clamped. A failed
 solve, or a solution off the target by more than POS_TOL / ROT_TOL, holds the last solution and the
 last target (`reach_limited`): the target never winds past what the arm reaches. Left arm and hand:
 the stats' mean; the base moves in walk mode only.
@@ -192,7 +193,7 @@ class Teleop:
             self._jog(self.sticks[1], self.sticks[2], *self.dpad)
         a = min(1.0, self.steps / self.ramp_steps)
         left = (1 - a) * self.left_from + a * self.pose.left_arm
-        hand_q = np.concatenate([self.pose.left_hand, self.grasp * self.pose.hand_closed])
+        hand_q = np.concatenate([a * self.pose.left_hand, self.grasp * self.pose.hand_closed])
         self.last_goal = make_goal(np.concatenate([left, self.right_q]), hand_q=hand_q,
                                    torso_rpy=self.torso[:3], torso_height=self.torso[3],
                                    vx=self.walk[0], vy=self.walk[1], vyaw=self.walk[2],

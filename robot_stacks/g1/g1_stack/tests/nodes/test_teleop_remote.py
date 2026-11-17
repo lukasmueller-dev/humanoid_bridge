@@ -157,9 +157,11 @@ def test_goals_and_actions_follow_the_jog():
     # A held closed the right hand; L1 masked the F1
     assert final["hand_q"][7:] == pytest.approx([0.6, 0.3, -0.9, 1.1, 1.3, 0.8, 1.4])
     assert goals[0]["hand_q"][7:] == [0.0] * 7
-    # left arm ramps from measured to the mean over the ramp, then stays; left hand at the mean
+    # left arm from measured and left hand from open ramp to the mean over the ramp, then stay
     assert goals[0]["arm_q"][0] == pytest.approx(0.3 + 0.1 * (-0.02 - 0.3))
     assert goals[9]["arm_q"][:7] == pytest.approx([-0.02] * 7)
+    assert goals[0]["hand_q"][:7] == pytest.approx([0.1 * 0.01] * 7)
+    assert goals[9]["hand_q"][:7] == pytest.approx([0.01] * 7)
     assert final["hand_q"][:7] == pytest.approx([0.01] * 7)
     # actions.jsonl: each goal without its stamp, in order
     for goal, row in zip(goals, rows):
