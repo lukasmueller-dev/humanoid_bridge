@@ -1,0 +1,18 @@
+# g1_link_watch on the G1's Jetson: install.sh installs it; docs/estop.md, "Jetson link watcher".
+[Unit]
+Description=G1 link watcher: holds the robot when the bridge's rt/lowcmd stops while armed
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+User=unitree
+# The robot network: change it with `systemctl edit g1-link-watch`.
+Environment=BRIDGE_IFACE=eth0
+Environment=PYTHONPATH=/opt/g1_link_watch
+# -u: Python 3.8 buffers stderr without a terminal, so the journal got log lines late.
+ExecStart=/usr/bin/python3 -u -m g1_link_watch.run
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
