@@ -11,6 +11,7 @@ Milestones 1 and 2 of `SPEC.md` are ticked. `origin/main` is merged in (`a1aac81
 
 - The owner's `run_sim_watch_test.sh` run (2026-11-17, turing): all checks passed. Detail: commit `7491ef4`.
 - Review fixes after that run: `3c70a38` (a stop signal in a hold damps 1 s), `ecefda6` (the mode poll survives a `CheckMode` exception), `b7d3b2c` (the stage fails on a `/lowcmd` gap ≥ 0.4 s).
+- Review 2: `5905a2d` (a non-finite q damps that joint at q 0), `2b73e46` (the stage sends SIGTERM in a hold), `2c4fa69` (a repo test ties `DAMP_KD` to `G1_config.yaml`), `03da9d7` (Dockerfile).
 
 ## Next action
 
@@ -25,6 +26,8 @@ None.
 ## Gotchas (unpromoted)
 
 - Decided (`3c70a38`): SIGTERM or SIGINT in a hold damps 1 s, then exits, as the bridge does. Name it in the docs section.
+  Loopback, lab SDK, fake bridge: 500 damp frames over 1 s, exit code 0 after 1.02 s. The sim stage checks it since `2b73e46`.
+- `DAMP_KD` has no per-joint value: a joint's `damp_kd` in `G1_config.yaml` fails `tests/test_g1_link_watch_damp_kd.py`.
 - Open risk for the docs section: a link gap of 0.1–0.2 s. The bridge's 1 Hz `watchLowcmd_` can count the watcher's writer before it closes → `damp other_lowcmd`. Over 0.2 s the bridge latches `damp state_loss` anyway. Only the gantry test measures it.
 - Without a motion switcher (no robot) the SDK prints `[ClientStub] send request error` once a second → journal noise.
 - `systemd-analyze` 255 is on turing.
