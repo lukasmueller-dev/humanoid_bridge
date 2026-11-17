@@ -67,6 +67,8 @@ def allow_lo(iface):
         return
     from unitree_sdk2py.core import channel
 
+    if 'multicast="true"' in channel.ChannelConfigHasInterface:
+        return   # patched before in this process
     if 'multicast="default"' not in channel.ChannelConfigHasInterface:
         raise RuntimeError("unitree_sdk2py's ChannelConfigHasInterface no longer carries "
                            'multicast="default": discovery over lo needs another patch')
