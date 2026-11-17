@@ -136,13 +136,7 @@ void sairol_bridge::T1Bridge::remoteHandler_(booster_interface::msg::RemoteContr
     pad.back = msg->back, pad.start = msg->start, pad.ls = msg->ls, pad.rs = msg->rs;
     pad.up = msg->hat_u || msg->hat_lu || msg->hat_ru, pad.down = msg->hat_d || msg->hat_ld || msg->hat_rd;
     pad.left = msg->hat_l || msg->hat_lu || msg->hat_ld, pad.right = msg->hat_r || msg->hat_ru || msg->hat_rd;
-    const uint16_t keys = estop::t1KeyMask(pad);
-    remoteKeys_ = keys;
-    const estop::Cause remote = estop::remoteOnset(estop::remoteCause(keys, estopConfig_), lastRemote_);
-    if (remote != estop::Cause::None)
-    {
-        enterStop_(remote);
-    }
+    noteRemoteKeys_(estop::t1KeyMask(pad));
 }
 
 bool sairol_bridge::T1Bridge::robotAllowsArming_(std::string &why)

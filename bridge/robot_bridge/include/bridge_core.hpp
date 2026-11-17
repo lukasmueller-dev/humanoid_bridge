@@ -159,6 +159,11 @@ namespace sairol_bridge
         // /robot_state from currentState_ and imu_, mutex_ held; the robot's state handler fills
         // remote and publishes it on robotStatePublisher_ after unlocking.
         bridge_interface::msg::RobotState robotState_(uint32_t tick);
+        // Stores keys in remoteKeys_ and enters the stop on a combo onset. Executor thread only.
+        void noteRemoteKeys_(uint16_t keys);
+        // LowState.wireless_remote (Unitree G1, Go2): keys, header, e-stop onset, sticks into state.remote.
+        // Call after robotState_; the robot's state handler publishes state.
+        void remoteFromLowState_(const uint8_t *raw, size_t size, bridge_interface::msg::RobotState &state);
 
 
         rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr stopControlService_;
@@ -239,6 +244,7 @@ namespace sairol_bridge
         std::atomic<bool> latched_{false};
         std::atomic<bool> stopPublishing_{false};
         std::atomic<uint16_t> remoteKeys_{0};
+        estop::Cause lastRemote_{estop::Cause::None};   // executor thread only
         std::atomic<double> lastRemoteHeader_{-1e9};   // steadyClock_ seconds; set by the robot's state handler
         bool remoteOnEventsOnly_{false};   // the remote sends on events, not on a clock (T1); set in the constructor
         estop::Cause lastFault_{estop::Cause::None};   // control thread only

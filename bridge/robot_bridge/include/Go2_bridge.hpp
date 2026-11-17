@@ -36,7 +36,6 @@ private:
     rclcpp::Subscription<unitree_go::msg::LowState>::SharedPtr lowStateSubscriber_;
     rclcpp::Publisher<unitree_go::msg::LowCmd>::SharedPtr lowCommandPublisher_;
     rclcpp::TimerBase::SharedPtr lowcmdWatchTimer_;
-    estop::Cause lastRemote_{estop::Cause::None};       // executor thread only
     estop::Cause lastLowcmdFault_{estop::Cause::None};  // executor thread only
     bool stateLogged_{false};
 };
