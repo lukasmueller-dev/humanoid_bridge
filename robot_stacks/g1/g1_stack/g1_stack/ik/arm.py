@@ -6,14 +6,13 @@ Same problem as upstream: end effector 0.05 m along x past `right_wrist_yaw_join
 Two changes: the forward kinematics is built in CasADi from a G1 URDF, because PyPI's `pin`
 has no `pinocchio.casadi` (upstream takes conda-forge's); a failed solve returns None, and the
 caller holds the last solution. Frame: `torso_link`, waist at zero (upstream: pelvis, waist
-locked at zero; a constant offset). Python 3.8.
+locked at zero; a constant offset). Python 3.8. Only `RightArmIK` needs casadi.
 """
 
 from __future__ import annotations
 
 import xml.etree.ElementTree as ET
 
-import casadi
 import numpy as np
 
 ARM_JOINTS = ("right_shoulder_pitch_joint", "right_shoulder_roll_joint",
@@ -77,8 +76,8 @@ def _fk(chain, q, lib):
     if lib is np:
         rot, pos, matrix = np.eye(3), np.zeros(3), np.array
     else:
-        rot, pos = casadi.DM.eye(3), casadi.DM.zeros(3, 1)
-        matrix = lambda rows: casadi.vertcat(*[casadi.horzcat(*row) for row in rows])  # noqa: E731
+        rot, pos = lib.DM.eye(3), lib.DM.zeros(3, 1)
+        matrix = lambda rows: lib.vertcat(*[lib.horzcat(*row) for row in rows])  # noqa: E731
     for i, (placement, axis, _) in enumerate(chain):
         pos = pos + rot @ placement[:3, 3]
         rot = rot @ placement[:3, :3] @ matrix(_axis_angle(axis, q[i], lib))
@@ -90,7 +89,7 @@ def log3(rot, lib=np):
     v = [rot[2, 1] - rot[1, 2], rot[0, 2] - rot[2, 0], rot[1, 0] - rot[0, 1]]
     s = lib.sqrt(v[0] ** 2 + v[1] ** 2 + v[2] ** 2 + 1e-12) / 2
     c = (rot[0, 0] + rot[1, 1] + rot[2, 2] - 1) / 2
-    k = (np.arctan2 if lib is np else casadi.atan2)(s, c) / (2 * s)
+    k = (np.arctan2 if lib is np else lib.atan2)(s, c) / (2 * s)
     return k * np.array(v) if lib is np else [k * x for x in v]
 
 
@@ -98,6 +97,8 @@ class RightArmIK:
     """`solve(rot, pos)`, a target in ROOT -> 7 joint angles (motors 22..28), or None: no solve."""
 
     def __init__(self, urdf):
+        import casadi
+
         self.chain = load_chain(urdf)
         self.lower = np.array([lim[0] for _, _, lim in self.chain])
         self.upper = np.array([lim[1] for _, _, lim in self.chain])
