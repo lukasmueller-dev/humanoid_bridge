@@ -3,7 +3,7 @@
 - **Repo:** humanoid_bridge
 - **Branch:** `link-watcher`
 - **Worktree:** `.claude/worktrees/link-watcher`
-- **Last updated:** 2026-11-13 · turing
+- **Last updated:** 2026-11-17 · turing
 
 ## State
 
@@ -21,21 +21,15 @@ Milestone 2 of `SPEC.md` (`sim-watch` stage) has its code. It is not ticked: it 
 
 ## Next action
 
-The owner rebuilds the image and runs the stage on turing:
+The owner rebuilt `robot-sim:humble` and ran `run_sim_watch_test.sh` on turing (2026-11-17): all checks passed.
+1 hold in the run, every joint within 0.05 rad (max 0.002), longest `/lowcmd` gap after SIGSTOP 0.102 s.
 
-```bash
-docker build -t robot-sim:humble robot_stacks/sim/robot_sim
-# robot_stacks/sim/robot_sim/README.md step 1 (container, build); the script starts its own sim
-. /ws/install/setup.bash
-/ws/src/humanoid_bridge/robot_stacks/sim/robot_sim/tests/integration/run_sim_watch_test.sh
-```
-
-- The stage passes: tick milestone 2 in `SPEC.md`, then start milestone 3 (unit file, install script, docs).
-- The stage fails: read the watcher log tail that the script prints.
+1. Merge `origin/main` into this branch (no rebase); PR #77 conflicts with main.
+2. Tick milestone 2 in `SPEC.md` with this result; it needs no new code.
 
 ## Blockers
 
-- The job sandbox has no ROS and no Docker socket, so the stage cannot run there. The owner runs it.
+None.
 
 ## Gotchas (unpromoted)
 
