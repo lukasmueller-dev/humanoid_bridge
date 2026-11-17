@@ -24,13 +24,13 @@ EE_OFFSET = 0.05
 FILTER_WEIGHTS = (0.4, 0.3, 0.2, 0.1)   # newest first, as upstream's WeightedMovingFilter
 
 
-def _floats(text, n=3):
-    return [float(v) for v in (text or " ".join(["0"] * n)).split()]
+def _floats(text):
+    return [float(v) for v in (text or "0 0 0").split()]
 
 
-def _rpy(r, p, y, lib=np):
+def _rpy(r, p, y):
     """URDF rpy: Rz(y) Ry(p) Rx(r)."""
-    cr, sr, cp, sp, cy, sy = lib.cos(r), lib.sin(r), lib.cos(p), lib.sin(p), lib.cos(y), lib.sin(y)
+    cr, sr, cp, sp, cy, sy = np.cos(r), np.sin(r), np.cos(p), np.sin(p), np.cos(y), np.sin(y)
     return np.array([[cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr],
                      [sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr],
                      [-sp, cp * sr, cp * cr]])
