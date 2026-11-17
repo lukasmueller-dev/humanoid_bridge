@@ -48,7 +48,7 @@ import time
 import numpy as np
 
 from g1_stack.amo.goal import GOAL_PORT, GoalPublisher, make_goal
-from g1_stack.amo.policy import STAND_HEIGHT
+from g1_stack.amo.policy import IN_PLACE_SPEED, STAND_HEIGHT
 from g1_stack.ik.arm import log3
 
 # --- the remote: robot_bridge/robot_client.py RemoteController, KeyMap
@@ -67,8 +67,6 @@ HEIGHT_V = 0.05     # m/s
 # psi0's real teleop (real/teleop/master_whole_body.py:427);
 # at -0.2 m/s AMO did not step back (G1, 2026-10-26)
 WALK_VX, WALK_VY, WALK_VYAW = 0.6, 0.5, 0.5   # m/s (D-pad), m/s (D-pad), rad/s (full stick)
-# AMO stands in place, and ignores target_yaw, below this on vx, vy and vyaw (amo/policy.py)
-IN_PLACE_SPEED = 0.1
 # rad/s, fastest finger; the Dex3 reports ~10x its real dq, 2 rad/s tripped the bridge's limit (20)
 GRASP_RATE = 1.0
 RATE_HZ = 50.0
