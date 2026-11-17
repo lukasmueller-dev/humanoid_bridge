@@ -24,6 +24,7 @@ HOLD_S = 5.0
 DAMP_S = 1.0  # g1_link_watch.watch.DAMP_S
 RAMP_SECONDS = 3.0  # `duration` 2.0 plus margin
 QUIET_S = 1.0  # no /lowcmd frame this long counts as silence
+BUDGET_S = 0.4  # robot_sim's PASSIVE_AFTER_S: the motors go passive after this /lowcmd gap
 
 
 class Driver(Checks):
@@ -143,7 +144,8 @@ class Driver(Checks):
                    f"max error {self.worst:.3f} rad")  # fmt: skip
         times = [stopped, *(t for t, _, _ in self.cmds if t > stopped), time.monotonic()]
         gap = max(b - a for a, b in zip(times[:-1], times[1:], strict=True))
-        print(f"note  longest /lowcmd gap after SIGSTOP: {gap:.3f} s", flush=True)
+        self.check(f"no /lowcmd gap over {BUDGET_S} s after SIGSTOP", gap < BUDGET_S,
+                   f"longest {gap:.3f} s")  # fmt: skip
         publishers = self.node.count_publishers("/lowcmd")
         print(
             f"note  /lowcmd publishers in the hold: {publishers} (the stopped bridge is 1)",
