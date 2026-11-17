@@ -104,13 +104,13 @@ def _press(*keys):
     return _hold(1, *keys) + _hold(1)
 
 
-def _run(frames, ik, ramp_seconds=0.2):
+def _run(frames, ik, ramp_seconds=0.2, duration=0.0):
     low = _low(frames)
     teleop = node.Teleop(ik, node.StatsPose(_stats()), ARM_Q,
                          ramp_seconds=ramp_seconds)
     clock, publisher, actions, live = _Clock(), _Publisher(), io.StringIO(), []
-    end = node.run(teleop, low, publisher, actions, "episode_3", out=live.append, clock=clock,
-                   wall=clock, sleep=clock.sleep)
+    end = node.run(teleop, low, publisher, actions, "episode_3", duration=duration,
+                   out=live.append, clock=clock, wall=clock, sleep=clock.sleep)
     rows = [json.loads(line) for line in actions.getvalue().splitlines()]
     return end, teleop, publisher.goals, rows, live
 
@@ -258,6 +258,11 @@ def test_an_interrupt_in_walk_mode_ends_standing(monkeypatch, tmp_path):
     walk = [(g["vx"], g["vy"], g["vyaw"]) for g in publisher.goals]
     assert walk[-4] == pytest.approx((0.6, 0.0, 0.0)), "walking when the interrupt came"
     assert walk[-3:] == [(0.0, 0.0, 0.0)] * 3, "the hold goals stand"
+
+
+def test_the_duration_ends_the_episode():
+    end, _, goals, _, _ = _run(_hold(100), _ExactIK(), duration=0.51)
+    assert end == "timeout" and len(goals) == 26, "ticks at 0.00 .. 0.50 s, none at 0.52 s"
 
 
 def test_actions_log_the_sticks_target_and_ik_error():
