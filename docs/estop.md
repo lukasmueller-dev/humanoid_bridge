@@ -150,7 +150,7 @@ Sources: Unitree G1 developer docs (remote control page) and third-party guides;
 - No trigger if `MotionSwitcherClient.CheckMode` (polled at 1 Hz) reported a vendor mode at the last frame. No report yet: the gate is open.
 - No trigger on a stale `rt/lowstate`, also once it comes back.
 - Hold frame: q = the measured q at the trigger; `mode`, kp, kd per joint, `mode_pr` and `mode_machine` from the last bridge frame; dq = tau = 0; CRC set. A non-finite measured q damps that joint at q 0, as `estop::stopFrame`.
-- Nothing else ends a hold. A bridge that comes back latched and silent does not end it: use `R1+R2`.
+- Nothing else ends a hold. A restarted bridge cannot end it (see What breaks it), and a bridge that comes back latched and silent does not end it either.
 - The DDS writer exists only in `hold` and `damp`. The bridge's start and arming checks for another `/lowcmd` publisher (`G1_bridge.cpp:17-23, 127-144`) see none while the watcher is in `watch`.
 - `DAMP_KD` has no per-joint value. `tests/test_g1_link_watch_damp_kd.py` fails if it differs from `estop.damp_kd`, or if a joint in `G1_config.yaml` sets its own `damp_kd`.
 - The watcher ignores the echo of its own frames on `rt/lowcmd`.
@@ -185,6 +185,8 @@ What breaks it:
 
 - `ModuleNotFoundError: unitree_sdk2py` in the journal → install `unitree_sdk2py` for the `unitree` user's `/usr/bin/python3`.
 - Exit at start on a missing `crc_<arch>.so` → the `unitree_sdk2py` install is incomplete. The watcher builds the CRC before DDS.
+- A bridge restarted in a hold → its start waits for a free `/lowcmd` (`G1_bridge.cpp:17-23`), logs `Detected 1 publishers on /lowcmd` each second and sends nothing, so the hold never ends. Support the robot, then press `R1+R2`: damp 1 s, then silence, and the bridge starts.
+  Not measured: this assumes the bridge counts the watcher's raw DDS writer, as it counts the motion service's. The sim stage prints the count in a hold but does not check it.
 - A link gap of 0.1 to 0.2 s → the hold starts, and the bridge's 1 Hz `/lowcmd` publisher check can count the watcher's writer before it closes: `LATCHED damp other_lowcmd`. Over 0.2 s the bridge latches `damp state_loss` anyway. Only the gantry test measures it.
 - A crash in the 500 Hz loop → the watcher closes the writer and exits 1; systemd restarts it after 3 s. A hold in progress ends, and the motors go passive 0.4 s later (G0).
 - A `CheckMode` poll between the release and the motion service's last frame (a window of ms) → the gate misses the vendor mode. The real `rt/lowcmd` content of the motion service is not known.
