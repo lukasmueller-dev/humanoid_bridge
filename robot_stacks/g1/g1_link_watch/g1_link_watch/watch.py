@@ -53,7 +53,7 @@ def damp_frame(hold: Frame) -> Frame:
 
 
 class Watcher:
-    """watch → hold (trigger) → damp (R1+R2) → watch; bridge frames back → watch at once.
+    """watch → hold (trigger) → damp (R1+R2, `damp`) → watch; bridge frames back → watch at once.
 
     `open_writer()` returns an object with `write(frame)` and `close()`.
     """
@@ -106,16 +106,22 @@ class Watcher:
         elif bridge[1] != self._handled:
             self._end("bridge frames back")
             return
-        if self.mode == "hold" and r1_r2(state[0]):
-            self._frame = damp_frame(self._frame)
-            self._own.add(self._frame)
-            self._damp_until = now + DAMP_S
-            self.mode = "damp"
-            log.warning("R1+R2: damp %.1f s", DAMP_S)
+        if r1_r2(state[0]):
+            self.damp(now, "R1+R2")
         if self.mode == "damp" and now >= self._damp_until:
             self._end("damp done")
             return
         self.writer.write(self._frame)
+
+    def damp(self, now: float, why: str) -> None:
+        """hold → damp for DAMP_S, then silence; no-op in other modes. Same thread as `step`."""
+        if self.mode != "hold":
+            return
+        self._frame = damp_frame(self._frame)
+        self._own.add(self._frame)
+        self._damp_until = now + DAMP_S
+        self.mode = "damp"
+        log.warning("%s: damp %.1f s", why, DAMP_S)
 
     def _end(self, why: str) -> None:
         self.writer.close()

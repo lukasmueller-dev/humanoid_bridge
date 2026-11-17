@@ -159,6 +159,21 @@ def test_r1_r2_damps_for_1_s_then_silence():
         assert (out.kp, out.kd) == (0.0, DAMP_KD if held.mode else 0.0)
 
 
+def test_damp_from_the_hold_damps_for_1_s_then_silence_and_is_a_no_op_otherwise():
+    run = Run()
+    run.watcher.damp(0.0, "stop signal")
+    assert run.watcher.mode == "watch"
+    run.for_(0.5, cmd=ARMED).for_(0.5)
+    [writer] = run.writers
+    sent = len(writer.frames)
+    run.watcher.damp(run.tick * PERIOD_S, "stop signal")
+    run.for_(2.0)
+    assert writer.closed and run.watcher.mode == "watch"
+    damp = writer.frames[sent:]
+    assert len(damp) == pytest.approx(DAMP_S / PERIOD_S, abs=1)
+    assert all(m.kp == 0.0 for m in damp[0].motors)
+
+
 @pytest.mark.parametrize(
     "keys, damps",
     [(R1 | R2, True), (L1 | R1 | R2, True), (R1, False), (R2, False), (L1 | R1, False)],

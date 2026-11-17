@@ -56,10 +56,12 @@ def poll_mode(switcher, watcher, stop) -> None:
 
 
 def spin(watcher, stop) -> None:
-    """`watcher.step` at 500 Hz until `stop`; a crash closes the writer and ends the process."""
+    """`watcher.step` at 500 Hz until `stop`, a hold damped first; a crash closes the writer."""
     due = time.monotonic()
     try:
-        while not stop.is_set():
+        while not stop.is_set() or watcher.mode != "watch":
+            if stop.is_set():
+                watcher.damp(time.monotonic(), "stop signal")  # as the bridge: damp, not a drop
             watcher.step(time.monotonic())
             due += PERIOD_S
             delay = due - time.monotonic()
@@ -123,7 +125,7 @@ def main(argv=None) -> int:
 
     log.info("watching %s on %s, domain %d", LOWCMD, args.iface, args.domain)
     spin(watcher, stop)
-    log.info("stopped in mode %s", watcher.mode)  # a hold ends here: the robot drops 0.4 s later
+    log.info("stopped")
     return 0
 
 
