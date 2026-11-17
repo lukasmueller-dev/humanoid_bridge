@@ -4,6 +4,7 @@ publisher. The IK tests use the `arm_urdf` fixture and skip without casadi."""
 from __future__ import annotations
 
 import io
+import itertools
 import json
 from types import SimpleNamespace
 
@@ -87,13 +88,15 @@ class _Publisher:
         pass
 
 
-def _low(frames):
-    """A lowstate source replaying `frames`, one per call; the arms stay at ARM_Q."""
+def _low(frames, freeze_at=None):
+    """A lowstate source replaying `frames`, one per call; the arms stay at ARM_Q. `tick` counts
+    the calls and stops at `freeze_at`."""
     motors = [SimpleNamespace(q=0.0) for _ in range(35)]
     for i, q in enumerate(ARM_Q):
         motors[15 + i].q = q
-    it = iter(frames)
-    return lambda: SimpleNamespace(wireless_remote=list(next(it)), motor_state=motors)
+    it, ticks = iter(frames), itertools.count()
+    return lambda: SimpleNamespace(wireless_remote=list(next(it)), motor_state=motors,
+                                   tick=min(next(ticks), freeze_at or float("inf")))
 
 
 def _hold(n, *keys, **sticks):
@@ -104,8 +107,8 @@ def _press(*keys):
     return _hold(1, *keys) + _hold(1)
 
 
-def _run(frames, ik, ramp_seconds=0.2, duration=0.0):
-    low = _low(frames)
+def _run(frames, ik, ramp_seconds=0.2, duration=0.0, freeze_at=None):
+    low = _low(frames, freeze_at)
     teleop = node.Teleop(ik, node.StatsPose(_stats()), ARM_Q,
                          ramp_seconds=ramp_seconds)
     clock, publisher, actions, live = _Clock(), _Publisher(), io.StringIO(), []
@@ -263,6 +266,14 @@ def test_an_interrupt_in_walk_mode_ends_standing(monkeypatch, tmp_path):
 def test_the_duration_ends_the_episode():
     end, _, goals, _, _ = _run(_hold(100), _ExactIK(), duration=0.51)
     assert end == "timeout" and len(goals) == 26, "ticks at 0.00 .. 0.50 s, none at 0.52 s"
+
+
+def test_a_frozen_lowstate_ends_the_episode():
+    walking = len(RAMP + _press("B") + _press("select")) + 10
+    end, _, goals, _, _ = _run(RAMP + _press("B") + _press("select") + _hold(100, "up"),
+                               _ExactIK(), freeze_at=walking)
+    assert end == "stale" and goals[walking]["vx"] == pytest.approx(0.6)
+    assert len(goals) - walking <= 1 + 0.1 * 50, "the D-pad frame replays for 0.1 s at most"
 
 
 def test_actions_log_the_sticks_target_and_ik_error():

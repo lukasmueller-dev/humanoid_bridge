@@ -34,7 +34,8 @@ the torso range. `--urdf`: a G1 URDF with the chain `torso_link` -> `right_wrist
         --stats <dataset>/meta/stats.json --actions /tmp/actions.jsonl --duration 60
     python -m g1_stack.nodes.teleop_remote --dds-iface lo --watch
 
-Last stdout line: `end <reason>` (start, stopped, timeout). Exit 0.
+Last stdout line: `end <reason>` (start, stopped, timeout; stale: the `rt/lowstate` tick stood
+still for 0.1 s). Exit 0.
 """
 
 from __future__ import annotations
@@ -70,6 +71,7 @@ WALK_VX, WALK_VY, WALK_VYAW = 0.6, 0.5, 0.5   # m/s (D-pad), m/s (D-pad), rad/s 
 # rad/s, fastest finger; the Dex3 reports ~10x its real dq, 2 rad/s tripped the bridge's limit (20)
 GRASP_RATE = 1.0
 RATE_HZ = 50.0
+STATE_TIMEOUT = 0.1   # s, as amo_controller: a frozen rt/lowstate tick ends the episode
 LIVE_HZ = 5.0
 # right hand target, torso frame (g1_stack.ik.arm ROOT); widened to hold the start pose
 REACH_LO = np.array([0.10, -0.45, -0.20])
@@ -259,8 +261,9 @@ class Teleop:
 
 def run(teleop, low_state, publisher, actions, episode, duration=0.0, out=print,
         clock=time.monotonic, wall=time.time, sleep=time.sleep):
-    """Tick at the teleop's rate until Start or the duration; the end reason."""
+    """Tick at the teleop's rate until Start, the duration or a frozen lowstate; the end reason."""
     started = clock()
+    last_tick, tick_at = None, started
     next_tick = started
     next_live = started
     step = 0
@@ -269,6 +272,10 @@ def run(teleop, low_state, publisher, actions, episode, duration=0.0, out=print,
         if duration and now - started >= duration:
             return "timeout"
         low = low_state()
+        if low.tick != last_tick:
+            last_tick, tick_at = low.tick, now
+        elif now - tick_at > STATE_TIMEOUT:   # the remote frame is old: never replay it
+            return "stale"
         goal = teleop.tick(parse_remote(low.wireless_remote))
         publisher.send(goal)
         step += 1
