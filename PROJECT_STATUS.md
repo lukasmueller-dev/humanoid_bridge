@@ -3,7 +3,7 @@
 > One per repo. The *current* picture: goal, architecture, decisions, open
 > questions. Finished work is removed; git history is the log.
 
-_Last updated: 2026-11-06 · gains-bridge job_
+_Last updated: 2026-11-17 · link-watcher job_
 
 ## Goal
 
@@ -16,7 +16,7 @@ deploy layers stay independent of it.
 ```
 bridge/           upstream-bound: bridge_interface (msgs, srvs), robot_bridge (C++ + Python client),
                   low_level_controller (plugin interface of the per-tick controllers)
-robot_stacks/     per-robot deploy layers; g1/ holds g1_stack and g1_camera; sim/robot_sim: the MuJoCo sim of G1, T1 and Go2
+robot_stacks/     per-robot deploy layers; g1/ holds g1_stack, g1_camera and g1_link_watch; sim/robot_sim: the MuJoCo sim of G1, T1 and Go2
 scripts/          environment setup, sourced not run; real/ holds a robot check you run
 tools/            build, test and bring-up helpers, run not sourced
 thirdparty/       vendored unitree_ros2, booster_ros2_interface, aimdk_msgs
@@ -75,6 +75,7 @@ _One line each, dated, with a pointer (commit or PR)._
 - 2026-11-01: T1 leg limits in `T1_config.yaml` are Siwei's measured stops, not the old ones: ankle pitch -0.87..0.35, where the old 0.855 lies 0.5 rad past the measured stop — `6806406` on `t1-parallel-ankle` (#61)
 - 2026-11-01: `main` takes only the T1 ankle mapping; the T1 examples move to robots_web_commander `workspaces/scratch/` (#59), the joint-response tools stay on `t1-parallel-ankle` (#61, closed without a merge) until Siwei decides — PR from `t1-ankle-core`
 - 2026-11-01: the T1 ankle kinematics twin lives in `robot_sim/t1_parallel_ankle.py` (the sim needs it, `scripts/real/` is not installed); the check script imports it from there. The sim shares the bridge's formula: it cannot check the real crank order or sign — PR from `sim-t1-parallel-ankle`
+- 2026-11-17: `g1_link_watch` on the G1's Jetson holds the robot when the bridge's `/lowcmd` stops for 0.1 s after kp > 0 frames; its `rt/lowcmd` writer exists only while it sends; sim-tested, the gantry test is open — `docs/estop.md` § Jetson link watcher, PR from `link-watcher`
 
 ## Roadmap
 

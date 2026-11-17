@@ -133,6 +133,64 @@ Sources: Unitree G1 developer docs (remote control page) and third-party guides;
 ## Limits
 
 - No wireless hardware e-stop for this G1 (author, 2026-10-19). The combos run through the bridge: a hung or crashed bridge ignores them. The robot's power button is the only stop outside software.
+- An armed bridge whose `/lowcmd` stops (crash, hang, link drop): the Jetson link watcher holds, and `R1+R2` damps. Sim-tested only.
+
+## Jetson link watcher
+
+`robot_stacks/g1/g1_link_watch` runs on the G1's Jetson as the systemd service `g1-link-watch`. It holds the robot when the bridge's `/lowcmd` stops while armed, and sends nothing otherwise. Python 3.8, `unitree_sdk2py` (raw DDS), no ROS. The gantry test is open (roadmap "Jetson link watcher").
+
+| Mode | Sends on `rt/lowcmd`, 500 Hz | Left by |
+|---|---|---|
+| `watch` | nothing, no DDS writer | the trigger → `hold` |
+| `hold` | the hold frame | bridge frames back → `watch` at once; `R1+R2`, SIGINT or SIGTERM → `damp` |
+| `damp` | the hold frame with kp 0, kd `DAMP_KD` (8.0) on each motor with `mode` ≠ 0 | 1 s or bridge frames back → `watch`; after a signal the process exits 0 |
+
+- Trigger: the last bridge frame has a motor with `mode` ≠ 0 and kp > 0, no bridge frame for 0.1 s, and `rt/lowstate` at most 0.1 s old.
+- No trigger after damp frames (kp 0) or `mode` 0 frames: the bridge's own SIGINT stop.
+- No trigger if `MotionSwitcherClient.CheckMode` (polled at 1 Hz) reported a vendor mode at the last frame. No report yet: the gate is open.
+- No trigger on a stale `rt/lowstate`, also once it comes back.
+- Hold frame: q = the measured q at the trigger; `mode`, kp, kd per joint, `mode_pr` and `mode_machine` from the last bridge frame; dq = tau = 0; CRC set. A non-finite measured q damps that joint at q 0, as `estop::stopFrame`.
+- Nothing else ends a hold. A restarted bridge cannot end it (see What breaks it), and a bridge that comes back latched and silent does not end it either.
+- The DDS writer exists only in `hold` and `damp`. The bridge's start and arming checks for another `/lowcmd` publisher (`G1_bridge.cpp:17-23, 127-144`) see none while the watcher is in `watch`.
+- `DAMP_KD` has no per-joint value. `tests/test_g1_link_watch_damp_kd.py` fails if it differs from `estop.damp_kd`, or if a joint in `G1_config.yaml` sets its own `damp_kd`.
+- The watcher ignores the echo of its own frames on `rt/lowcmd`.
+
+Install from the workstation (the unit: `robot_stacks/g1/g1_link_watch/g1-link-watch.service`):
+
+```bash
+rsync -a robot_stacks/g1/g1_link_watch/ unitree@192.168.123.164:~/g1_link_watch/
+ssh -t unitree@192.168.123.164 '~/g1_link_watch/install.sh --dry-run'              # print the steps, change nothing
+ssh -t unitree@192.168.123.164 'sudo ~/g1_link_watch/install.sh'                   # copy to /opt/g1_link_watch, enable, restart
+ssh unitree@192.168.123.164 'journalctl -u g1-link-watch -n 5 --no-pager'          # expect: watching rt/lowcmd on eth0, domain 0
+```
+
+- The unit runs `/usr/bin/python3 -u -m g1_link_watch.run` as `unitree`, with `BRIDGE_IFACE=eth0`. Another interface: `sudo systemctl edit g1-link-watch`, then `[Service]` and `Environment=BRIDGE_IFACE=<iface>`.
+- Re-run `install.sh` after a code change. Run it while the bridge is disarmed: a restart in a hold damps 1 s.
+
+| Journal line | Meaning |
+|---|---|
+| `bridge silent <s> s after kp > 0 frames: hold` | the trigger |
+| `bridge frames back: silent` | the hold ends |
+| `R1+R2: damp 1.0 s`, `stop signal: damp 1.0 s` | the damp starts |
+| `damp done: silent` | the damp ends |
+| `bridge silent after kp > 0 frames, rt/lowstate stale: no hold` | no trigger: the robot side is gone too |
+| `a vendor mode held rt/lowcmd at the last frame: no hold` | no trigger: the motion service held the robot |
+
+| Level | What |
+|---|---|
+| `tools/test.sh --unit`: `robot_stacks/g1/g1_link_watch/tests` | fake frames: the trigger, no action after damp or `mode` 0 frames, the stop on bridge frames back, `R1+R2` damp for 1 s, the writer lifetime, a stop signal in a hold, a crash; `install.sh --dry-run` |
+| `tools/test.sh --sim`: sim-watch | robot_sim and the real `G1_bridge`, the drop modelled by a `SIGSTOP` of the bridge: 0 watcher frames beside a running or stopped bridge; every joint within 0.05 rad for 5 s; `R1+R2` damp, then silence; SIGTERM in a hold damps 1 s; bridges start and arm while the watcher runs |
+
+What breaks it:
+
+- `ModuleNotFoundError: unitree_sdk2py` in the journal → install `unitree_sdk2py` for the `unitree` user's `/usr/bin/python3`.
+- Exit at start on a missing `crc_<arch>.so` → the `unitree_sdk2py` install is incomplete. The watcher builds the CRC before DDS.
+- A bridge restarted in a hold → its start waits for a free `/lowcmd` (`G1_bridge.cpp:17-23`), logs `Detected 1 publishers on /lowcmd` each second and sends nothing, so the hold never ends. Support the robot, then press `R1+R2`: damp 1 s, then silence, and the bridge starts.
+  Not measured: this assumes the bridge counts the watcher's raw DDS writer, as it counts the motion service's. The sim stage prints the count in a hold but does not check it.
+- A link gap of 0.1 to 0.2 s → the hold starts, and the bridge's 1 Hz `/lowcmd` publisher check can count the watcher's writer before it closes: `LATCHED damp other_lowcmd`. Over 0.2 s the bridge latches `damp state_loss` anyway. Only the gantry test measures it.
+- A crash in the 500 Hz loop → the watcher closes the writer and exits 1; systemd restarts it after 3 s. A hold in progress ends, and the motors go passive 0.4 s later (G0).
+- A `CheckMode` poll between the release and the motion service's last frame (a window of ms) → the gate misses the vendor mode. The real `rt/lowcmd` content of the motion service is not known.
+- `[ClientStub] send request error` once a second → no motion switcher answers (no robot). Journal noise only.
 
 ## Config — `G1_config.yaml`
 
