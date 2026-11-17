@@ -22,7 +22,6 @@ ADD https://github.com/unitreerobotics/unitree_sdk2_python/archive/814556d15970d
 RUN pip3 install --no-cache-dir cyclonedds==0.10.2 \
     && mkdir /opt/unitree_sdk2_python \
     && tar -xzf /tmp/unitree_sdk2_python.tar.gz --strip-components=1 -C /opt/unitree_sdk2_python \
-    && rm /tmp/unitree_sdk2_python.tar.gz \
     && pip3 install --no-cache-dir --no-deps -e /opt/unitree_sdk2_python \
     && python3 -c 'from unitree_sdk2py.utils.crc import CRC; CRC()'
 
