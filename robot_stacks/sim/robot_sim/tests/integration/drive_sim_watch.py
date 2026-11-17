@@ -1,7 +1,8 @@
 """Drives G1_bridge runs against robot_sim (G1) beside g1_link_watch; checks what the robot gets.
 
 Exit 1 on failure. run_sim_watch_test.sh starts the sim and the watcher; this starts and signals
-each bridge (its own process group), and reads the watcher's log for its hold lines.
+each bridge (its own process group), reads the watcher's log for its hold lines, and ends the
+watcher with SIGTERM in a hold.
 """
 
 import argparse
@@ -24,14 +25,24 @@ HOLD_S = 5.0
 DAMP_S = 1.0  # g1_link_watch.watch.DAMP_S
 RAMP_SECONDS = 3.0  # `duration` 2.0 plus margin
 QUIET_S = 1.0  # no /lowcmd frame this long counts as silence
+EXIT_S = 5.0  # SIGTERM to the watcher's exit: damp 1 s, then DDS teardown (1.02 s on loopback)
 BUDGET_S = 0.4  # robot_sim's PASSIVE_AFTER_S: the motors go passive after this /lowcmd gap
 
 
+def alive(pid):
+    """The process runs: not gone, not a zombie."""
+    try:
+        return pathlib.Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()[0] != "Z"
+    except FileNotFoundError:
+        return False
+
+
 class Driver(Checks):
-    def __init__(self, node, params, out):
+    def __init__(self, node, params, out, watcher):
         super().__init__(node, width=52)
         self.params = params
         self.out = pathlib.Path(out)
+        self.watcher = watcher  # pid, leader of its own process group
         self.client = RobotCmdClient(node, num_dof=NUM_MOTORS, control_frequency=50.0)
         self.buttons = node.create_publisher(String, "/robot_sim/buttons", 10)
         latched = QoSProfile(
@@ -109,6 +120,18 @@ class Driver(Checks):
         """Seconds since the last /lowcmd frame."""
         return time.monotonic() - self.cmds[-1][0] if self.cmds else float("inf")
 
+    def check_damp(self, what, mark):
+        """After cmds[mark]: damp frames (kp 0, kd > 0) for DAMP_S, then silence."""
+        self.wait(lambda: self.quiet() >= QUIET_S, DAMP_S + QUIET_S + 1.0)
+        after = self.cmds[mark:]
+        first = next((i for i, (_, kp, _) in enumerate(after) if kp == 0.0), None)
+        damp = after[first:] if first is not None else []
+        span = damp[-1][0] - damp[0][0] if damp else 0.0
+        ok = bool(damp) and all(kp == 0.0 and kd > 0.0 for _, kp, kd in damp)
+        self.check(f"{what}: damp frames (kp 0, kd > 0)", ok, f"{len(damp)} frames")
+        self.check(f"{what}: damp for {DAMP_S:.0f} s", abs(span - DAMP_S) < 0.2, f"{span:.2f} s")
+        self.check(f"{what}: then silence", self.quiet() >= QUIET_S, f"{self.quiet():.2f} s")
+
     # --- run -------------------------------------------------------------
 
     def run(self):
@@ -156,15 +179,7 @@ class Driver(Checks):
         self.buttons.publish(String(data="R1+R2"))
         self.spin(0.3)
         self.buttons.publish(String(data=""))
-        self.wait(lambda: self.quiet() >= QUIET_S, DAMP_S + QUIET_S + 1.0)
-        after = self.cmds[mark:]
-        first = next((i for i, (_, kp, _) in enumerate(after) if kp == 0.0), None)
-        damp = after[first:] if first is not None else []
-        span = damp[-1][0] - damp[0][0] if damp else 0.0
-        ok = bool(damp) and all(kp == 0.0 and kd > 0.0 for _, kp, kd in damp)
-        self.check("R1+R2: damp frames (kp 0, kd > 0)", ok, f"{len(damp)} frames")
-        self.check(f"damp for {DAMP_S:.0f} s", abs(span - DAMP_S) < 0.2, f"{span:.2f} s")
-        self.check("then silence", self.quiet() >= QUIET_S, f"{self.quiet():.2f} s")
+        self.check_damp("R1+R2", mark)
 
         self.signal(signal.SIGCONT)
         if not self.stop_bridge():
@@ -173,6 +188,19 @@ class Driver(Checks):
         if not self.start_bridge():
             return
         self.check("one hold in the whole run", self.holds() == 1, f"{self.holds()} holds")
+
+        # systemctl stop or restart in a hold: SIGTERM damps, then the watcher exits.
+        self.signal(signal.SIGSTOP)
+        held = self.wait(lambda: self.holds() == 2, 2.0)
+        self.check("SIGSTOP again: a second hold", held, f"{self.holds()} holds")
+        mark = len(self.cmds)
+        termed = time.monotonic()
+        os.killpg(self.watcher, signal.SIGTERM)
+        exited = self.wait(lambda: not alive(self.watcher), EXIT_S)
+        self.check(f"SIGTERM: the watcher exits within {EXIT_S:.0f} s", exited,
+                   f"{time.monotonic() - termed:.2f} s")  # fmt: skip
+        self.check_damp("SIGTERM", mark)
+        self.signal(signal.SIGCONT)
         self.stop_bridge()
 
     def close(self):
@@ -184,10 +212,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("params", help="G1_config.yaml the bridges run with")
     parser.add_argument("out", help="directory with watch.log; bridge<N>.log go there")
+    parser.add_argument("watcher", type=int, help="pid of the running g1_link_watch")
     args = parser.parse_args()
 
     with ros_node("drive_sim_watch") as node:
-        driver = Driver(node, args.params, args.out)
+        driver = Driver(node, args.params, args.out, args.watcher)
         try:
             driver.run()
         finally:

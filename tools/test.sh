@@ -36,7 +36,7 @@
 #   sim    opt-in (--sim), host only: the real G1_bridge against robot_sim (MuJoCo G1): sticks, arm,
 #          hold, /robot_cmd, remote damp; sim-link: link drop, reboot, g1-bringup.sh --sim release;
 #          sim-t1: T1_bridge against robot_sim --robot t1, through robot-bringup.sh --robot t1, then --parallel-ankle;
-#          sim-watch: g1_link_watch silent beside a running or stopped bridge, holds on its SIGSTOP, R1+R2 damps
+#          sim-watch: g1_link_watch silent beside a running or stopped bridge, holds on its SIGSTOP, R1+R2 and SIGTERM damp
 #
 # No stage touches hardware. Nothing here opens a real NIC: the DDS settings
 # below pin discovery to loopback, overriding any inherited CYCLONEDDS_URI.

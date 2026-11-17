@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # g1_link_watch against robot_sim and the real G1_bridge: silent while a bridge runs and after its SIGINT stop;
-# holds the pose after a SIGSTOP of the armed bridge; R1+R2 damps, then silence; bridges start and arm meanwhile.
+# holds the pose after a SIGSTOP of the armed bridge; R1+R2 damps, then silence; bridges start and arm meanwhile;
+# SIGTERM in a hold damps 1 s, then the watcher exits.
 # Needs: the workspace with robot_bridge and robot_sim sourced, $G1_MJCF, unitree_sdk2py ($UNITREE_PYTHON).
 set -euo pipefail
 
@@ -41,7 +42,7 @@ WATCH_PID=$!; disown "$WATCH_PID"
 for _ in $(seq 1 20); do grep -q "watching" "$OUT/watch.log" && break; sleep 0.5; done
 grep -q "watching" "$OUT/watch.log" || { echo "watcher did not come up:"; tail -20 "$OUT/watch.log"; exit 1; }
 
-if ! python3 "$HERE/drive_sim_watch.py" "$PARAMS" "$OUT"; then
+if ! python3 "$HERE/drive_sim_watch.py" "$PARAMS" "$OUT" "$WATCH_PID"; then
     echo; echo "watcher log, last 20 lines:"; tail -20 "$OUT/watch.log"
     for log in "$OUT"/bridge*.log; do echo; echo "$log, last 20 lines:"; tail -20 "$log"; done
     echo; echo "sim log, last 10 lines:"; tail -10 "$OUT/sim.log"; exit 1
