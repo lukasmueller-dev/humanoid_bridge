@@ -97,7 +97,7 @@ def log3(rot, lib=np):
 class RightArmIK:
     """`solve(rot, pos)`, a target in ROOT -> 7 joint angles (motors 22..28), or None: no solve."""
 
-    def __init__(self, urdf, q0=None):
+    def __init__(self, urdf):
         self.chain = load_chain(urdf)
         self.lower = np.array([lim[0] for _, _, lim in self.chain])
         self.upper = np.array([lim[1] for _, _, lim in self.chain])
@@ -116,7 +116,7 @@ class RightArmIK:
         self.opti.solver("ipopt", {"ipopt": {"print_level": 0, "max_iter": 50, "tol": 1e-6,
                                              "sb": "yes"},
                                    "print_time": False, "calc_lam_p": False})
-        self.reset(np.zeros(7) if q0 is None else q0)
+        self.reset(np.zeros(7))
 
     def reset(self, q):
         """Seed and filter history from a measured arm."""

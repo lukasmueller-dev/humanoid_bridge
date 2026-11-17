@@ -38,7 +38,8 @@ def _urdf(tmp_path, chain=CHAIN):
 
 
 def test_solve_reaches_a_pose_of_the_arm(tmp_path):
-    ik = arm.RightArmIK(_urdf(tmp_path), q0=POUR_ARM)
+    ik = arm.RightArmIK(_urdf(tmp_path))
+    ik.reset(POUR_ARM)
     rot, pos = ik.fk(np.add(POUR_ARM, [0.2, -0.1, 0.1, 0.3, 0.0, 0.1, 0.0]))
     for _ in range(10):   # the moving filter needs a few solves to settle
         q = ik.solve(rot, pos)
