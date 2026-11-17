@@ -7,6 +7,7 @@ call `step` at 500 Hz on one thread. Only `step` opens, writes and closes the wr
 from __future__ import annotations
 
 import logging
+import math
 from collections import namedtuple
 
 SILENCE_S = 0.1  # bridge silence after kp > 0 frames that triggers the hold
@@ -39,9 +40,12 @@ def r1_r2(state) -> bool:
 
 
 def hold_frame(last: Frame, state) -> Frame:
-    """Measured q; mode, kp, kd of the last bridge frame; dq = tau = 0."""
+    """Measured q; mode, kp, kd of the last bridge frame; dq = tau = 0. q not finite: damp, q 0."""
     motors = tuple(
-        Motor(m.mode, s.q, 0.0, m.kp, m.kd, 0.0) for m, s in zip(last.motors, state.motor_state)
+        Motor(m.mode, s.q, 0.0, m.kp, m.kd, 0.0)
+        if math.isfinite(s.q)
+        else Motor(m.mode, 0.0, 0.0, 0.0, DAMP_KD if m.mode else 0.0, 0.0)  # estop::stopFrame
+        for m, s in zip(last.motors, state.motor_state)
     )
     return last._replace(motors=motors)
 

@@ -109,6 +109,17 @@ def test_silence_after_kp_frames_holds_the_measured_pose_at_500_hz():
         assert (out.q, out.dq, out.tau) == (0.2 + 0.01 * i, 0.0, 0.0)
 
 
+def test_a_non_finite_q_damps_that_joint_at_q_0_and_the_hold_stays():
+    state = lowstate()
+    state.motor_state[3].q = float("nan")
+    run = Run().for_(0.5, cmd=ARMED).for_(1.0, state=state)
+    [writer] = run.writers
+    assert run.watcher.mode == "hold"
+    [frame] = set(writer.frames)
+    assert frame.motors[3] == (1, 0.0, 0.0, 0.0, DAMP_KD, 0.0)
+    assert frame.motors[4].kp == ARMED.motor_cmd[4].kp
+
+
 @pytest.mark.parametrize("end", [DAMP, RELEASED], ids=["damp", "mode-0"])
 def test_damp_or_mode_0_frames_before_the_silence_are_a_normal_end(end):
     run = Run().for_(0.5, cmd=ARMED).for_(1.0, cmd=end).for_(2.0)
