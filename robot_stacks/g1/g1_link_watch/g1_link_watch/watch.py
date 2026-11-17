@@ -13,7 +13,7 @@ from collections import namedtuple
 SILENCE_S = 0.1  # bridge silence after kp > 0 frames that triggers the hold
 STATE_FRESH_S = 0.1  # rt/lowstate age the trigger accepts
 DAMP_S = 1.0  # R1+R2: damp this long, then silence
-DAMP_KD = 8.0  # the bridge's estop.damp_kd (G1_config.yaml)
+DAMP_KD = 8.0  # G1_config.yaml estop.damp_kd, no per-joint value; a repo test pins both
 PERIOD_S = 0.002  # 500 Hz
 R1_R2 = (1 << 0) | (1 << 4)  # wireless_remote bytes 2-3, little-endian (estop.hpp key bits)
 
