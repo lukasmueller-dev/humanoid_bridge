@@ -110,12 +110,14 @@ def main(argv=None) -> int:
     finally:
         for sub in subs:
             sub.Close()
-        recorder.drain()
-        stream.close()
-        seconds = time.monotonic() - started
-        print(f"{recorder.rows} rows in {seconds:.1f} s "
-              f"({recorder.rows / seconds if seconds else 0:.0f}/s), "
-              f"{recorder.errors} lost -> {args.out}", flush=True)
+        try:   # a full disk raises in flush: the counts still print, then the traceback
+            recorder.drain()
+            stream.close()
+        finally:
+            seconds = time.monotonic() - started
+            print(f"{recorder.rows} rows in {seconds:.1f} s "
+                  f"({recorder.rows / seconds if seconds else 0:.0f}/s), "
+                  f"{recorder.errors} lost -> {args.out}", flush=True)
     return 0
 
 
