@@ -13,7 +13,6 @@ import argparse
 import collections
 import json
 import sys
-import threading
 import time
 
 from g1_stack import robot
@@ -101,9 +100,9 @@ def main(argv=None) -> int:
         subs += [subscribe(topic, HandState_, recorder.on_hand(side))
                  for side, topic in joint_sources.DEX3_STATE_TOPICS.items()]
     started = time.monotonic()
-    stop = threading.Event()
     try:
-        while not stop.wait(FLUSH_S):
+        while True:
+            time.sleep(FLUSH_S)
             recorder.drain()
     except KeyboardInterrupt:
         pass
