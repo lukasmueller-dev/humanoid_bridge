@@ -49,6 +49,28 @@ def test_solve_reaches_a_pose_of_the_arm(tmp_path):
     assert np.all(q >= ik.lower) and np.all(q <= ik.upper)
 
 
+def test_the_filter_weighs_the_newest_solution_most(tmp_path):
+    """A target 2 cm higher per solve: the 4th entry fills the filter, the arm lags the newest."""
+    ik = arm.RightArmIK(_urdf(tmp_path))
+    ik.reset(POUR_ARM)
+    rot, start = ik.fk(POUR_ARM)
+    for k in (1, 2, 3):
+        q = ik.solve(rot, start + [0.0, 0.0, 0.02 * k])
+    _, reached = ik.fk(q)
+    # newest first: 2.3 cm off the newest target; oldest first: 1.9 cm off the start
+    assert np.linalg.norm(reached - start - [0.0, 0.0, 0.06]) < np.linalg.norm(reached - start)
+
+
+def test_a_failed_solve_returns_none_and_keeps_the_arm(tmp_path):
+    ik = arm.RightArmIK(_urdf(tmp_path))
+    ik.reset(POUR_ARM)
+    ik.opti.solver("ipopt", {"ipopt": {"print_level": 0, "max_iter": 1, "sb": "yes"},
+                             "print_time": False})
+    rot, pos = ik.fk(POUR_ARM)
+    assert ik.solve(rot, pos + [0.1, 0.0, 0.1]) is None
+    np.testing.assert_array_equal(ik.q, np.clip(POUR_ARM, ik.lower, ik.upper))
+
+
 def test_a_urdf_without_the_right_arm_chain_is_refused(tmp_path):
     chain = list(CHAIN)
     chain[3] = ("right_knee_joint",) + chain[3][1:]
