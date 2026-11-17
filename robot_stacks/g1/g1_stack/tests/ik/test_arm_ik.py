@@ -1,6 +1,8 @@
-"""Right-arm IK on the G1 arm chain, from a URDF written here. Skips without casadi."""
+"""Right-arm IK on the G1 arm chain (the `arm_urdf` fixture). Skips without casadi."""
 
 from __future__ import annotations
+
+import pathlib
 
 import numpy as np
 import pytest
@@ -9,36 +11,11 @@ pytest.importorskip("casadi")
 
 from g1_stack.ik import arm  # noqa: E402
 
-# torso_link -> right_wrist_yaw_link, as in g1_body29_hand14.urdf: joint, xyz, rpy, axis, limits.
-CHAIN = [
-    ("right_shoulder_pitch_joint", "0.0039563 -0.10021 0.24778", "-0.27931 5.4949E-05 0.00019159",
-     "0 1 0", -3.0892, 2.6704),
-    ("right_shoulder_roll_joint", "0 -0.038 -0.013831", "0.27925 0 0", "1 0 0", -2.2515, 1.5882),
-    ("right_shoulder_yaw_joint", "0 -0.00624 -0.1032", "0 0 0", "0 0 1", -2.618, 2.618),
-    ("right_elbow_joint", "0.015783 0 -0.080518", "0 0 0", "0 1 0", -1.0472, 2.0944),
-    ("right_wrist_roll_joint", "0.100 -0.00188791 -0.010", "0 0 0", "1 0 0", -1.972222054,
-     1.972222054),
-    ("right_wrist_pitch_joint", "0.038 0 0", "0 0 0", "0 1 0", -1.614429558, 1.614429558),
-    ("right_wrist_yaw_joint", "0.046 0 0", "0 0 0", "0 0 1", -1.614429558, 1.614429558),
-]
 POUR_ARM = [-0.5, -0.09, 0.0, 0.42, -0.22, 0.09, -0.03]
 
 
-def _urdf(tmp_path, chain=CHAIN):
-    parent, joints = arm.ROOT, []
-    for name, xyz, rpy, axis, lower, upper in chain:
-        child = name.replace("_joint", "_link")
-        joints.append(f'<joint name="{name}" type="revolute"><parent link="{parent}"/>'
-                      f'<child link="{child}"/><origin xyz="{xyz}" rpy="{rpy}"/>'
-                      f'<axis xyz="{axis}"/><limit lower="{lower}" upper="{upper}"/></joint>')
-        parent = child
-    path = tmp_path / "g1_right_arm.urdf"
-    path.write_text('<robot name="g1">' + "".join(joints) + "</robot>")
-    return str(path)
-
-
-def test_solve_reaches_a_pose_of_the_arm(tmp_path):
-    ik = arm.RightArmIK(_urdf(tmp_path))
+def test_solve_reaches_a_pose_of_the_arm(arm_urdf):
+    ik = arm.RightArmIK(arm_urdf)
     ik.reset(POUR_ARM)
     rot, pos = ik.fk(np.add(POUR_ARM, [0.2, -0.1, 0.1, 0.3, 0.0, 0.1, 0.0]))
     for _ in range(10):   # the moving filter needs a few solves to settle
@@ -49,9 +26,9 @@ def test_solve_reaches_a_pose_of_the_arm(tmp_path):
     assert np.all(q >= ik.lower) and np.all(q <= ik.upper)
 
 
-def test_the_filter_weighs_the_newest_solution_most(tmp_path):
+def test_the_filter_weighs_the_newest_solution_most(arm_urdf):
     """A target 2 cm higher per solve: the 4th entry fills the filter, the arm lags the newest."""
-    ik = arm.RightArmIK(_urdf(tmp_path))
+    ik = arm.RightArmIK(arm_urdf)
     ik.reset(POUR_ARM)
     rot, start = ik.fk(POUR_ARM)
     for k in (1, 2, 3):
@@ -61,8 +38,8 @@ def test_the_filter_weighs_the_newest_solution_most(tmp_path):
     assert np.linalg.norm(reached - start - [0.0, 0.0, 0.06]) < np.linalg.norm(reached - start)
 
 
-def test_a_failed_solve_returns_none_and_keeps_the_arm(tmp_path):
-    ik = arm.RightArmIK(_urdf(tmp_path))
+def test_a_failed_solve_returns_none_and_keeps_the_arm(arm_urdf):
+    ik = arm.RightArmIK(arm_urdf)
     ik.reset(POUR_ARM)
     ik.opti.solver("ipopt", {"ipopt": {"print_level": 0, "max_iter": 1, "sb": "yes"},
                              "print_time": False})
@@ -71,11 +48,11 @@ def test_a_failed_solve_returns_none_and_keeps_the_arm(tmp_path):
     np.testing.assert_array_equal(ik.q, np.clip(POUR_ARM, ik.lower, ik.upper))
 
 
-def test_a_urdf_without_the_right_arm_chain_is_refused(tmp_path):
-    chain = list(CHAIN)
-    chain[3] = ("right_knee_joint",) + chain[3][1:]
+def test_a_urdf_without_the_right_arm_chain_is_refused(arm_urdf):
+    urdf = pathlib.Path(arm_urdf)
+    urdf.write_text(urdf.read_text().replace("right_elbow_joint", "right_knee_joint"))
     with pytest.raises(ValueError, match="expected"):
-        arm.load_chain(_urdf(tmp_path, chain))
+        arm.load_chain(arm_urdf)
 
 
 @pytest.mark.parametrize("axis", [0, 1, 2])
