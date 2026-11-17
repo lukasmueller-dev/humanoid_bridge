@@ -143,7 +143,7 @@ Sources: Unitree G1 developer docs (remote control page) and third-party guides;
 |---|---|---|
 | `watch` | nothing, no DDS writer | the trigger → `hold` |
 | `hold` | the hold frame | bridge frames back → `watch` at once; `R1+R2`, SIGINT or SIGTERM → `damp` |
-| `damp` | the hold frame with kp 0, kd `DAMP_KD` (8.0) on each motor with `mode` ≠ 0 | 1 s → `watch`; after a signal the process exits 0 |
+| `damp` | the hold frame with kp 0, kd `DAMP_KD` (8.0) on each motor with `mode` ≠ 0 | 1 s or bridge frames back → `watch`; after a signal the process exits 0 |
 
 - Trigger: the last bridge frame has a motor with `mode` ≠ 0 and kp > 0, no bridge frame for 0.1 s, and `rt/lowstate` at most 0.1 s old.
 - No trigger after damp frames (kp 0) or `mode` 0 frames: the bridge's own SIGINT stop.
