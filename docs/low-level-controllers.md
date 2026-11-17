@@ -1,7 +1,7 @@
 # Low-level controllers
 
-The bridge's 1 kHz tick runs one low-level controller, a `pluginlib` plugin. A policy picks it per
-`/robot_cmd` stream by name, on the G1, T1 and Go2. H1, H1_2 and X2 keep their own loop: they
+The bridge's tick (`control_dt`: 1 kHz on the G1, 500 Hz on the T1 and Go2) runs one low-level controller, a
+`pluginlib` plugin. A policy picks it per `/robot_cmd` stream by name, on the G1, T1 and Go2. H1, H1_2 and X2 keep their own loop: they
 load `motor_pd`, never call it, and drop any other name.
 
 | Name | Package | The motor gets |
@@ -83,5 +83,5 @@ tools/test.sh --controllers             # the bridge's stage: bridge_pd and exam
 - `Controller '<name>' is not in controllers_allowed: /robot_cmd dropped`: add it to the config, restart the bridge.
 - `Controller '<name>' inside a '<other>' stream: /robot_cmd dropped`: `/stop_control`, `/start_control`, then the new name.
 - A client built before `RobotCmd.controller` sends the old type: rebuild `bridge_interface` on every machine that publishes `/robot_cmd`.
-- `compute()` allocates or blocks: the tick misses its 1 ms.
+- `compute()` allocates or blocks: the tick misses its `control_dt` (1 ms on the G1).
 - `Torque control is not supported yet`: `torque_control: true` in the config. Send `controller: bridge_pd` instead.

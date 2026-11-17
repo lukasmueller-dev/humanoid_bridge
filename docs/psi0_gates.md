@@ -54,7 +54,7 @@ q_target = clamp(q_interp, q_min, q_max)                                  # gate
 q_cmd    = q_prev + clamp(q_target - q_prev, -v_max·dt, +v_max·dt)         # gate 2
 ```
 
-- `q_prev` is the last sent target (`lastCommand_`); `dt` = `control_dt` (1 ms).
+- `q_prev` is the last sent target (`lastCommand_`); `dt` = `control_dt` (1 ms on the G1).
 - Arming seeds `q_prev` with the measured q: at boot `lastCommand_` is all zeros, and an unseeded limiter pulls every joint toward 0.
 - Stop frames bypass both and leave `lastCommand_` at the measured pose.
 - `v_max` per joint: optional `<joint>.q_rate_limit`, else `q_rate_limit_default` (absent: 0 = off, warn). Per joint, because the gain groups put the ankles with the arms.

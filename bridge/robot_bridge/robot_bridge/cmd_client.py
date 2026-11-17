@@ -224,7 +224,7 @@ class RobotCmdClient:
         return cmd
 
     def start_control(self, default_position=None, timeout_sec=5.0):
-        """Ramp to default_position, then accept /robot_cmd. Blocks on the bridge."""
+        """Arm and start the ramp to default_position. Returns once armed, not after the ramp."""
         request = SetDefaultPosition.Request()
         request.default_position = [
             float(v) for v in self._resolve(default_position, self._default_pos, "default_position")

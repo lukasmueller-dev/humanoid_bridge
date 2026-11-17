@@ -3,7 +3,7 @@
 > One per repo. Planned work only, one item per task. Finished items are
 > deleted; git history is the log.
 
-_Last updated: 2026-11-06 · roadmap-cleanup job_
+_Last updated: 2026-11-14 · codebase-health job_
 
 ## Items
 
@@ -71,3 +71,12 @@ Decided and fake-tested on `g1-web-interface` (`docs/psi0_gates.md`).
 ### Upstream fixes — one branch each
 
 - [ ] `fix/config-keymaps`: the keymap headers in `params/*.yaml` are corrected here: each key names its handler, `robot_client.py` or the bridge. Still to send upstream. **Done when:** the PR is open.
+
+### Codebase health
+
+- [ ] `G1_bridge.cpp:228-253` and `Go2_bridge.cpp:130-155` hold the same 23 lines that read the remote off `/lowstate` (keys, header, e-stop onset, sticks into `RobotState`). Move them into one `BridgeCore` helper; `T1_bridge.cpp:141` shares the onset part.
+  **Done when:** `grep -c 'estop::remoteSticks' bridge/robot_bridge/src/G1_bridge.cpp bridge/robot_bridge/src/Go2_bridge.cpp` prints 0 for both files and `tools/test.sh --docker` passes.
+- [ ] `g1_node.cpp` and `h1_node.cpp` each end in 232 commented-out lines of an upstream example, after `main`. Delete them.
+  **Done when:** `grep -c 'This example demonstrates\|^//' bridge/robot_bridge/src/g1_node.cpp bridge/robot_bridge/src/h1_node.cpp` prints 0 for both files and `tools/test.sh --docker` passes.
+- [ ] No target builds `src/bridge.cpp`, `src/release_node.cpp`, `src/key_event_handler.cpp`, `src/common/ros2_sport_client.cpp` or their headers (README, "upstream leftovers"); `CMakeLists.txt:170-240` keeps their targets and the unitree_sdk2 import commented out. Check that DFKI has not changed them, then delete them and the README sentence.
+  **Done when:** `git ls-files bridge/robot_bridge | grep -c 'src/bridge.cpp\|include/bridge.hpp\|release_node\|key_event_handler\|ros2_sport_client'` prints 0, `grep -c 'release_node\|unitree_sdk2' bridge/robot_bridge/CMakeLists.txt` prints 0, and `tools/test.sh --docker` passes.
