@@ -10,11 +10,13 @@
 Milestones 1 and 2 of `SPEC.md` are ticked. `origin/main` is merged in (`a1aac81`).
 
 - The owner's `run_sim_watch_test.sh` run (2026-11-17, turing): all checks passed. Detail: commit `7491ef4`.
+- Review fixes after that run: `3c70a38` (a stop signal in a hold damps 1 s), `ecefda6` (the mode poll survives a `CheckMode` exception), `b7d3b2c` (the stage fails on a `/lowcmd` gap ≥ 0.4 s).
 
 ## Next action
 
 Milestone 3 of `SPEC.md`: the unit file, the install script and the docs.
 Done when `systemd-analyze verify` passes on the unit, the install script's `--dry-run` prints its steps, and `docs/estop.md` has a "Jetson link watcher" section.
+Ask the owner for one more `tools/test.sh --sim` run: the review fixes came after the last one.
 
 ## Blockers
 
@@ -22,7 +24,8 @@ None.
 
 ## Gotchas (unpromoted)
 
-- SIGTERM while holding exits silent (robot drops 0.4 s later). Spec is silent; decide with the unit file.
+- Decided (`3c70a38`): SIGTERM or SIGINT in a hold damps 1 s, then exits, as the bridge does. Name it in the docs section.
+- Open risk for the docs section: a link gap of 0.1–0.2 s. The bridge's 1 Hz `watchLowcmd_` can count the watcher's writer before it closes → `damp other_lowcmd`. Over 0.2 s the bridge latches `damp state_loss` anyway. Only the gantry test measures it.
 - Without a motion switcher (no robot) the SDK prints `[ClientStub] send request error` once a second → journal noise.
 - `systemd-analyze` 255 is on turing.
 - Core API: `Watcher(open_writer)`; `on_lowcmd`, `on_lowstate`, `on_motion_mode` (msg or name, now) from any thread; `step(now)` at 500 Hz on one thread. `now` = `time.monotonic()`.
