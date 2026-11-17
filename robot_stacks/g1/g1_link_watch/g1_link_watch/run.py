@@ -48,11 +48,14 @@ class Writer:
 
 
 def poll_mode(switcher, watcher, stop) -> None:
-    """CheckMode at MODE_POLL_S into the watcher; an error reports nothing."""
+    """CheckMode at MODE_POLL_S into the watcher; an error code or an exception reports nothing."""
     while not stop.wait(MODE_POLL_S):
-        code, mode = switcher.CheckMode()
-        if code == 0 and isinstance(mode, dict):
-            watcher.on_motion_mode(mode.get("name", ""), time.monotonic())
+        try:  # CheckMode's json.loads raises on a bad reply: a dead thread froze the gate
+            code, mode = switcher.CheckMode()
+            if code == 0 and isinstance(mode, dict):
+                watcher.on_motion_mode(mode.get("name", ""), time.monotonic())
+        except Exception:
+            log.exception("CheckMode failed: no report")
 
 
 def spin(watcher, stop) -> None:
