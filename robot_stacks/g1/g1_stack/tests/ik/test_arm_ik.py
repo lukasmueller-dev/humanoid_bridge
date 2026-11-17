@@ -53,3 +53,13 @@ def test_a_urdf_without_the_right_arm_chain_is_refused(tmp_path):
     chain[3] = ("right_knee_joint",) + chain[3][1:]
     with pytest.raises(ValueError, match="expected"):
         arm.load_chain(_urdf(tmp_path, chain))
+
+
+@pytest.mark.parametrize("axis", [0, 1, 2])
+def test_log3_is_the_rotation_vector(axis):
+    """2.5 rad about x, y or z, built by hand: log3 must return 2.5 along that axis."""
+    i, j = (axis + 1) % 3, (axis + 2) % 3
+    rot = np.eye(3)
+    rot[i, i] = rot[j, j] = np.cos(2.5)
+    rot[j, i], rot[i, j] = np.sin(2.5), -np.sin(2.5)
+    np.testing.assert_allclose(arm.log3(rot), 2.5 * np.eye(3)[axis])
