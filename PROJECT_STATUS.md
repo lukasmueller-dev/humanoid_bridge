@@ -3,7 +3,7 @@
 > One per repo. The *current* picture: goal, architecture, decisions, open
 > questions. Finished work is removed; git history is the log.
 
-_Last updated: 2026-11-17 · link-watcher job_
+_Last updated: 2026-11-17 · shared-teleop job_
 
 ## Goal
 
@@ -76,6 +76,7 @@ _One line each, dated, with a pointer (commit or PR)._
 - 2026-11-01: `main` takes only the T1 ankle mapping; the T1 examples move to robots_web_commander `workspaces/scratch/` (#59), the joint-response tools stay on `t1-parallel-ankle` (#61, closed without a merge) until Siwei decides — PR from `t1-ankle-core`
 - 2026-11-01: the T1 ankle kinematics twin lives in `robot_sim/t1_parallel_ankle.py` (the sim needs it, `scripts/real/` is not installed); the check script imports it from there. The sim shares the bridge's formula: it cannot check the real crank order or sign — PR from `sim-t1-parallel-ankle`
 - 2026-11-17: `g1_link_watch` on the G1's Jetson holds the robot when the bridge's `/lowcmd` stops for 0.1 s after kp > 0 frames; its `rt/lowcmd` writer exists only while it sends; sim-tested, the gantry test is open — `docs/estop.md` § Jetson link watcher, PR from `link-watcher`
+- 2026-11-17: G1 remote teleop lives in `g1_stack`, beside AMO: `nodes.teleop_remote`, its right-arm IK `ik.arm`, `nodes.record_lowstate`, with no psi0 or locoman import; the commander's Teleop tab starts them — feature shared-teleop, PR from `shared-teleop`
 
 ## Roadmap
 
