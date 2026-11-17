@@ -27,7 +27,7 @@ See the feature file.
 Source files: `git -C /home/lukas-mueller/github/humanoid-locoman-vla show origin/main:<path>`.
 
 - [x] Move `registry/psi0/arm_ik.py` to `g1_stack/ik/arm.py`, and `benches/g1/nodes/record_lowstate.py` (with the `allow_lo` helper of `benches/g1/nodes/observe_only.py`) to `g1_stack/nodes/record_lowstate.py`, with their tests; casadi tests skip without casadi — code — done when `tools/test.sh --unit` passes.
-- [ ] Move `benches/g1/nodes/teleop_remote.py` and its test to `g1_stack/nodes/teleop_remote.py` per the contract: `--stats` documented as a LeRobot stats file in AMO goal order, `actions.jsonl` rows carry `goal` (the `make_goal` dict without `stamp`) — code — done when its tests pass in `tools/test.sh --unit` and `git grep -nE '^(from|import) (registry|benches|lab)' robot_stacks/g1/g1_stack` prints nothing.
+- [x] Move `benches/g1/nodes/teleop_remote.py` and its test to `g1_stack/nodes/teleop_remote.py` per the contract: `--stats` documented as a LeRobot stats file in AMO goal order, `actions.jsonl` rows carry `goal` (the `make_goal` dict without `stamp`) — code — done when its tests pass in `tools/test.sh --unit` and `git grep -nE '^(from|import) (registry|benches|lab)' robot_stacks/g1/g1_stack` prints nothing.
 - [ ] `robot_stacks/g1/g1_stack/README.md`: rows for `ik/`, `teleop_remote` and `record_lowstate` — code — done when `grep -E 'ik/|teleop_remote|record_lowstate' robot_stacks/g1/g1_stack/README.md` matches all three. Then the end action.
 
 ## End action

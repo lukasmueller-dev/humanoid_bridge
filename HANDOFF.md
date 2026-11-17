@@ -14,14 +14,13 @@
 
 ## State
 
-Milestone 1 of `SPEC.md` is done: `g1_stack.ik.arm` (`RightArmIK`, `log3`), `g1_stack.nodes.record_lowstate`, `g1_stack.joints.dds.allow_lo`. Feature: ~/.local/state/vibe/features/shared-teleop.md.
+Milestones 1 and 2 of `SPEC.md` are done: `g1_stack.ik.arm`, `g1_stack.nodes.record_lowstate`, `g1_stack.nodes.teleop_remote` (contract changes in commit 6e9642a). Feature: ~/.local/state/vibe/features/shared-teleop.md.
 
 ## Next action
 
-The second milestone of `SPEC.md`: move `benches/g1/nodes/teleop_remote.py` and its test to `g1_stack/nodes/teleop_remote.py` per the contract — code — done when its tests pass in `tools/test.sh --unit` and `git grep -nE '^(from|import) (registry|benches|lab)' robot_stacks/g1/g1_stack` prints nothing.
+The third and last milestone of `SPEC.md`: rows for `ik/`, `teleop_remote` and `record_lowstate` in `robot_stacks/g1/g1_stack/README.md` — code — done when `grep -E 'ik/|teleop_remote|record_lowstate' robot_stacks/g1/g1_stack/README.md` matches all three. Then the end action `delete`: each feature decision moves to the PR body.
 
-- Imports: `registry.psi0.arm_ik` → `g1_stack.ik.arm`; `observe_only.allow_lo` → `g1_stack.joints.dds.allow_lo`.
-- The node's IK tests read `~/github/psi0/real/assets/g1/g1_body29_hand14.urdf`; `tests/ik/test_arm_ik.py` writes the same chain as a URDF (`_urdf`).
+- The `nodes/` row lists the nodes by name; `Verify` names the casadi venv below for `tests/ik` and the node's IK tests.
 
 ## Blockers
 
@@ -30,6 +29,5 @@ None.
 ## Gotchas (unpromoted)
 
 - System `python3` has no pytest: `tools/test.sh --unit` skips → run it with `--python /home/lukas-mueller/github/humanoid_bridge/.venv38/bin/python`.
-- That venv has no casadi, so the IK tests skip → run them with `/home/lukas-mueller/github/humanoid-locoman-vla/.venv38/bin/python -m pytest robot_stacks/g1/g1_stack/tests/ik`.
+- That venv has no casadi, so the IK tests skip → run them with `/home/lukas-mueller/github/humanoid-locoman-vla/.venv38/bin/python -m pytest robot_stacks/g1/g1_stack/tests/ik robot_stacks/g1/g1_stack/tests/nodes/test_teleop_remote.py`.
 - No ruff on PATH → `UV_CACHE_DIR=$TMPDIR/uv-cache UV_TOOL_DIR=$TMPDIR/uv-tools uvx ruff check <paths>`; the repo has 118 old E501 errors, so check only the new files.
-- `git fetch` in humanoid-locoman-vla fails in the sandbox (read-only `FETCH_HEAD`) → read the sources from `origin/main` as is (da10b7c, 2026-11-16).
