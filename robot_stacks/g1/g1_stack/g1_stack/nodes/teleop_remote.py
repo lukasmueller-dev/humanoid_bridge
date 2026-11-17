@@ -257,11 +257,6 @@ class Teleop:
                 "target_yaw": round(self.target_yaw, 4), "episode_s": round(seconds, 2)}
 
 
-def rotvec(rot):
-    """Rotation vector of a rotation matrix (the inverse of exp3)."""
-    return np.asarray(log3(np.asarray(rot, dtype=np.float64))).reshape(3)
-
-
 def run(teleop, low_state, publisher, actions, episode, duration=0.0, out=print,
         clock=time.monotonic, wall=time.time, sleep=time.sleep):
     """Tick at the teleop's rate until Start or the duration; the end reason."""
@@ -282,7 +277,7 @@ def run(teleop, low_state, publisher, actions, episode, duration=0.0, out=print,
                "grasp": round(teleop.grasp, 4), "ik_ok": not teleop.ik_fail,
                "reach_limited": teleop.reach_limited,
                "sticks": [round(v, 4) for v in teleop.sticks], "dpad": list(teleop.dpad),
-               "target": [round(float(v), 5) for v in (*teleop.pos, *rotvec(teleop.rot))],
+               "target": [round(float(v), 5) for v in (*teleop.pos, *log3(teleop.rot))],
                "ik_err": [round(v, 5) for v in teleop.ik_err]}
         actions.write(json.dumps(row) + "\n")
         if now >= next_live:
