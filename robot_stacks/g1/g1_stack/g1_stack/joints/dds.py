@@ -60,6 +60,22 @@ def _channel_subscriber(topic, message_type):
 _dds_initialized = False
 
 
+def allow_lo(iface):
+    """On `lo` force multicast on: unitree_sdk2py's "default" turns it off there ("not multicast-
+    capable"), and the node never finds robot_sim or G1_bridge. Call before `initialize_dds`."""
+    if iface != "lo":
+        return
+    from unitree_sdk2py.core import channel
+
+    if 'multicast="true"' in channel.ChannelConfigHasInterface:
+        return   # patched before in this process
+    if 'multicast="default"' not in channel.ChannelConfigHasInterface:
+        raise RuntimeError("unitree_sdk2py's ChannelConfigHasInterface no longer carries "
+                           'multicast="default": discovery over lo needs another patch')
+    channel.ChannelConfigHasInterface = channel.ChannelConfigHasInterface.replace(
+        'multicast="default"', 'multicast="true"')
+
+
 def initialize_dds(network_interface=None, domain_id: int = 0) -> None:
     """Bring up the DDS channel factory. Once per process, before any subscriber.
 

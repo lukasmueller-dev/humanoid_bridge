@@ -10,7 +10,8 @@ whole-body-controller goals.
 | `observation/` | One validated frame of camera plus joints |
 | `gear/` | Goal order, goal messages, the ZMQ publisher, its pacer, and the walk-policy status reader |
 | `amo/` | AMO, psi0's lower-body policy (port of psi0 `real/teleop`), its gravity feedforward, its ZMQ goal |
-| `nodes/` | `gear_controller`, `amo_controller`, `fixed_goals`, `joint_probe`, `dex3_probe` |
+| `ik/` | Right-arm IK (port of psi0 teleop `G1_29_ArmIK`), CasADi forward kinematics from a G1 URDF |
+| `nodes/` | `gear_controller`, `amo_controller`, `teleop_remote`, `record_lowstate`, `fixed_goals`, `joint_probe`, `dex3_probe` |
 
 Depends on `robot_bridge` (the bridge's Python client) and `g1_camera`.
 Nothing under `bridge/` depends on this — that rule is what keeps the bridge
@@ -44,6 +45,8 @@ base_height, target_time)` is the general form.
 ```bash
 pytest robot_stacks/g1/g1_stack/tests/
 ~/github/psi0/.venv-psi/bin/python -m pytest robot_stacks/g1/g1_stack/tests/amo   # AMO against psi0's own code: torch, pinocchio
+~/github/humanoid-locoman-vla/.venv38/bin/python -m pytest robot_stacks/g1/g1_stack/tests/ik \
+    robot_stacks/g1/g1_stack/tests/nodes/test_teleop_remote.py   # the IK: casadi
 ```
 
 Everything, including the bridge against a fake robot: `tools/test.sh`.
@@ -60,3 +63,5 @@ Everything, including the bridge against a fake robot: `tools/test.sh`.
 - **`--interface sim` does not reach the bridge**, permanently: root `README.md`, What breaks it.
 - **`amo_controller` needs psi0's venv**: CUDA torch (the traced AMO allocates on `cuda:0`), `pin<4`, pyzmq.
   `pin` 4 pulls numpy 2, and numpy 2 breaks the ROS messages: install with `numpy==1.26.4` pinned.
+- **`teleop_remote` and `record_lowstate` run with `$G1_STACK_PYTHON`**: casadi (the IK), `unitree_sdk2py`, pyzmq;
+  lab PC: locoman's `.venv38`. Without casadi the IK tests skip.
