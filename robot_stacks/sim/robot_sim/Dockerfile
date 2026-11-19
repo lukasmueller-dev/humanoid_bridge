@@ -14,6 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libgl1 \
         libosmesa6 \
         iproute2 \
+        ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 RUN pip3 install --no-cache-dir mujoco==3.3.6 pyzmq opencv-python-headless==4.10.0.84
 # For tools/g1-release-lowcmd.py and g1_link_watch against robot_sim. --no-deps: its opencv-python
