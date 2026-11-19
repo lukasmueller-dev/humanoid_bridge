@@ -79,6 +79,8 @@ Options:
                          a missing file or any other key refuses the start (exit 2)
   --parallel-ankle       T1: the bridge maps the ankles to the crank motors (-p parallel_ankle_mapping:=true
                          after the params files); check the cranks first: scripts/real/t1_check_parallel_ankle_mapping.py
+                         The law is parallel_ankle_law in the params: torque (T1_config.yaml) or impedance
+                         (--params bridge/robot_bridge/params/T1_config_impedance.yaml, mapping on)
   --no-release           G1, Go2: skip the /lowcmd release (already released, or a fake robot)
   --arm-from-measured    arm to the pose the robot currently holds
   --arm-from "<N nums>"  arm to an explicit pose (G1 29, T1 23, Go2 12), length-checked here

@@ -36,6 +36,32 @@ const Reference kReference[] = {
 };
 // clang-format on
 
+
+// Impedance transfer: loco-mujoco-t1 parallel_act/impedance_transfer.py impedance_transfer(..) with Kps = 50, Kds = 3, dq_ref = 0,
+// tau_ff = 0; literal = 1 uses the printed eq. 29 / 30 terms. Kp_m, Kd_m row-major.
+struct ImpedanceReference
+{
+    int side, literal;
+    pa::Vec2 q_s, dq_m, q_ref;
+    std::array<double, 4> Kp, Kd;
+    pa::Vec2 q_star, tau_m;
+};
+
+// clang-format off
+const ImpedanceReference kImpedanceReference[] = {
+    {0, 0, {-0.25, 0}, {0.75223726683364789, -0.98252186925618823}, {-0.34053656700181567, 0.57685740685680864}, {106.2370744215138, -47.845342598656501, -58.964907895270549, 29.93273367662399}, {3.869536132381449, -2.8398002715206156, -2.8398002715206161, 4.6038506995500885}, {2.5425047792121247, 5.8834283435709001}, {-34.059159151720344, 41.337829016354675}},
+    {0, 1, {-0.25, 0}, {0.75223726683364789, -0.98252186925618823}, {-0.34053656700181567, 0.57685740685680864}, {17.874545799248743, -16.345054546622425, 41.572076522012551, 71.705305791877635}, {3.869536132381449, -2.8398002715206156, -2.8398002715206161, 4.6038506995500885}, {-0.46401361960354931, 1.1926171140701931}, {-34.059159151720344, 41.337829016354675}},
+    {0, 0, {-0.59999999999999998, 0.29999999999999999}, {1.5955038762927325, 0.890864557326978}, {0.50072934526010515, -0.43918248402792015}, {-10.009123916042416, 47.291993654221194, 44.792252812877059, 15.966118819447335}, {6.4078694226838415, -6.0248403771102872, -6.0248403771102872, 9.6946660299879799}, {-1.1106380252591161, 0.40962591146488997}, {-1.9798835572059872, -78.531425403709463}},
+    {0, 1, {-0.59999999999999998, 0.29999999999999999}, {1.5955038762927325, 0.890864557326978}, {0.50072934526010515, -0.43918248402792015}, {157.65669739528713, -47.672412976382994, -195.45827593516762, -40.70884218255248}, {6.4078694226838415, -6.0248403771102872, -6.0248403771102872, 9.6946660299879799}, {0.80834430275571023, 1.4632334367414146}, {-1.9798835572059872, -78.531425403709463}},
+    {0, 0, {0.29999999999999999, -0.34999999999999998}, {-2.9313730674426521, -3.2068666280240525}, {-0.67869598244974627, 0.93985082643226514}, {115.77005284487397, -39.158315606580203, -37.908670862747343, -4.5145340395567057}, {2.058865151863623, -0.89902404061767238, -0.89902404061767238, 1.1538755171379305}, {-1.1234020830279787, -2.7096843275819489}, {-40.524239387703069, 51.084928442746765}},
+    {0, 1, {0.29999999999999999, -0.34999999999999998}, {-2.9313730674426521, -3.2068666280240525}, {-0.67869598244974627, 0.93985082643226514}, {-15.668379087876719, -15.926882432635537, 34.947576210471084, 71.37187731126987}, {2.058865151863623, -0.89902404061767238, -0.89902404061767238, 1.1538755171379305}, {4.0823149563929446, -1.9716505566529836}, {-40.524239387703069, 51.084928442746765}},
+    {1, 0, {-0.59999999999999998, 0.29999999999999999}, {-1.6256930064551962, -1.2138782508802561}, {0.61010966629001939, 0.92734174568994177}, {8.4295669377933304, -79.162521021692868, -72.41802529909053, 227.9964144477849}, {8.1649099640051386, -7.1056235258589941, -7.1056235258589933, 9.6059376958921749}, {0.20354085503367961, -0.10015910443749557}, {51.286233823777849, -106.71129667966353}},
+    {1, 1, {-0.59999999999999998, 0.29999999999999999}, {-1.6256930064551962, -1.2138782508802561}, {0.61010966629001939, 0.92734174568994177}, {-54.858427468590087, -94.276438392076102, -16.688678313932868, 203.57757748611667}, {8.1649099640051386, -7.1056235258589941, -7.1056235258589933, 9.6059376958921749}, {0.82005625062707466, 0.028808935890416967}, {51.286233823777849, -106.71129667966353}},
+    {1, 0, {0.20000000000000001, 0.40000000000000002}, {-0.17718840139880299, 1.0706770759293018}, {-0.2074876755660271, -0.98835080978403811}, {119.48173096744141, -41.923774738928458, -39.654628165822764, 4.8283085266380459}, {2.5731958094845186, -1.2861376187452653, -1.2861376187452656, 1.5628171933052348}, {-1.4328503324382231, -3.406427437610581}, {-59.358417206585045, 45.002943257694923}},
+    {1, 1, {0.20000000000000001, 0.40000000000000002}, {-0.17718840139880299, 1.0706770759293018}, {-0.2074876755660271, -0.98835080978403811}, {102.39997039719702, -44.459345427733396, -30.155406020411455, -3.9888695218922376}, {2.5731958094845186, -1.2861376187452653, -1.2861376187452656, 1.5628171933052348}, {-1.2253650198299009, -2.1702154697541785}, {-59.358417206585045, 45.002943257694923}},
+};
+// clang-format on
+
 int failures = 0;
 
 void expectNear(const char *what, double got, double want, double tol)
@@ -148,6 +174,89 @@ int main()
             for (int i = 0; i < 2; ++i)
                 expectNear("applied |kd (0 - dq_m) + tau| <= limit",
                            std::abs(c.kd[i] * (0.0 - dq_m[i]) + c.tau[i]) <= 5.0 + 1e-9, 1.0, 0.0);
+        }
+    }
+
+    // 3c) impedance transfer against impedance_transfer.py, the closure at the measured state, the wire form and the fallback
+    {
+        double worst_Kp = 0, worst_Kd = 0, worst_qstar = 0, worst_closure = 0, worst_hess = 0;
+        int fallbacks = 0;
+        for (const auto &r : kImpedanceReference)
+        {
+            const auto side = static_cast<pa::Side>(r.side);
+            const pa::Vec2 q_m = pa::crankAngles(side, r.q_s);
+            pa::ImpedanceOptions opt;
+            opt.paper_terms = r.literal != 0;
+            opt.fallback_eig = -1e9; // compute the law whatever its sign, ok is checked below
+            const auto law = pa::impedanceLaw(side, q_m, r.dq_m, {r.q_s[0] + 0.01, r.q_s[1] - 0.01}, r.q_ref, {0.0, 0.0},
+                                              kp, kd, {0.0, 0.0}, 1e9, opt);
+            expectNear("impedanceLaw estimated q_s", law.estimated, 1.0, 0.0);
+            for (int i = 0; i < 2; ++i)
+            {
+                worst_qstar = std::max(worst_qstar, std::abs(law.q_star[i] - r.q_star[i]));
+                for (int j = 0; j < 2; ++j)
+                {
+                    worst_Kp = std::max(worst_Kp, std::abs(law.Kp[i][j] - r.Kp[2 * i + j]));
+                    worst_Kd = std::max(worst_Kd, std::abs(law.Kd[i][j] - r.Kd[2 * i + j]));
+                }
+            }
+            // eq. 32: at the measured state the impedance reproduces tau_m
+            const auto m = pa::impedanceMotorCommand(law, q_m, r.dq_m, 1e9);
+            for (int i = 0; i < 2; ++i) worst_closure = std::max(worst_closure, std::abs(m.tau_applied[i] - r.tau_m[i]));
+            // the fallback fires exactly when Python's Kp_m is not positive definite enough or a diagonal is not positive
+            const double min_eig_py = pa::minEigSym({{{r.Kp[0], r.Kp[1]}, {r.Kp[2], r.Kp[3]}}});
+            const bool usable = min_eig_py > 1e-3 && r.Kp[0] > 0.0 && r.Kp[3] > 0.0;
+            opt.fallback_eig = 1e-3;
+            const auto guarded = pa::impedanceLaw(side, q_m, r.dq_m, r.q_s, r.q_ref, {0.0, 0.0}, kp, kd, {0.0, 0.0}, 1e9, opt);
+            expectNear("impedance fallback matches the sign of min eig(Kp_m)", guarded.ok == usable, 1.0, 0.0);
+            fallbacks += guarded.ok ? 0 : 1;
+        }
+        // Hessians: central difference of J against a coarse forward difference with a different step
+        for (const auto &r : kReference)
+        {
+            const auto side = static_cast<pa::Side>(r.side);
+            pa::Tensor2 H, H2;
+            pa::jacobianDerivative(side, r.q_s, H, 1e-6);
+            pa::jacobianDerivative(side, r.q_s, H2, 1e-5);
+            for (int i = 0; i < 2; ++i)
+                for (int m = 0; m < 2; ++m)
+                    for (int n = 0; n < 2; ++n) worst_hess = std::max(worst_hess, std::abs(H[i][m][n] - H2[i][m][n]));
+        }
+        expectNear("max |Kp_m - python| [Nm/rad]", worst_Kp, 0.0, 1e-4);
+        expectNear("max |Kd_m - python| [Nm s/rad]", worst_Kd, 0.0, 1e-7);
+        expectNear("max |q_m* - python| [rad]", worst_qstar, 0.0, 1e-6);
+        expectNear("max |closure - tau_m| [Nm]", worst_closure, 0.0, 1e-6);
+        expectNear("Hessian step independence", worst_hess, 0.0, 1e-5);
+        std::printf("impedance: Kp %.1e  Kd %.1e  q* %.1e  closure %.1e Nm  hessian %.1e  (%d of %zu cases fall back)\n", worst_Kp,
+                    worst_Kd, worst_qstar, worst_closure, worst_hess, fallbacks, sizeof(kImpedanceReference) / sizeof(kImpedanceReference[0]));
+    }
+
+    // 3d) wire form: the driver's kp, kd on the diagonal plus tau reproduce Kp_m (q* - q) - Kd_m dq, also after the state moved
+    //     and with a cap on kp and kd (the cap's difference goes into tau); tau + driver torque stays in the limit
+    {
+        const auto &r = kImpedanceReference[0];
+        const auto side = static_cast<pa::Side>(r.side);
+        pa::ImpedanceOptions opt;
+        opt.kp_max = 40.0;
+        opt.kd_max = 2.0;
+        const pa::Vec2 q_m = pa::crankAngles(side, r.q_s);
+        const auto law = pa::impedanceLaw(side, q_m, r.dq_m, r.q_s, r.q_ref, {0.0, 0.0}, kp, kd, {0.0, 0.0}, 1e9, opt);
+        expectNear("capped kp", law.kp[0] <= 40.0 + 1e-12 && law.kp[1] <= 40.0 + 1e-12, 1.0, 0.0);
+        expectNear("capped kd", law.kd[0] <= 2.0 + 1e-12 && law.kd[1] <= 2.0 + 1e-12, 1.0, 0.0);
+        const pa::Vec2 q_later = {q_m[0] + 0.03, q_m[1] - 0.02}, dq_later = {r.dq_m[0] * 0.5, -r.dq_m[1]};
+        const auto m = pa::impedanceMotorCommand(law, q_later, dq_later, 1e9);
+        for (int i = 0; i < 2; ++i)
+        {
+            double want = 0.0;
+            for (int j = 0; j < 2; ++j) want += law.Kp[i][j] * (law.q_star[j] - q_later[j]) - law.Kd[i][j] * dq_later[j];
+            const double got = m.tau[i] + m.kp[i] * (m.q[i] - q_later[i]) + m.kd[i] * (0.0 - dq_later[i]);
+            expectNear("wire form equals the impedance at the later state [Nm]", got, want, 1e-9);
+        }
+        const auto clipped = pa::impedanceMotorCommand(law, q_later, dq_later, 3.0);
+        for (int i = 0; i < 2; ++i)
+        {
+            const double total = clipped.tau[i] + clipped.kp[i] * (clipped.q[i] - q_later[i]) - clipped.kd[i] * dq_later[i];
+            expectNear("clipped total torque <= limit", std::abs(total) <= 3.0 + 1e-9, 1.0, 0.0);
         }
     }
 

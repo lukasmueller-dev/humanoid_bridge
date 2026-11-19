@@ -29,6 +29,9 @@ robot_bridge:
     parallel_ankle_crank_sign: [1.0, 1.0]    # XML crank angle = sign * motor angle (crank a, crank b); floats
     parallel_ankle_crank_tau_limit: 43.0     # [Nm] per crank motor, motor-loop damping included (E4315 peak, forcerange in T1_23dof_parallel.xml)
     parallel_ankle_max_estimate_error: 0.05  # [rad] stop if f^-1(crank angles) and the firmware's serial ankle state disagree
+    # Law the bridge sends to the cranks when parallel_ankle_mapping is true: "torque" (this file: the torque law above, at
+    # the control rate) or "impedance" (Lutz et al. impedance transfer, see T1_config_impedance.yaml).
+    parallel_ankle_law: torque
 
     # docs/estop.md. Operator e-stops have a fixed mode; these set the rest.
     estop:

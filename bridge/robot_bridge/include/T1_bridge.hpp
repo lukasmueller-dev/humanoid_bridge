@@ -47,12 +47,14 @@ private:
         t1_parallel_ankle::Vec2 q_m{0.0, 0.0}, dq_m{0.0, 0.0};  // crank state, XML convention
         t1_parallel_ankle::Vec2 q_s_firmware{0.0, 0.0};         // motor_state_serial, for the consistency check
         t1_parallel_ankle::CrankCommand crank;
+        bool impedance_active{false};  // the impedance law (not its torque-law fallback) produced this cycle's command
+        t1_parallel_ankle::ImpedanceMotorCommand impedance;
         double estimate_error{0.0};
         bool ok{false};
     };
     int crankSlot_(int side, int crank) const;
     // mutex_ held.
-    bool mapAnklesToCranks_(booster_interface::msg::LowCmd &cmd, std::array<AnkleMapping, 2> &mapping) const;
+    bool mapAnklesToCranks_(booster_interface::msg::LowCmd &cmd, std::array<AnkleMapping, 2> &mapping);
 
     static constexpr int kAnkleSerialIdx[2][2] = {{15, 16}, {21, 22}}; // [side][pitch, roll]; the two crank motors in parallel mode
     bool parallelAnkle_{false};
@@ -61,6 +63,27 @@ private:
     double parallelAnkleCrankTauLimit_{t1_parallel_ankle::kCrankTorqueMax};
     double parallelAnkleMaxEstimateError_{0.05};   // stop if |f^-1(q_m) - firmware serial q| exceeds this [rad]
     std::vector<booster_interface::msg::MotorState> parallelState_;
+
+    // parallel_ankle_law: "torque" (crankCommand, every control cycle) or "impedance" (impedanceLaw refreshed at
+    // parallel_ankle_update_hz, the torque law as the fallback). The torque law is the default.
+    enum class AnkleLaw
+    {
+        Torque,
+        Impedance
+    };
+    struct ImpedanceState
+    {
+        t1_parallel_ankle::ImpedanceLaw law;
+        int ticks_since_update{0};
+        bool have_law{false};
+        unsigned long updates{0}, fallbacks{0};
+        double min_eig{1e9};
+    };
+    AnkleLaw parallelAnkleLaw_{AnkleLaw::Torque};
+    t1_parallel_ankle::ImpedanceOptions impedanceOptions_;
+    double parallelAnkleUpdateHz_{100.0};
+    int impedancePeriodTicks_{1};  // control cycles between two refreshes of the impedance law
+    std::array<ImpedanceState, 2> impedanceState_;
 
     rclcpp::Subscription<booster_interface::msg::LowState>::SharedPtr lowStateSubscriber_;
     rclcpp::Subscription<booster_interface::msg::RemoteControllerState>::SharedPtr remoteSubscriber_;

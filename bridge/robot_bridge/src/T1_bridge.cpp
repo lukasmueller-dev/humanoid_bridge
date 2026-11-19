@@ -323,6 +323,30 @@ void sairol_bridge::T1Bridge::loadParallelAnkleParameters_()
     nh->get_parameter("parallel_ankle_crank_sign", parallelAnkleCrankSign_);
     nh->get_parameter("parallel_ankle_crank_tau_limit", parallelAnkleCrankTauLimit_);
     nh->get_parameter("parallel_ankle_max_estimate_error", parallelAnkleMaxEstimateError_);
+    std::string law = "torque";
+    nh->get_parameter("parallel_ankle_law", law);
+    if (law != "torque" && law != "impedance")
+    {
+        RCLCPP_FATAL(nh->get_logger(), "parallel_ankle_law must be 'torque' or 'impedance', got '%s'", law.c_str());
+        throw ConfigError("parallel_ankle_law");
+    }
+    parallelAnkleLaw_ = law == "impedance" ? AnkleLaw::Impedance : AnkleLaw::Torque;
+    nh->get_parameter("parallel_ankle_update_hz", parallelAnkleUpdateHz_);
+    nh->get_parameter("parallel_ankle_paper_terms", impedanceOptions_.paper_terms);
+    nh->get_parameter("parallel_ankle_fallback_eig", impedanceOptions_.fallback_eig);
+    nh->get_parameter("parallel_ankle_kp_max", impedanceOptions_.kp_max);
+    nh->get_parameter("parallel_ankle_kd_max", impedanceOptions_.kd_max);
+    if (!(parallelAnkleUpdateHz_ > 0.0) || impedanceOptions_.kp_max < 0.0 || impedanceOptions_.kd_max < 0.0)
+    {
+        RCLCPP_FATAL(nh->get_logger(), "parallel_ankle_update_hz must be > 0 and kp_max, kd_max >= 0");
+        throw ConfigError("parallel_ankle_update_hz");
+    }
+    impedancePeriodTicks_ = std::max(1, static_cast<int>(std::lround(1.0 / (parallelAnkleUpdateHz_ * controlDt_))));
+    if (parallelAnkleLaw_ == AnkleLaw::Impedance && !parallelAnkle_)
+    {
+        RCLCPP_FATAL(nh->get_logger(), "parallel_ankle_law: impedance needs parallel_ankle_mapping: true");
+        throw ConfigError("parallel_ankle_law");
+    }
     robotMapsParallelJoints_ = parallelAnkle_;
     if (parallelAnkleCrankSign_.size() != 2)
     {
@@ -348,6 +372,14 @@ void sairol_bridge::T1Bridge::loadParallelAnkleParameters_()
                                : "disabled: firmware maps ankle commands (CMD_TYPE_SERIAL)",
                 parallelAnkleSwapCranks_, parallelAnkleCrankSign_[0], parallelAnkleCrankSign_[1],
                 parallelAnkleCrankTauLimit_, parallelAnkleMaxEstimateError_);
+    if (parallelAnkle_)
+    {
+        RCLCPP_INFO(nh->get_logger(),
+                    "Parallel ankle law: %s (update %.0f Hz = every %d control cycles, paper_terms=%d, fallback_eig=%.1e, "
+                    "kp_max=%.1f, kd_max=%.1f).",
+                    law.c_str(), parallelAnkleUpdateHz_, impedancePeriodTicks_, impedanceOptions_.paper_terms,
+                    impedanceOptions_.fallback_eig, impedanceOptions_.kp_max, impedanceOptions_.kd_max);
+    }
 }
 
 int sairol_bridge::T1Bridge::crankSlot_(int side, int crank) const
@@ -357,7 +389,7 @@ int sairol_bridge::T1Bridge::crankSlot_(int side, int crank) const
 }
 
 bool sairol_bridge::T1Bridge::mapAnklesToCranks_(booster_interface::msg::LowCmd &cmd,
-                                                 std::array<AnkleMapping, 2> &mapping) const
+                                                 std::array<AnkleMapping, 2> &mapping)
 {
     // On entry the four ankle entries of cmd hold the serial command (pitch / roll q, dq, kp, kd, tau); on success
     // they hold the crank commands: hold the measured angle with kp = 0, damping kd, torque tau (motor convention).
@@ -389,6 +421,37 @@ bool sairol_bridge::T1Bridge::mapAnklesToCranks_(booster_interface::msg::LowCmd 
                                     std::abs(m.crank.q_s[1] - m.q_s_firmware[1]));
         m.ok = m.crank.ok && m.estimate_error <= parallelAnkleMaxEstimateError_;
         all_ok = all_ok && m.ok;
+
+        // The impedance law replaces the torque command; where it cannot be used (min eig(Kp_m) too small, a torque
+        // above the limit, ...) m.crank, the torque law at this cycle's state, is sent instead.
+        m.impedance_active = false;
+        if (parallelAnkleLaw_ == AnkleLaw::Impedance && m.ok)
+        {
+            auto &st = impedanceState_[side];
+            if (!st.have_law || ++st.ticks_since_update >= impedancePeriodTicks_)
+            {
+                st.law = pa::impedanceLaw(static_cast<pa::Side>(side), m.q_m, m.dq_m, m.crank.q_s, {sp.q, sr.q},
+                                          {sp.dq, sr.dq}, {sp.kp, sr.kp}, {sp.kd, sr.kd}, {sp.tau, sr.tau},
+                                          parallelAnkleCrankTauLimit_, impedanceOptions_);
+                st.have_law = true;
+                st.ticks_since_update = 0;
+                ++st.updates;
+                st.min_eig = std::min(st.min_eig, st.law.min_eig);
+                if (!st.law.ok)
+                {
+                    ++st.fallbacks;
+                    RCLCPP_WARN_THROTTLE(nh->get_logger(), steadyClock_, 5000,
+                                         "Ankle impedance law not used (side %d, min eig(Kp_m) = %.3g, tau_m = [%.1f, %.1f]): torque law "
+                                         "instead. %lu of %lu updates so far.",
+                                         side, st.law.min_eig, st.law.tau_m[0], st.law.tau_m[1], st.fallbacks, st.updates);
+                }
+            }
+            if (st.law.ok)
+            {
+                m.impedance = pa::impedanceMotorCommand(st.law, m.q_m, m.dq_m, parallelAnkleCrankTauLimit_);
+                m.impedance_active = true;
+            }
+        }
     }
     if (!all_ok) return false;
 
@@ -398,8 +461,18 @@ bool sairol_bridge::T1Bridge::mapAnklesToCranks_(booster_interface::msg::LowCmd 
         {
             const int slot = crankSlot_(side, c);
             auto &motor_cmd = cmd.motor_cmd[slot];
-            motor_cmd.q = parallelState_[slot].q;
             motor_cmd.dq = 0.0;
+            if (mapping[side].impedance_active)
+            {
+                // The motor's angle convention is sign * the XML crank angle; gains do not change with it.
+                const auto &im = mapping[side].impedance;
+                motor_cmd.q = parallelAnkleCrankSign_[c] * im.q[c];
+                motor_cmd.kp = im.kp[c];
+                motor_cmd.kd = im.kd[c];
+                motor_cmd.tau = parallelAnkleCrankSign_[c] * im.tau[c];
+                continue;
+            }
+            motor_cmd.q = parallelState_[slot].q;
             motor_cmd.kp = 0.0;
             motor_cmd.kd = mapping[side].crank.kd[c];
             motor_cmd.tau = parallelAnkleCrankSign_[c] * mapping[side].crank.tau[c];
