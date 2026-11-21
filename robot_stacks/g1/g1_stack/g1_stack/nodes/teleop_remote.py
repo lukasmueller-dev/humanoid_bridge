@@ -88,7 +88,7 @@ def parse_remote(data):
 
 
 def pack_remote(keys=0, lx=0.0, rx=0.0, ry=0.0, ly=0.0):
-    """The inverse, 40 bytes as the G1 sends them (header 0x55 0x51); for tests and g1_sim."""
+    """The inverse, 40 bytes as the G1 sends them (header 0x55 0x51); for tests."""
     raw = bytearray(40)
     raw[0], raw[1] = 0x55, 0x51
     struct.pack_into("<H3f", raw, 2, keys, lx, rx, ry)
