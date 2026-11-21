@@ -3,7 +3,7 @@
 > One per repo. Planned work only, one item per task. Finished items are
 > deleted; git history is the log.
 
-_Last updated: 2026-11-14 · codebase-health job_
+_Last updated: 2026-11-21 · codebase-health job_
 
 ## Items
 
@@ -71,3 +71,10 @@ Decided and fake-tested on `g1-web-interface` (`docs/psi0_gates.md`).
 ### Upstream fixes — one branch each
 
 - [ ] `fix/config-keymaps`: the keymap headers in `params/*.yaml` are corrected here: each key names its handler, `robot_client.py` or the bridge. Still to send upstream. **Done when:** the PR is open.
+
+### Cleanups
+
+- [ ] Fold `robot_stacks/sim/robot_sim/tests/integration/sim_harness.py` into the bridge's `harness.py`: it is a 45-line subset (`Checks`, `ros_node`) with another PASS/FAIL line format. `drive_sim.py`, `drive_sim_t1.py` and `drive_amo_sim.py` import `harness` instead; their `run_sim_*.sh` put `$REPO/bridge/robot_bridge/tests/integration` on `PYTHONPATH`, as `run_sim_watch_test.sh` does. Check nothing parses the old line format first.
+  **Done when:** `sim_harness.py` is gone, `grep -rn sim_harness .` prints nothing, and `tools/test.sh --sim` passes sim, sim-t1 and sim-watch.
+- [ ] Delete the unused `FakeChannelSubscriber` (`robot_stacks/g1/g1_stack/g1_stack/joints/fake.py`) and `NUM_SLOTS` (`robot_stacks/sim/robot_sim/robot_sim/robots/go2.py`): no caller in the repo.
+  **Done when:** `grep -rnE 'FakeChannelSubscriber|NUM_SLOTS' robot_stacks` prints nothing and `pytest` passes.
