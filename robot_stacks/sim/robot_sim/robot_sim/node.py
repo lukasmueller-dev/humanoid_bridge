@@ -222,7 +222,11 @@ def start_camera(node, args):
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--robot", default="g1", choices=robots.NAMES)
-    parser.add_argument("--mjcf", default=None, help="the model (default: the robot's; $G1_MJCF)")
+    parser.add_argument(
+        "--mjcf",
+        default=None,
+        help="the model (default: the robot's; $G1_MJCF, $T1_MJCF or $GO2_MJCF)",
+    )
     parser.add_argument("--clearance", type=float, default=0.05, help="feet above floor, m")
     parser.add_argument("--no-gantry", action="store_true", help="start on the floor, unheld")
     parser.add_argument(
