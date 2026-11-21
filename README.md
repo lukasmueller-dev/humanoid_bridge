@@ -69,7 +69,7 @@ Details and done-when per item: `PROJECT_ROADMAP.md`.
 |---|---|
 | OS, ROS | Ubuntu 22.04, ROS 2 Humble. Foxy + Python 3.8 on-board |
 | Python | 3.10 on the workstation, 3.8 on-board |
-| Not pulled by rosdep | `rosidl_generator_dds_idl`, `rmw_cyclonedds_cpp`, and the Python deps (`numpy`, `pyzmq`, `msgpack`, `msgpack-numpy`, `scipy`, OpenCV, `pytest`, `ruff`). `tools/install-build-deps.sh` installs the lot |
+| Not pulled by rosdep | `rosidl_generator_dds_idl`, `rmw_cyclonedds_cpp`, and the Python deps (`numpy`, `pyzmq`, `msgpack`, `msgpack-numpy`, `scipy`, OpenCV, `casadi` (g1_stack arm IK), `pytest`, `ruff`). `tools/install-build-deps.sh` installs the lot |
 | G1 / H1 | [unitree_sdk2_python](https://github.com/unitreerobotics/unitree_sdk2_python) |
 | T1 | nothing more: `include/booster_mode.hpp` stands in for the Booster SDK (`tools/check-booster-sdk.py <sdk clone>` checks it) |
 
