@@ -1,4 +1,5 @@
-"""RobotSim on the T1, no ROS. Needs mujoco and a T1 model (fetch_assets.sh t1_ncbf, t1_booster)."""
+"""RobotSim on the T1, no ROS. Needs mujoco and a T1 model
+(`fetch_assets.sh --model t1_ncbf` or `t1_booster`)."""
 
 import pathlib
 import re
