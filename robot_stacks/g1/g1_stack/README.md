@@ -6,6 +6,7 @@ whole-body-controller goals.
 | Module | What it owns |
 |---|---|
 | `robot.py` | What the G1 is: joint counts, the 29-joint state layout |
+| `cmd_log.py` | The controller log: every `/robot_cmd` and `/hand_cmd` as JSONL rows (`$G1_CONTROLLER_LOG`) |
 | `joints/` | Reading arm and hand angles off Unitree DDS, and their fake |
 | `observation/` | One validated frame of camera plus joints |
 | `gear/` | Goal order, goal messages, the ZMQ publisher, its pacer, and the walk-policy status reader |
