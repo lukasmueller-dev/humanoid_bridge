@@ -7,11 +7,11 @@ Closes roadmap `feat/g1-finish-control-release`.
 
 | Path | Where | Sets `controlStarted_=false` | Calls `finishControl_` |
 |---|---|---|---|
-| remote `L2+Up+Left` | `G1_bridge.cpp:130`, executor thread | yes | **no** |
-| `/stop_control` | `bridge_core.cpp:510`, executor thread | yes | **no** |
-| IMU trip in `lowStateHandler_` | `G1_bridge.cpp:178`, executor thread | yes | **no** |
-| `checkState_` fail (state age, NaN, dq, IMU) | `bridge_core.cpp:264`, control thread | yes | yes (logs only) |
-| command timeout (`tValid_`) | `bridge_core.cpp:270`, control thread | yes | yes (logs only) |
+| remote `L2+Up+Left` | `G1_bridge.cpp`, executor thread | yes | **no** |
+| `/stop_control` | `bridge_core.cpp`, executor thread | yes | **no** |
+| IMU trip in `lowStateHandler_` | `G1_bridge.cpp`, executor thread | yes | **no** |
+| `checkState_` fail (state age, NaN, dq, IMU) | `bridge_core.cpp`, control thread | yes | yes (logs only) |
+| command timeout (`tValid_`) | `bridge_core.cpp`, control thread | yes | yes (logs only) |
 
 - `update_()` publishes only while `controlStarted_`, so every path ends in `/lowcmd` silence.
 - The three executor-thread paths flip the flag before `update_()` looks, so `finishControl_` never runs for them.
