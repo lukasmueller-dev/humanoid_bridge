@@ -23,8 +23,9 @@ stick. Any shoulder button held (L1, R1, L2, R2: the bridge's e-stop combos) mas
 Deadzone 0.1. The first `--ramp-seconds` take the left arm from measured, and the left hand from
 open (the tab's Ready opens both hands), to the stats' mean; the sticks wait. The right hand starts
 open. Right arm: `g1_stack.ik.arm`; a target outside the reach box is clamped. A failed
-solve, or a solution off the target by more than POS_TOL / ROT_TOL, holds the last solution and the
-last target (`reach_limited`): the target never winds past what the arm reaches. Left arm and hand:
+solve (`ik_fail`), or a solution off the target by more than POS_TOL / ROT_TOL (`reach_limited`),
+holds the last solution and the last target: the target never winds past what the arm reaches.
+Left arm and hand:
 the stats' mean; the base moves in walk mode only.
 
 `--stats`: a LeRobot `meta/stats.json` whose `action` is in AMO goal order: hands 14, arms 14,
