@@ -1,1 +1,1 @@
-"""Inverse kinematics for the G1 arms."""
+"""Inverse kinematics for the G1's right arm."""

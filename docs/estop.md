@@ -7,11 +7,11 @@ Closes roadmap `feat/g1-finish-control-release`.
 
 | Path | Where | Sets `controlStarted_=false` | Calls `finishControl_` |
 |---|---|---|---|
-| remote `L2+Up+Left` | `G1_bridge.cpp:130`, executor thread | yes | **no** |
-| `/stop_control` | `bridge_core.cpp:510`, executor thread | yes | **no** |
-| IMU trip in `lowStateHandler_` | `G1_bridge.cpp:178`, executor thread | yes | **no** |
-| `checkState_` fail (state age, NaN, dq, IMU) | `bridge_core.cpp:264`, control thread | yes | yes (logs only) |
-| command timeout (`tValid_`) | `bridge_core.cpp:270`, control thread | yes | yes (logs only) |
+| remote `L2+Up+Left` | `G1_bridge.cpp`, executor thread | yes | **no** |
+| `/stop_control` | `bridge_core.cpp`, executor thread | yes | **no** |
+| IMU trip in `lowStateHandler_` | `G1_bridge.cpp`, executor thread | yes | **no** |
+| `checkState_` fail (state age, NaN, dq, IMU) | `bridge_core.cpp`, control thread | yes | yes (logs only) |
+| command timeout (`tValid_`) | `bridge_core.cpp`, control thread | yes | yes (logs only) |
 
 - `update_()` publishes only while `controlStarted_`, so every path ends in `/lowcmd` silence.
 - The three executor-thread paths flip the flag before `update_()` looks, so `finishControl_` never runs for them.
@@ -31,7 +31,7 @@ Closes roadmap `feat/g1-finish-control-release`.
 | `LATCHED(mode, cause)` | stop frame, every `control_dt` (nothing if latched from `DISARMED`, or 1.2 s after `/lowstate` stopped) | dropped | **refused** | `/estop_reset` → `STOPPED`, or `DISARMED` if silent |
 
 - Arming services: `/start_control`, `/limp_control`, `/ready_position_control`, `/zero_position_control`, `/start_hand_control`.
-- `estop.require_remote: true` (the G1 default when the key is missing, with a warning): every arming service is refused unless the remote's header (`0x55 0x51`) arrived in the last 0.5 s. Measured 2026-10-20: remote off = all 40 bytes 0; at rest the bytes stay constant, so only the header counts. Remote lost while armed: open question. Ready and zero count as arming even while `ARMED`: they move every joint, so they also need the remote and a free `/lowcmd`.
+- `estop.require_remote: true` (the G1, T1 and Go2 default when the key is missing, with a warning): every arming service is refused unless the remote is present. G1, Go2: the remote's header (`0x55 0x51`) arrived in the last 0.5 s. T1: any gamepad message since the bridge started (the gamepad sends on events only). G1 measured 2026-10-20: remote off = all 40 bytes 0; at rest the bytes stay constant, so only the header counts. Remote lost while armed: open question. Ready and zero count as arming even while `ARMED`: they move every joint, so they also need the remote and a free `/lowcmd`.
 - Latched, `/lowstate` older than 1.2 s (0.2 s `state_loss` + 1 s): the latch goes silent and stays silent until reset (`LATCHED … silent`). A robot that restarts meanwhile runs its own motion service; old frames would fight it (2026-10-20).
 - G1 arming is also refused while any other program publishes `/lowcmd` (a restarted robot's motion service): release it first. One that starts while the bridge publishes latches `damp other_lowcmd` within about 1 s (checked once a second); the damp frames go on until reset or exit.
 - `/start_control`, `/ready_position_control`, `/zero_position_control` exist only after the startup waits (`/lowcmd` free, `/lowstate` up): DDS would store a call made during the wait and arm once the bridge spins.

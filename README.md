@@ -45,7 +45,7 @@ Forked from [DFKI-SAIROL/humanoid_bridge](https://github.com/DFKI-SAIROL/humanoi
 | `start_control` drops `default_kp`/`default_kd` silently, arms with the config gains | upstream | fixed here: non-empty gains refused, no PR yet |
 | Arming services exist during the startup waits, so a call made then arms later | upstream | fixed here: created after the waits, no PR yet |
 | Ctrl-C during the startup waits aborts the bridge: the graph calls throw once rclcpp is shut down | upstream | fixed here for G1, H1, H1_2, T1, Go2: clean exit, no PR yet |
-| Any host can `ros2 param set /robot_bridge`: the bridge ignores it, live readers do not | upstream | G1: fixed here: every change refused, no PR yet |
+| Any host can `ros2 param set /robot_bridge`: the bridge ignores it, live readers do not | upstream | G1, T1, Go2: fixed here: every change refused, no PR yet |
 | G1 `_default_pos` is 27 long while kp/kd are 29 | upstream | fixed here: `robot_tables.py` has 29, no PR yet |
 | `finishControl_` only logs on G1, H1, H1_2, so an abort holds at full gains | upstream | G1: fixed here by the e-stop latch (`docs/estop.md`); H1, H1_2: open |
 | G1 Ctrl-C while armed: `/lowcmd` silent at once, motors passive 0.4 s later | upstream | fixed here: damp frames for 1 s first, no PR yet |
@@ -53,7 +53,7 @@ Forked from [DFKI-SAIROL/humanoid_bridge](https://github.com/DFKI-SAIROL/humanoi
 | G1 target gates: range clamp, speed limit, kp-0 torque window (`docs/psi0_gates.md`) | upstream | added here, no PR yet |
 | G1 torque window ignores the feedforward `tau`: `tau = tau_limit` plus a full PD window commands 2× `tau_limit` | upstream | fixed here, no PR yet |
 | `start_control` keeps the last `/robot_cmd`'s dq and tau in its endless hold | upstream | G1, T1, Go2: fixed here, no PR yet; H1, H1_2, X2: open |
-| G1 arming needs the remote (`estop.require_remote`, true if unset) | upstream | added here, no PR yet |
+| G1, T1 and Go2 arming need the remote (`estop.require_remote`, true if unset) | upstream | added here, no PR yet |
 | G1 `initControl_` resets the `/lowstate` age, so arming on a stalled state tracks it for 0.2 s | upstream | fixed here: arming refused on a state fault, no PR yet |
 | G1 checks for another `/lowcmd` sender only at arming | upstream | fixed here: one that starts while sending latches `damp other_lowcmd`, no PR yet |
 | `test_node` (a 23-motor `/robot_cmd` at 500 Hz) built and installed by default | upstream | fixed here: only with `-DBUILD_TEST_NODE=ON`, no PR yet; an existing workspace keeps it until `tools/build.sh --clean robot_bridge` |
@@ -69,7 +69,7 @@ Details and done-when per item: `PROJECT_ROADMAP.md`.
 |---|---|
 | OS, ROS | Ubuntu 22.04, ROS 2 Humble. Foxy + Python 3.8 on-board |
 | Python | 3.10 on the workstation, 3.8 on-board |
-| Not pulled by rosdep | `rosidl_generator_dds_idl`, `rmw_cyclonedds_cpp`, and the Python deps (`numpy`, `pyzmq`, `msgpack`, `msgpack-numpy`, `scipy`, OpenCV, `pytest`, `ruff`). `tools/install-build-deps.sh` installs the lot |
+| Not pulled by rosdep | `rosidl_generator_dds_idl`, `rmw_cyclonedds_cpp`, and the Python deps (`numpy`, `pyzmq`, `msgpack`, `msgpack-numpy`, `scipy`, OpenCV, `casadi` (g1_stack arm IK), `pytest`, `ruff`). `tools/install-build-deps.sh` installs the lot |
 | G1 / H1 | [unitree_sdk2_python](https://github.com/unitreerobotics/unitree_sdk2_python) |
 | T1 | nothing more: `include/booster_mode.hpp` stands in for the Booster SDK (`tools/check-booster-sdk.py <sdk clone>` checks it) |
 
@@ -139,12 +139,15 @@ ros2 run robot_bridge G1_bridge --ros-args \
     --params-file bridge/robot_bridge/params/G1_config.yaml
 ```
 
-Substitute `H1_bridge`, `H1_2_bridge` or `T1_bridge` and the matching config.
-The bridge starts idle and publishes nothing until control starts. It refuses to
-start while anything else publishes `/lowcmd`. `tools/g1-release-lowcmd.py --iface <nic>` frees it;
-`L2 + R2` on the controller does the same. On G1, H1 and H1_2,
+Substitute `H1_bridge`, `H1_2_bridge`, `Go2_bridge` or `T1_bridge` and the matching config.
+The bridge starts idle and publishes nothing until control starts. G1, H1, H1_2 and Go2
+refuse to start while anything else publishes `/lowcmd`. On G1, H1 and H1_2,
+`tools/g1-release-lowcmd.py --iface <nic>` frees it; `L2 + R2` on the controller does the same.
+On the Go2, `tools/robot-bringup.sh --robot go2` stands it down first, then releases the sport service.
+The T1 bridge waits for `booster_rpc_service` and
+`/low_state` instead, and refuses arming while another node publishes `/joint_ctrl`.
 `/start_control`, `/ready_position_control` and `/zero_position_control` do not
-exist until then.
+exist until these waits end.
 
 ## 3. Launch a client
 
@@ -244,9 +247,10 @@ tests that need `bridge_interface` skip. `tools/test.sh` prints what it ran.
 - **`start_control` with an empty `default_position` arms to `ready_q_`**, legs
   included. Any length other than 29 is refused, and nothing moves. So are
   non-empty `default_kp`/`default_kd`: arming uses the config gains.
-- **G1: no arming without the remote.** `estop.require_remote` refuses every
-  arming service until the remote's header arrives: switch the remote on.
-  A G1 config without the key gets `true`.
+- **G1, T1, Go2: no arming without the remote.** `estop.require_remote` refuses every
+  arming service until the remote is seen (G1, Go2: its header arrives; T1: any gamepad
+  message since the bridge started): switch the remote on.
+  A config without the key gets `true`.
 - **The first `/robot_cmd` cuts the arming ramp short.** `controlStarted_` is
   set before the 2 s ramp, so a client already streaming jumps to its own
   target at the gate-2 speed limit (G1: arms 3, rest 6 rad/s). Arm before the
@@ -260,7 +264,7 @@ tests that need `bridge_interface` skip. `tools/test.sh` prints what it ran.
 - **H1, H1_2: an abort does not release the joints.** `finishControl_` only
   logs, so the robot holds its last pose at full kp/kd. G1, Go2, T1 and X2 send stop frames.
 - **`kp = 0` makes the torque clamp a no-op for that joint** (`upper_limbs_kp_min: 0.0`).
-- **G1: `/robot_bridge` parameters are read-only.** `ros2 param set` is refused:
+- **G1, T1, Go2: `/robot_bridge` parameters are read-only.** `ros2 param set` is refused:
   the bridge reads them once at start. Edit the config and restart.
 - **GEAR `--interface sim` never reaches the bridge, and will not.** Its MuJoCo
   listens on `rt/lowcmd`, the topic the bridge owns. The sim stays as it is.

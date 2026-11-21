@@ -1,4 +1,5 @@
-"""Shared by the drive_sim*.py drivers: PASS/FAIL lines, spin on one node, ROS setup, exit."""
+"""Shared by drive_sim.py, drive_sim_t1.py and drive_amo_sim.py: PASS/FAIL lines, spin on one
+node, ROS setup, exit. drive_sim_link.py and drive_sim_watch.py use the bridge's `harness`."""
 
 import contextlib
 import sys

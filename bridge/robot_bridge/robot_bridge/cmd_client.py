@@ -11,7 +11,7 @@ from std_srvs.srv import Trigger
 
 TOPIC = "/robot_cmd"
 
-# The bridge overwrites mode on every motor; 1 matches what it writes.
+# The bridge overwrites mode on every motor with its robot's own value (G1: 1, T1: 0).
 MOTOR_MODE = 1
 
 HAND_TOPIC = "/hand_cmd/{side}"
@@ -21,8 +21,9 @@ HAND_SIDES = ("left", "right")
 # thumb_0 thumb_1 thumb_2 middle_0 middle_1 index_0 index_1.
 NUM_HAND_JOINTS = 7
 
-# GEAR's goal order groups the fingers the other way round. Anything coming from
-# a policy goes through robot_bridge.adapters.gear_hands, not straight in here.
+# GEAR's goal order groups the fingers the other way round. A goal-order pose goes through
+# g1_stack.gear.goal.hand_from_pose first; robot_bridge.adapters.gear_hands is a pass-through
+# (DDS order in, DDS order out).
 
 # The bridge packs the Dex3 mode bitfield itself, per motor index, so a client
 # cannot write a useful value. Left at 0 and overwritten.

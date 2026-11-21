@@ -1,4 +1,5 @@
-"""RobotSim on the Go2, no ROS. Needs mujoco and a Go2 model (fetch_assets.sh go2_ncbf, ...)."""
+"""RobotSim on the Go2, no ROS. Needs mujoco and a Go2 model
+(`fetch_assets.sh --model go2_ncbf`, ...)."""
 
 import pathlib
 import random
