@@ -5,8 +5,8 @@ Serves JPEG frames on a ZMQ REP socket; see wire.py for the contract.
 Both listen on `--bind` only, default the Jetson's robot-network address
 (`wire.DEFAULT_HOST`), not on every interface.
 
-`--preview-port` adds a stdlib HTTP view of the same frames: `/frame.jpg` and
-`/health`. It answers from the cache while that is younger than `--max-age`, so
+`--preview-port` adds a stdlib HTTP view of the same frames: `/frame.jpg`, `/stream.mjpeg`
+and `/health`. It answers from the cache while that is younger than `--max-age`, so
 a preview open during a run faster than that touches neither the camera nor the
 REP socket.
 
