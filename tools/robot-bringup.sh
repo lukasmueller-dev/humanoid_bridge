@@ -109,7 +109,7 @@ EOF
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --robot)   ROBOT="${2:?--robot needs g1 or t1}"; shift ;;
+        --robot)   ROBOT="${2:?--robot needs g1, t1 or go2}"; shift ;;
         --iface)   IFACE="${2:?--iface needs a NIC}"; IFACE_GIVEN=1; shift ;;
         --workspace) WS="${2:?--workspace needs a path}"; shift ;;
         --params)  PARAMS="${2:?--params needs a path}"; shift ;;
@@ -219,7 +219,7 @@ if [ "$PARALLEL_ANKLE" = 1 ] && [ "$ROBOT" != t1 ]; then
 fi
 if [ -n "$ARM_MODE" ] && [ "$ROBOT_IS_CLEAR" != 1 ]; then
     echo "refusing to arm without --robot-is-clear." >&2
-    echo "start_control ramps all $NUM_JOINT joints, legs included, over 2 s." >&2
+    echo "start_control ramps all $NUM_JOINT joints, legs included, over \`duration\` (G1, T1: 2 s; Go2: 3 s)." >&2
     echo "Gantry, e-stop and the safety gate first, then add --robot-is-clear." >&2
     exit 2
 fi
@@ -426,7 +426,7 @@ if [ "$ARM_MODE" = "measured" ]; then
     fi
 fi
 
-say "ARMING: this moves the robot over 2 s"
+say "ARMING: this moves the robot over its duration ramp (G1, T1: 2 s; Go2: 3 s)"
 ARM_REQUEST="{default_position: [$(echo "$ARM_VALUES" | tr ' ' ',')]}"
 if [ "$DRY_RUN" = 1 ]; then
     # Printed plainly, not %q-escaped: this one is meant to be copy-pasted.
