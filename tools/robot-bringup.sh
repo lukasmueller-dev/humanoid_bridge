@@ -28,13 +28,18 @@
 # --foreground (for a supervisor such as robot_web_commander): same checks and
 # release, then execs the bridge in this process; never arms.
 #
-# --override <file>: a second --params-file after the base one, for override.<joint>.<key> only
+# --overlay <file>: a --params-file after --params, before --override, any key under
+# robot_bridge.ros__parameters (robot_web_commander refuses the safety keys). Any other top-level key
+# refuses the start (exit 2), before ROS is touched.
+#
+# --override <file>: a last --params-file after the others, for override.<joint>.<key> only
 # (docs/estop.md, Overrides). Any other key refuses the start (exit 2), before ROS is touched.
 #
 # --parallel-ankle (T1): -p parallel_ankle_mapping:=true after the params files; the bridge maps the ankles.
 #
 # A start passes the bridge sources.build_commit|build_time (install/bridge-build.stamp, written by
-# tools/build.sh; "unknown" plus a warning without it, or when a plain colcon build is newer) and sources.params_file|params_sha1 (--params),
+# tools/build.sh; "unknown" plus a warning without it, or when a plain colcon build is newer),
+# sources.params_file|params_sha1 (--params) and sources.overlay_file|overlay_sha1 (--overlay)
 # for the commander's Sources tab. Quoted: a hash such as 1234567 or 12e4567 must stay a string.
 set -euo pipefail
 
@@ -43,6 +48,7 @@ REPO="$(cd "$HERE/.." && pwd)"
 
 ROBOT=g1
 PARAMS=""
+OVERLAY=""
 OVERRIDE=""
 PARALLEL_ANKLE=0
 RELEASE_ARGS=()   # g1-release-lowcmd.py; the Go2 stands down first
@@ -74,7 +80,10 @@ Options:
   --iface <nic>          DDS interface (default $BRIDGE_IFACE or enp4s0); no effect for t1
   --workspace <ws>       colcon workspace that builds this clone (default $BRIDGE_WS or ~/bridge_ws_estop)
   --params <path>        bridge params file (default bridge/robot_bridge/params/<G1|T1|Go2>_config.yaml)
-  --override <file>      second params file after --params, only robot_bridge.ros__parameters.override
+  --overlay <file>       params file after --params, before --override, any key under
+                         robot_bridge.ros__parameters; a missing or empty file or another
+                         top-level key refuses the start (exit 2)
+  --override <file>      last params file, only robot_bridge.ros__parameters.override
                          (dq_trip, kp, kd per joint, each capped; docs/estop.md, Overrides);
                          a missing file or any other key refuses the start (exit 2)
   --parallel-ankle       T1: the bridge maps the ankles to the crank motors (-p parallel_ankle_mapping:=true
@@ -113,6 +122,7 @@ while [ $# -gt 0 ]; do
         --iface)   IFACE="${2:?--iface needs a NIC}"; IFACE_GIVEN=1; shift ;;
         --workspace) WS="${2:?--workspace needs a path}"; shift ;;
         --params)  PARAMS="${2:?--params needs a path}"; shift ;;
+        --overlay) OVERLAY="${2:?--overlay needs a file}"; shift ;;
         --override) OVERRIDE="${2:?--override needs a file}"; shift ;;
         --parallel-ankle) PARALLEL_ANKLE=1 ;;
         --no-release) DO_RELEASE=0 ;;
@@ -142,6 +152,7 @@ esac
 CONFIG_NAME="${ROBOT^^}"; [ "$ROBOT" = go2 ] && CONFIG_NAME=Go2
 [ -n "$PARAMS" ] || PARAMS="$REPO/bridge/robot_bridge/params/${CONFIG_NAME}_config.yaml"
 PARAMS_ARGS=(--params-file "$PARAMS")
+[ -z "$OVERLAY" ] || PARAMS_ARGS+=(--params-file "$OVERLAY")
 [ -z "$OVERRIDE" ] || PARAMS_ARGS+=(--params-file "$OVERRIDE")   # after the base: ROS merges in order
 [ "$PARALLEL_ANKLE" = 0 ] || PARAMS_ARGS+=(-p parallel_ankle_mapping:=true)   # after the files: it wins
 BRIDGES=(G1_bridge T1_bridge Go2_bridge)   # one robot per host: any of them counts
@@ -240,35 +251,35 @@ if [ "$ARM_MODE" = "explicit" ]; then
     ARM_VALUES="$*"
 fi
 
-if [ -n "$OVERRIDE" ]; then
-    [ -f "$OVERRIDE" ] || { echo "refusing --override: no file at $OVERRIDE." >&2; exit 2; }
-    # Only the shape: the bridge checks the joints, the keys and the cap, and refuses the start itself.
-    python3 - "$OVERRIDE" <<'PY' || exit 2
+# Only the shape: the bridge checks an override's joints, keys and cap, and refuses the start itself.
+refuse_shape() {   # <flag> <file> <a.b.c> <leaf hint>: exit 2 unless a.b.c is a non-empty mapping, no key beside it
+    [ -f "$2" ] || { echo "refusing $1: no file at $2." >&2; exit 2; }
+    python3 - "$@" <<'PY' || exit 2
 import sys
 
 import yaml
 
-KEYS = ("robot_bridge", "ros__parameters", "override")
-path = sys.argv[1]
+flag, path, dotted, leaf = sys.argv[1:]
 try:
     with open(path) as handle:
         node = yaml.safe_load(handle)
 except (OSError, yaml.YAMLError) as error:
-    sys.exit(f"refusing --override: {path} does not load: {error}")
+    sys.exit(f"refusing {flag}: {path} does not load: {error}")
 seen = []
-for key in KEYS:
+for key in dotted.split("."):
     if not isinstance(node, dict):
         break
     outside = [".".join(seen + [str(k)]) for k in node if k != key]
     if outside:
-        sys.exit("refusing --override: keys outside robot_bridge.ros__parameters.override: "
-                 + ", ".join(outside))
+        sys.exit(f"refusing {flag}: keys outside {dotted}: " + ", ".join(outside))
     node = node.get(key)
     seen.append(key)
-if seen != list(KEYS) or not isinstance(node, dict) or not node:
-    sys.exit(f"refusing --override: {path} has no robot_bridge.ros__parameters.override.<joint>.<key>")
+if ".".join(seen) != dotted or not isinstance(node, dict) or not node:
+    sys.exit(f"refusing {flag}: {path} has no {dotted}.{leaf}")
 PY
-fi
+}
+[ -z "$OVERLAY" ] || refuse_shape --overlay "$OVERLAY" robot_bridge.ros__parameters '<key>'
+[ -z "$OVERRIDE" ] || refuse_shape --override "$OVERRIDE" robot_bridge.ros__parameters.override '<joint>.<key>'
 
 [ -f "$PARAMS" ] || { echo "no params file at $PARAMS" >&2; exit 1; }
 
@@ -328,6 +339,7 @@ if [ "${#running[@]}" -eq 1 ]; then
     log="$(readlink "/proc/${running[0]}/fd/1" 2>/dev/null || true)"
     if [ -f "$log" ]; then BRIDGE_LOG="$log"; fi
     echo "   restart it: $0 --stop, then run this again"
+    [ -z "$OVERLAY" ] || echo "   --overlay not applied: it reaches only a bridge this run starts"
     [ -z "$OVERRIDE" ] || echo "   --override not applied: it reaches only a bridge this run starts"
     [ "$PARALLEL_ANKLE" = 0 ] || echo "   --parallel-ankle not applied: it reaches only a bridge this run starts"
 else
@@ -360,6 +372,8 @@ else
                   -p "sources.build_time:=\"$(stamped build_time)\""
                   -p "sources.params_file:=\"$(realpath "$PARAMS")\""
                   -p "sources.params_sha1:=\"$(sha1sum "$PARAMS" | cut -d' ' -f1)\"")
+    [ -z "$OVERLAY" ] || PARAMS_ARGS+=(-p "sources.overlay_file:=\"$(realpath "$OVERLAY")\""
+                                       -p "sources.overlay_sha1:=\"$(sha1sum "$OVERLAY" | cut -d' ' -f1)\"")
     if [ "$FOREGROUND" = 1 ]; then
         say "exec $BIN in the foreground; stop: SIGINT to this process group"
         # exec keeps the supervisor's pid and group; its signals reach `ros2 run` and the bridge.
