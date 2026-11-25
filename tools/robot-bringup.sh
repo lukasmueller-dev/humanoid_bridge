@@ -252,14 +252,14 @@ if [ "$ARM_MODE" = "explicit" ]; then
 fi
 
 # Only the shape: the bridge checks an override's joints, keys and cap, and refuses the start itself.
-refuse_shape() {   # <flag> <file> <a.b.c>: exit 2 unless a.b.c is a non-empty mapping with no key beside it
+refuse_shape() {   # <flag> <file> <a.b.c> <leaf hint>: exit 2 unless a.b.c is a non-empty mapping, no key beside it
     [ -f "$2" ] || { echo "refusing $1: no file at $2." >&2; exit 2; }
     python3 - "$@" <<'PY' || exit 2
 import sys
 
 import yaml
 
-flag, path, dotted = sys.argv[1:]
+flag, path, dotted, leaf = sys.argv[1:]
 try:
     with open(path) as handle:
         node = yaml.safe_load(handle)
@@ -275,11 +275,11 @@ for key in dotted.split("."):
     node = node.get(key)
     seen.append(key)
 if ".".join(seen) != dotted or not isinstance(node, dict) or not node:
-    sys.exit(f"refusing {flag}: {path} has no {dotted}.<key>")
+    sys.exit(f"refusing {flag}: {path} has no {dotted}.{leaf}")
 PY
 }
-[ -z "$OVERLAY" ] || refuse_shape --overlay "$OVERLAY" robot_bridge.ros__parameters
-[ -z "$OVERRIDE" ] || refuse_shape --override "$OVERRIDE" robot_bridge.ros__parameters.override
+[ -z "$OVERLAY" ] || refuse_shape --overlay "$OVERLAY" robot_bridge.ros__parameters '<key>'
+[ -z "$OVERRIDE" ] || refuse_shape --override "$OVERRIDE" robot_bridge.ros__parameters.override '<joint>.<key>'
 
 [ -f "$PARAMS" ] || { echo "no params file at $PARAMS" >&2; exit 1; }
 

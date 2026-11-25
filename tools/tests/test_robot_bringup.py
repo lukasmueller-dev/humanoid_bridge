@@ -142,6 +142,14 @@ def test_overlay_with_any_key_passes_the_check(tmp_path):
     result = bringup(tmp_path, "--overlay", str(override_file(tmp_path, OVERLAY)))
     assert result.returncode == 1
     assert "is not this clone" in result.stderr
+    assert "--overlay" not in result.stderr
+
+
+def test_empty_override_names_the_joint_level(tmp_path):
+    path = override_file(tmp_path, {"robot_bridge": {"ros__parameters": {"override": {}}}})
+    result = bringup(tmp_path, "--override", str(path))
+    assert result.returncode == 2
+    assert "has no robot_bridge.ros__parameters.override.<joint>.<key>" in result.stderr
 
 
 @pytest.mark.parametrize(
