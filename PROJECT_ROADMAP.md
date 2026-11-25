@@ -3,7 +3,7 @@
 > One per repo. Planned work only, one item per task. Finished items are
 > deleted; git history is the log.
 
-_Last updated: 2026-11-14 · codebase-health job_
+_Last updated: 2026-11-21 · codebase-health job_
 
 ## Items
 
@@ -50,7 +50,7 @@ Decided and fake-tested on `g1-web-interface` (`docs/psi0_gates.md`).
 - [ ] Dex3 finger gains: GEAR's hand sender (`decoupled_wbc` `command_sender.py:130-133`, forwarded by `adapters/gear_hands.py`) sends kp 2/1, kd 0.5/0.2; SIMPLE trains and evaluates with kp 5/2.5, kd 1 (`G1Sonic.apply_action`). A bridge try of psi0 `g1-xmovepick` (g1-pick-smoke ep 0) failed the grasp with GEAR's gains and succeeded in-process. **Done when:** the gains the real Dex3 needs are measured on the robot and the sim or the sender matches them.
 - [ ] Stale controller state after a `/lowstate` gap: GEAR waits in `observe()` with no timeout and resumes with its old history; the psi0 loop node keeps the last `rt/lowstate` sample with no age check (`humanoid-locoman-vla`). `amo_controller` resets its AMO state when `/lowstate` returns. The commander's Arm gate covers GEAR and psi0 until then.
   **Done when:** GEAR and the psi0 loop node each exit or reset their policy state after a gap, and a `fake_g1 /fake_g1/pause` test shows it.
-- [ ] Robot rehearsal on the real-robot branch, after both items above: the full G1 path (workspace `psi0` with a real-robot checkpoint → `psi0_gear_loop` → GEAR robot mode → G1_bridge) against `robot_sim` instead of the G1. Needs `robot_sim` to publish `rt/secondary_imu` and answer the motion switcher ("no mode"), the workspace's camera host and DDS interface from the commander's mode, and the multicast patch on `lo` for the loop node. **Done when:** a rehearsal from the page reaches GEAR's loop and moves `robot_sim` through the loop node.
+- [ ] Robot rehearsal on the real-robot branch, after both items above: the full G1 path (workspace `psi0` with a real-robot checkpoint → `psi0_gear_loop` → GEAR robot mode → G1_bridge) against `robot_sim` instead of the G1. Needs `robot_sim` to publish `rt/secondary_imu` (its motion switcher already answers "no mode"), the workspace's camera host and DDS interface from the commander's mode, and the multicast patch on `lo` for the loop node. **Done when:** a rehearsal from the page reaches GEAR's loop and moves `robot_sim` through the loop node.
 
 ### Gantry acceptance
 
@@ -71,3 +71,11 @@ Decided and fake-tested on `g1-web-interface` (`docs/psi0_gates.md`).
 ### Upstream fixes — one branch each
 
 - [ ] `fix/config-keymaps`: the keymap headers in `params/*.yaml` are corrected here: each key names its handler, `robot_client.py` or the bridge. Still to send upstream. **Done when:** the PR is open.
+
+### Cleanups
+
+- [ ] Fold `robot_stacks/sim/robot_sim/tests/integration/sim_harness.py` into the bridge's `harness.py`: it is a 45-line subset (`Checks`, `ros_node`) with another PASS/FAIL line format. `drive_sim.py`, `drive_sim_t1.py` and `drive_amo_sim.py` import `harness` instead; their `run_sim_*.sh` put `$REPO/bridge/robot_bridge/tests/integration` on `PYTHONPATH`, as `run_sim_watch_test.sh` does. Check nothing parses the old line format first.
+  `run_sim_amo_test.sh` is not a `tools/test.sh` stage: run it by hand (psi0 venv, mujoco).
+  **Done when:** `sim_harness.py` is gone, `grep -rn sim_harness .` prints nothing, `tools/test.sh --sim` passes sim, sim-t1 and sim-watch, and `robot_stacks/sim/robot_sim/tests/integration/run_sim_amo_test.sh` passes.
+- [ ] Delete the unused `FakeChannelSubscriber` (`robot_stacks/g1/g1_stack/g1_stack/joints/fake.py`) and `NUM_SLOTS` (`robot_stacks/sim/robot_sim/robot_sim/robots/go2.py`): no caller in the repo.
+  **Done when:** `grep -rnE 'FakeChannelSubscriber|NUM_SLOTS' robot_stacks` prints nothing and `pytest` passes.

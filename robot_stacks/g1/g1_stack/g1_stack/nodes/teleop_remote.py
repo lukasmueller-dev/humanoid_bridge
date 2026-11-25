@@ -23,8 +23,9 @@ stick. Any shoulder button held (L1, R1, L2, R2: the bridge's e-stop combos) mas
 Deadzone 0.1. The first `--ramp-seconds` take the left arm from measured, and the left hand from
 open (the tab's Ready opens both hands), to the stats' mean; the sticks wait. The right hand starts
 open. Right arm: `g1_stack.ik.arm`; a target outside the reach box is clamped. A failed
-solve, or a solution off the target by more than POS_TOL / ROT_TOL, holds the last solution and the
-last target (`reach_limited`): the target never winds past what the arm reaches. Left arm and hand:
+solve (`ik_fail`), or a solution off the target by more than POS_TOL / ROT_TOL (`reach_limited`),
+holds the last solution and the last target: the target never winds past what the arm reaches.
+Left arm and hand:
 the stats' mean; the base moves in walk mode only.
 
 `--stats`: a LeRobot `meta/stats.json` whose `action` is in AMO goal order: hands 14, arms 14,
@@ -88,7 +89,7 @@ def parse_remote(data):
 
 
 def pack_remote(keys=0, lx=0.0, rx=0.0, ry=0.0, ly=0.0):
-    """The inverse, 40 bytes as the G1 sends them (header 0x55 0x51); for tests and g1_sim."""
+    """The inverse, 40 bytes as the G1 sends them (header 0x55 0x51); for tests."""
     raw = bytearray(40)
     raw[0], raw[1] = 0x55, 0x51
     struct.pack_into("<H3f", raw, 2, keys, lx, rx, ry)

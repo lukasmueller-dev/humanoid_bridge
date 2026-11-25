@@ -1,4 +1,5 @@
-"""rt/lowstate and the Dex3 states at full rate, one JSONL row per sample, until SIGINT.
+"""rt/lowstate, and with `--hands dex3` the Dex3 states, at full rate: one JSONL row per sample,
+until SIGINT.
 
 Started at nice 19 per episode beside the control loop. The DDS thread only queues (wall time,
 sample); the main thread writes, so a slow disk never delays the subscriber. Rows join the

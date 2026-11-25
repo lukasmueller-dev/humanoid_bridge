@@ -16,7 +16,7 @@ import numpy as np
 NUM_MOTORS = 29
 NUM_LOWER = 15  # what AMO outputs: legs 12 + waist 3
 
-# master_whole_body.py:97-103, motor order.
+# master_whole_body.py:99-105, motor order.
 DEFAULT_DOF_POS = np.array([
     -0.1, 0.0, 0.0, 0.3, -0.2, 0.0,
     -0.1, 0.0, 0.0, 0.3, -0.2, 0.0,
@@ -128,7 +128,7 @@ class Amo:
         ])
         hist = np.array(self._hist).flatten()  # the 10 steps before this one
 
-        # The flag is set here, after dyaw used the previous one (master_whole_body.py:373).
+        # The flag is set here, after dyaw used the previous one (master_whole_body.py:374).
         self._in_place = (abs(cmd.vx) < IN_PLACE_SPEED and abs(cmd.vy) < IN_PLACE_SPEED
                           and abs(cmd.vyaw) < IN_PLACE_SPEED)
         demo = np.zeros(NUM_DEMO_DOF + 9)

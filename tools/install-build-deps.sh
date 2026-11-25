@@ -13,7 +13,8 @@
 #   the Python deps            the union of g1_stack's and g1_camera's
 #                              install_requires, plus scipy (robot_client.py), OpenCV, which g1_camera
 #                              deliberately does not declare (no aarch64 wheel
-#                              for the Jetson), plus pytest and ruff. colcon
+#                              for the Jetson), casadi (g1_stack's RightArmIK; not
+#                              in install_requires), plus pytest and ruff. colcon
 #                              installs neither: they are ament_python packages
 #                              and pip never runs
 #

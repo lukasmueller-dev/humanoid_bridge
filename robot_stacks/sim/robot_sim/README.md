@@ -20,7 +20,7 @@ A new robot: `robot_sim/robots/<name>.py` with `SPEC` (`physics.RobotSpec`) and 
 | Camera | `d435` rendered at 30 Hz, served by `g1_camera.CameraServer` (source `robot_sim g1 d435`): ZMQ 5556, preview `:5557/frame.jpg`, on 127.0.0.1 (`--camera-bind`); `--no-camera` |
 | Viewer | MuJoCo window when `$DISPLAY` is set; in docker: `-e DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix:ro` |
 | Gantry | spring on the pelvis, feet 5 cm up; on at start |
-| Guard | refuses to start unless DDS stays on loopback (`CYCLONEDDS_URI` names only `lo` under `rmw_cyclonedds_cpp`; under another RMW, `ROS_LOCALHOST_ONLY=1`) |
+| Guard | refuses to start unless DDS stays on loopback (`CYCLONEDDS_URI` names only `lo` under `rmw_cyclonedds_cpp`; under another RMW, `ROS_LOCALHOST_ONLY=1` or `ROS_AUTOMATIC_DISCOVERY_RANGE=LOCALHOST`) |
 | Inputs | `/robot_sim/gantry` (Bool), `/robot_sim/remote` (Bool), `/robot_sim/buttons` (String `R1+R2`, `""` releases; names as the bridge YAML's combos), `/robot_sim/reset` (Empty) |
 | Sticks | `/robot_sim/sticks` (`Float32MultiArray` `[lx, ly, rx, ry]`, clipped to ±1), G1 only → `wireless_remote` bytes 4-24 as the bridge's `remoteSticks` reads them; zero 0.2 s after the last message |
 | Link drop | `/robot_sim/link` (Float32 s): no state out, no command in; sim time and `tick` run on |
@@ -61,6 +61,7 @@ ros2 topic pub -1 /robot_sim/gantry std_msgs/msg/Bool "{data: false}"   # drop i
 pytest robot_stacks/sim/robot_sim/tests/     # no ROS; skips without mujoco or g1.xml
 tools/test.sh --sim                      # sticks, bridge arms the sim, holds, /robot_cmd, camera, remote damp;
                                          # sim-link: link drop, reboot, restart via g1-bringup.sh --sim
+                                         # sim-t1: T1_bridge against robot_sim --robot t1, via robot-bringup.sh --robot t1, then --parallel-ankle
                                          # sim-watch: g1_link_watch holds on a bridge SIGSTOP, R1+R2 and SIGTERM damp; $UNITREE_PYTHON
 G1_MJCF=~/.local/share/robot_web_commander/g1_description/g1_29dof_with_hand.xml tools/test.sh --sim   # plus: Ready opens both Dex3
 robot_stacks/sim/robot_sim/tests/integration/run_sim_amo_test.sh   # AMO stands the sim 30 s, gantry off; own netns, psi0 venv + mujoco

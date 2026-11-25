@@ -1,4 +1,5 @@
-# /robot_state: the robot's state as the bridge read it, the same type on every robot.
+# /robot_state: the robot's state as the bridge read it, the same type on the G1, T1 and Go2
+# (H1, H1_2 and X2 publish none).
 # Arrays follow joint_names, the bridge YAML's order. One per robot state message, at its rate.
 builtin_interfaces/Time stamp   # when the bridge received the robot's message (ROS clock)
 uint32 tick                     # the robot's own counter; 0 on a robot without one
