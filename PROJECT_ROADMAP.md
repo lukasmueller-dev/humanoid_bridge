@@ -71,3 +71,8 @@ Decided and fake-tested on `g1-web-interface` (`docs/psi0_gates.md`).
 ### Upstream fixes — one branch each
 
 - [ ] `fix/config-keymaps`: the keymap headers in `params/*.yaml` are corrected here: each key names its handler, `robot_client.py` or the bridge. Still to send upstream. **Done when:** the PR is open.
+
+### Commander config tab
+
+- [ ] `robot-bringup.sh --overlay <file>`: a second `--params-file` after `--params`, before `--override`, for the commander's merged `bridge_params`; passes `sources.overlay_file|overlay_sha1`.
+  **Done when:** `pytest tools/tests/test_robot_bringup.py` passes with tests for the order, the sources and the refusal of a missing or non-YAML file.
