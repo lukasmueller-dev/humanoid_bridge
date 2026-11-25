@@ -28,8 +28,9 @@
 # --foreground (for a supervisor such as robot_web_commander): same checks and
 # release, then execs the bridge in this process; never arms.
 #
-# --overlay <file>: a --params-file after --params, before --override, any key (robot_web_commander
-# refuses the safety keys). Only a missing or non-YAML file refuses the start (exit 2).
+# --overlay <file>: a --params-file after --params, before --override, any key under
+# robot_bridge.ros__parameters (robot_web_commander refuses the safety keys). Any other top-level key
+# refuses the start (exit 2), before ROS is touched.
 #
 # --override <file>: a last --params-file after the others, for override.<joint>.<key> only
 # (docs/estop.md, Overrides). Any other key refuses the start (exit 2), before ROS is touched.
@@ -79,8 +80,9 @@ Options:
   --iface <nic>          DDS interface (default $BRIDGE_IFACE or enp4s0); no effect for t1
   --workspace <ws>       colcon workspace that builds this clone (default $BRIDGE_WS or ~/bridge_ws_estop)
   --params <path>        bridge params file (default bridge/robot_bridge/params/<G1|T1|Go2>_config.yaml)
-  --overlay <file>       params file after --params, before --override, any key;
-                         a missing file or one that is not YAML refuses the start (exit 2)
+  --overlay <file>       params file after --params, before --override, any key under
+                         robot_bridge.ros__parameters; a missing or empty file or another
+                         top-level key refuses the start (exit 2)
   --override <file>      last params file, only robot_bridge.ros__parameters.override
                          (dq_trip, kp, kd per joint, each capped; docs/estop.md, Overrides);
                          a missing file or any other key refuses the start (exit 2)
@@ -249,50 +251,35 @@ if [ "$ARM_MODE" = "explicit" ]; then
     ARM_VALUES="$*"
 fi
 
-if [ -n "$OVERLAY" ]; then
-    [ -f "$OVERLAY" ] || { echo "refusing --overlay: no file at $OVERLAY." >&2; exit 2; }
-    python3 - "$OVERLAY" <<'PY' || exit 2
+# Only the shape: the bridge checks an override's joints, keys and cap, and refuses the start itself.
+refuse_shape() {   # <flag> <file> <a.b.c>: exit 2 unless a.b.c is a non-empty mapping with no key beside it
+    [ -f "$2" ] || { echo "refusing $1: no file at $2." >&2; exit 2; }
+    python3 - "$@" <<'PY' || exit 2
 import sys
 
 import yaml
 
-try:
-    with open(sys.argv[1]) as handle:
-        yaml.safe_load(handle)
-except (OSError, yaml.YAMLError) as error:
-    sys.exit(f"refusing --overlay: {sys.argv[1]} does not load: {error}")
-PY
-fi
-
-if [ -n "$OVERRIDE" ]; then
-    [ -f "$OVERRIDE" ] || { echo "refusing --override: no file at $OVERRIDE." >&2; exit 2; }
-    # Only the shape: the bridge checks the joints, the keys and the cap, and refuses the start itself.
-    python3 - "$OVERRIDE" <<'PY' || exit 2
-import sys
-
-import yaml
-
-KEYS = ("robot_bridge", "ros__parameters", "override")
-path = sys.argv[1]
+flag, path, dotted = sys.argv[1:]
 try:
     with open(path) as handle:
         node = yaml.safe_load(handle)
 except (OSError, yaml.YAMLError) as error:
-    sys.exit(f"refusing --override: {path} does not load: {error}")
+    sys.exit(f"refusing {flag}: {path} does not load: {error}")
 seen = []
-for key in KEYS:
+for key in dotted.split("."):
     if not isinstance(node, dict):
         break
     outside = [".".join(seen + [str(k)]) for k in node if k != key]
     if outside:
-        sys.exit("refusing --override: keys outside robot_bridge.ros__parameters.override: "
-                 + ", ".join(outside))
+        sys.exit(f"refusing {flag}: keys outside {dotted}: " + ", ".join(outside))
     node = node.get(key)
     seen.append(key)
-if seen != list(KEYS) or not isinstance(node, dict) or not node:
-    sys.exit(f"refusing --override: {path} has no robot_bridge.ros__parameters.override.<joint>.<key>")
+if ".".join(seen) != dotted or not isinstance(node, dict) or not node:
+    sys.exit(f"refusing {flag}: {path} has no {dotted}.<key>")
 PY
-fi
+}
+[ -z "$OVERLAY" ] || refuse_shape --overlay "$OVERLAY" robot_bridge.ros__parameters
+[ -z "$OVERRIDE" ] || refuse_shape --override "$OVERRIDE" robot_bridge.ros__parameters.override
 
 [ -f "$PARAMS" ] || { echo "no params file at $PARAMS" >&2; exit 1; }
 

@@ -144,8 +144,29 @@ def test_overlay_with_any_key_passes_the_check(tmp_path):
     assert "is not this clone" in result.stderr
 
 
-def test_overlay_that_is_not_yaml_is_refused(tmp_path):
-    result = bringup(tmp_path, "--overlay", str(override_file(tmp_path, "robot_bridge: [")))
+@pytest.mark.parametrize(
+    "content",
+    [
+        {"T1_bridge": OVERLAY["robot_bridge"]},
+        {"q_rate_limit_default": 9.0},
+        {**OVERLAY, "other_node": {}},
+        {"robot_bridge": {**OVERLAY["robot_bridge"], "other": 1}},
+        {"robot_bridge": {"ros__parameters": {}}},
+        "",
+        "robot_bridge: [",
+    ],
+    ids=[
+        "binary name as node",
+        "flat, no ros__parameters",
+        "other top-level key",
+        "other key beside ros__parameters",
+        "ros__parameters empty",
+        "empty file",
+        "not yaml",
+    ],
+)
+def test_overlay_outside_robot_bridge_parameters_is_refused(tmp_path, content):
+    result = bringup(tmp_path, "--overlay", str(override_file(tmp_path, content)))
     assert result.returncode == 2
     assert "refusing --overlay" in result.stderr
 
