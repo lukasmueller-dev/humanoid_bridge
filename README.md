@@ -98,8 +98,8 @@ and every Python change needs a rebuild. `tools/build.sh --clean <pkg>` drops a
 stale package tree.
 
 A `tools/build.sh` build that reaches `robot_bridge` also writes `install/bridge-build.stamp` (commit, changed files, time).
-`tools/robot-bringup.sh` passes it and the params file to the bridge as read-only
-`sources.build_commit|build_time|params_file|params_sha1` for the commander's Sources tab.
+`tools/robot-bringup.sh` passes it, the params file and the `--overlay` file to the bridge as read-only
+`sources.build_commit|build_time|params_file|params_sha1|overlay_file|overlay_sha1` for the commander's Sources tab.
 
 ## 2. Launch the bridge
 

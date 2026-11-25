@@ -1,4 +1,4 @@
-"""tools/robot-bringup.sh: the --override refusals before ROS; the start command."""
+"""tools/robot-bringup.sh: the --overlay and --override refusals before ROS; the start command."""
 
 import hashlib
 import os
@@ -12,6 +12,7 @@ import yaml
 SCRIPT = Path(__file__).resolve().parent.parent / "robot-bringup.sh"
 REPO = SCRIPT.parent.parent
 JOINT = {"L_LEG_HIP_PITCH": {"dq_trip": 40.0}}
+OVERLAY = {"robot_bridge": {"ros__parameters": {"q_rate_limit_default": 9.0}}}   # any key passes
 
 
 def bringup(tmp_path, *args):
@@ -20,8 +21,8 @@ def bringup(tmp_path, *args):
     return subprocess.run(command, capture_output=True, text=True)
 
 
-def override_file(tmp_path, content):
-    path = tmp_path / "override.yaml"
+def override_file(tmp_path, content, name="override.yaml"):
+    path = tmp_path / name
     path.write_text(content if isinstance(content, str) else yaml.safe_dump(content))
     return path
 
@@ -29,6 +30,7 @@ def override_file(tmp_path, content):
 def test_options_in_the_usage_text():
     result = subprocess.run(["bash", str(SCRIPT), "--help"], capture_output=True, text=True)
     assert result.returncode == 0
+    assert "--overlay <file>" in result.stdout
     assert "--override <file>" in result.stdout
     assert "--parallel-ankle" in result.stdout
 
@@ -39,7 +41,7 @@ needs_ros = pytest.mark.skipif(
 T1_PARAMS = REPO / "bridge" / "robot_bridge" / "params" / "T1_config.yaml"
 
 
-def sim_start(tmp_path, stamp=None, built_after_stamp=None):
+def sim_start(tmp_path, stamp=None, built_after_stamp=None, args=()):
     """The T1 start command's arguments after --ros-args; --sim needs no robot.
 
     built_after_stamp: robot_bridge's build is newer (True) or older (False) than the stamp.
@@ -58,7 +60,7 @@ def sim_start(tmp_path, stamp=None, built_after_stamp=None):
         moment = (ws / "install" / "bridge-build.stamp").stat().st_mtime
         os.utime(rc, (moment + (100 if built_after_stamp else -100),) * 2)
     command = ["bash", str(SCRIPT), "--robot", "t1", "--sim", "--parallel-ankle",
-               "--workspace", str(ws), "--dry-run"]
+               "--workspace", str(ws), "--dry-run", *args]
     result = subprocess.run(command, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
     start = [line for line in result.stdout.splitlines() if "robot_bridge T1_bridge" in line]
@@ -77,6 +79,19 @@ def parameters(arguments):
 def test_parallel_ankle_reaches_the_bridge_command(tmp_path):
     _, arguments = sim_start(tmp_path)
     assert arguments[:4] == ["--params-file", str(T1_PARAMS), "-p", "parallel_ankle_mapping:=true"]
+
+
+@needs_ros
+def test_overlay_reaches_the_bridge_between_params_and_override(tmp_path):
+    overlay = override_file(tmp_path, OVERLAY, "overlay.yaml")
+    override = override_file(tmp_path, {"robot_bridge": {"ros__parameters": {"override": JOINT}}})
+    args = ("--overlay", str(overlay), "--override", str(override))
+    _, arguments = sim_start(tmp_path, args=args)
+    assert arguments[:6] == ["--params-file", str(T1_PARAMS), "--params-file", str(overlay),
+                             "--params-file", str(override)]
+    assert parameters(arguments)["sources.overlay_file"] == f'"{overlay.resolve()}"'
+    sha1 = hashlib.sha1(overlay.read_bytes()).hexdigest()
+    assert parameters(arguments)["sources.overlay_sha1"] == f'"{sha1}"'
 
 
 @needs_ros
@@ -116,10 +131,23 @@ def test_override_under_override_only_passes_the_check(tmp_path):
     assert "--override" not in result.stderr
 
 
-def test_missing_file_is_refused(tmp_path):
-    result = bringup(tmp_path, "--override", str(tmp_path / "missing.yaml"))
+@pytest.mark.parametrize("flag", ["--overlay", "--override"])
+def test_missing_file_is_refused(tmp_path, flag):
+    result = bringup(tmp_path, flag, str(tmp_path / "missing.yaml"))
     assert result.returncode == 2
-    assert "no file at" in result.stderr
+    assert f"refusing {flag}: no file at" in result.stderr
+
+
+def test_overlay_with_any_key_passes_the_check(tmp_path):
+    result = bringup(tmp_path, "--overlay", str(override_file(tmp_path, OVERLAY)))
+    assert result.returncode == 1
+    assert "is not this clone" in result.stderr
+
+
+def test_overlay_that_is_not_yaml_is_refused(tmp_path):
+    result = bringup(tmp_path, "--overlay", str(override_file(tmp_path, "robot_bridge: [")))
+    assert result.returncode == 2
+    assert "refusing --overlay" in result.stderr
 
 
 @pytest.mark.parametrize(
