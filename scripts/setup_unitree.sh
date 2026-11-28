@@ -4,9 +4,10 @@
 #   source scripts/setup_unitree.sh
 #
 # BRIDGE_IFACE picks the NIC CycloneDDS binds. Default enp4s0, the lab
-# machine's cable to the G1. On any other machine set it first. A NIC that does
-# not exist is refused; a wrong one that exists makes the bridge wait for
-# /lowstate forever with no error:
+# machine's cable to the G1. On any other machine set it first. With ip
+# (iproute2) installed, a NIC that does not exist is refused. A wrong one that
+# exists, or any one without ip, makes the bridge wait for /lowstate forever
+# with no error:
 #
 #   BRIDGE_IFACE=eth0 source scripts/setup_unitree.sh
 
