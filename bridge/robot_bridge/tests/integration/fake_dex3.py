@@ -27,7 +27,7 @@ from unitree_hg.msg import HandCmd, HandState, MotorState
 
 NUM_MOTORS = 7
 SIDES = ("left", "right")
-STATE_PERIOD = 0.01  # 100 Hz; the bridge aborts on state older than 0.2 s
+STATE_PERIOD = 0.01  # 100 Hz; the bridge releases a hand whose state is older than 0.2 s
 HOT = 99  # over hand_temperature_limit: 80.0 in G1_config.yaml
 
 
