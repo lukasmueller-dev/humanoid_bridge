@@ -5,8 +5,8 @@
 #   T1: start T1_bridge  ->  wait for it  ->  arm (the bridge asks for custom mode on arming)
 #   Go2: stand down + release /lowcmd  ->  start Go2_bridge  ->  wait for it  ->  arm
 #
-# Sources ROS and the workspace's scripts/setup_unitree.sh (T1: setup_booster.sh) itself. The G1's
-# release step needs unitree_sdk2py: $UNITREE_PYTHON, default the lab venv. tools/g1-bringup.sh is
+# Sources ROS and the workspace's scripts/setup_unitree.sh (T1: setup_booster.sh) itself. The G1 and
+# Go2 release step needs unitree_sdk2py: $UNITREE_PYTHON, default the lab venv. tools/g1-bringup.sh is
 # this script with --robot g1.
 #
 # ARMING MOVES THE ROBOT. start_control ramps every joint (G1 29, T1 23, Go2 12), legs
@@ -90,7 +90,7 @@ Options:
                          refuses any --arm-* and a running bridge. Stop: SIGINT
                          to the process group
   --sim                  robot_sim instead of the robot: DDS on loopback only (--iface lo),
-                         no robot_sim refusal; the G1 still releases /lowcmd
+                         no robot_sim refusal; the G1 and Go2 still release /lowcmd
   --wait <s>             seconds to wait for the bridge (default 20)
   --dry-run              print the commands that start, release or arm; read-only checks still run
   -h, --help             this text
