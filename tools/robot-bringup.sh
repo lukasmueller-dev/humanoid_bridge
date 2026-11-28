@@ -100,9 +100,9 @@ $LAB_REPO/.venv38/bin/python if present, else python3), LAB_REPO
 (~/github/humanoid-locoman-vla).
 
 Stop the bridge:  tools/robot-bringup.sh --stop
-An armed bridge sends damp frames for 1 s, then /lowcmd (T1: /joint_ctrl)
-goes silent, and the motors go passive about 0.4 s later (docs/estop.md, G0):
-a standing robot falls. Gantry first.
+An armed bridge sends damp frames for 1 s. Then /lowcmd goes silent, and the
+G1's motors go passive about 0.4 s later (docs/estop.md, G0): a standing robot
+falls. The T1 bridge asks for Booster's damping mode instead. Gantry first.
 /stop_control keeps the bridge up and holds the measured pose.
 EOF
 }
