@@ -22,7 +22,7 @@
 # releases, from robot_sim's fake motion switcher.
 #
 # Safe to re-run: with one robot bridge (G1, T1 or Go2) already up it only arms; with two or more
-# it refuses (each writes /lowcmd). Only bridges in this network namespace
+# it refuses (each writes its robot's commands). Only bridges in this network namespace
 # count: a test's bridge in its own namespace cannot reach the robot.
 #
 # --foreground (for a supervisor such as robot_web_commander): same checks and
@@ -100,9 +100,9 @@ $LAB_REPO/.venv38/bin/python if present, else python3), LAB_REPO
 (~/github/humanoid-locoman-vla).
 
 Stop the bridge:  tools/robot-bringup.sh --stop
-An armed bridge sends damp frames for 1 s, then /lowcmd goes silent, and the
-motors go passive about 0.4 s later (docs/estop.md, G0): a standing robot
-falls. Gantry first.
+An armed bridge sends damp frames for 1 s, then /lowcmd (T1: /joint_ctrl)
+goes silent, and the motors go passive about 0.4 s later (docs/estop.md, G0):
+a standing robot falls. Gantry first.
 /stop_control keeps the bridge up and holds the measured pose.
 EOF
 }
