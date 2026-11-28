@@ -33,7 +33,7 @@ try
     {
         bridge = std::make_shared<sairol_bridge::T1Bridge>(nh);
     }
-    catch (const sairol_bridge::ConfigError &)   // logged: "Failed to load parameters."
+    catch (const sairol_bridge::ConfigError &)   // logged: "Failed to load parameters." or a parallel_ankle_* FATAL
     {
         rclcpp::shutdown();
         return 1;
