@@ -5,8 +5,8 @@
 #   T1: start T1_bridge  ->  wait for it  ->  arm (the bridge asks for custom mode on arming)
 #   Go2: stand down + release /lowcmd  ->  start Go2_bridge  ->  wait for it  ->  arm
 #
-# Sources ROS and the workspace's scripts/setup_unitree.sh (T1: setup_booster.sh) itself. The G1's
-# release step needs unitree_sdk2py: $UNITREE_PYTHON, default the lab venv. tools/g1-bringup.sh is
+# Sources ROS and the workspace's scripts/setup_unitree.sh (T1: setup_booster.sh) itself. The G1 and
+# Go2 release step needs unitree_sdk2py: $UNITREE_PYTHON, default the lab venv. tools/g1-bringup.sh is
 # this script with --robot g1.
 #
 # ARMING MOVES THE ROBOT. start_control ramps every joint (G1 29, T1 23, Go2 12), legs
@@ -22,7 +22,7 @@
 # releases, from robot_sim's fake motion switcher.
 #
 # Safe to re-run: with one robot bridge (G1, T1 or Go2) already up it only arms; with two or more
-# it refuses (each writes /lowcmd). Only bridges in this network namespace
+# it refuses (each writes its robot's commands). Only bridges in this network namespace
 # count: a test's bridge in its own namespace cannot reach the robot.
 #
 # --foreground (for a supervisor such as robot_web_commander): same checks and
@@ -90,7 +90,7 @@ Options:
                          refuses any --arm-* and a running bridge. Stop: SIGINT
                          to the process group
   --sim                  robot_sim instead of the robot: DDS on loopback only (--iface lo),
-                         no robot_sim refusal; the G1 still releases /lowcmd
+                         no robot_sim refusal; the G1 and Go2 still release /lowcmd
   --wait <s>             seconds to wait for the bridge (default 20)
   --dry-run              print the commands that start, release or arm; read-only checks still run
   -h, --help             this text
@@ -100,9 +100,10 @@ $LAB_REPO/.venv38/bin/python if present, else python3), LAB_REPO
 (~/github/humanoid-locoman-vla).
 
 Stop the bridge:  tools/robot-bringup.sh --stop
-An armed bridge sends damp frames for 1 s, then /lowcmd goes silent, and the
-motors go passive about 0.4 s later (docs/estop.md, G0): a standing robot
-falls. Gantry first.
+An armed bridge sends damp frames for 1 s. Then /lowcmd goes silent, and the
+G1's motors go passive about 0.4 s later (docs/estop.md, G0): a standing robot
+falls. A damped Go2 sinks to the floor. The T1 bridge asks for Booster's damping
+mode instead. Gantry first.
 /stop_control keeps the bridge up and holds the measured pose.
 EOF
 }
@@ -396,10 +397,12 @@ else
             echo "the bridge did not come up. Last lines:" >&2
             tail -20 "$BRIDGE_LOG" >&2
             echo >&2
-            echo "'Waiting for publisher on /lowstate': the robot is not publishing, or" >&2
+            echo "'Waiting for publisher on topic /lowstate': the robot is not publishing, or" >&2
             echo "CycloneDDS is on the wrong NIC: pass --iface." >&2
             echo "'Detected N publishers on /lowcmd': something still holds the topic." >&2
-            echo "Run without --no-release, or press L2 + R2 on the controller." >&2
+            echo "Run without --no-release, or press L2 + R2 on the controller (G1, H1, H1_2)." >&2
+            echo "Go2: run without --no-release; the release stands the sport service down." >&2
+            echo "T1: the bridge waits for booster_rpc_service, then /low_state; the lines above do not apply." >&2
             exit 1
         fi
         echo "   up"

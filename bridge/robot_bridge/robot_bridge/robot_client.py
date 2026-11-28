@@ -180,7 +180,7 @@ class RobotClient:
             print(
                 "Key mapping for Unitree H1 robot:"
                 "\n- Start control: L2 + START"
-                "\n- Stop control: L2 + UP + LEFT"
+                "\n- Stop control: L2 + UP + LEFT (this client's commands only)"
             )
 
         elif self.robot_type == "H1_2":
@@ -356,7 +356,7 @@ class RobotClient:
                 buttons, [KeyMap.L2, KeyMap.up, KeyMap.left]
             ):
                 self.node.get_logger().info("Stopping control...")
-                # Stop control is done in the Robot Bridge.
+                # The client stops its own commands; the bridge side: stop_control's docstring.
                 # future = self.stop_control()
                 self.control_start_time = None
                 return
@@ -665,7 +665,8 @@ class RobotClient:
         X2 returns the pending future; its done-callback handles the response.
         The Booster joystick handler drops the result (fire-and-forget): awaiting inside a
         subscription callback blocks the executor that delivers the response. The Unitree
-        handler does not call it: the bridge stops itself.
+        handler does not call it: on L2 + UP + LEFT the client only stops its own commands.
+        H1_2's bridge reads the combo from /wirelesscontroller, which may stay silent in debug mode.
         """
         if self.robot_type == "X2" and not self.stop_control_client.service_is_ready():
             raise RuntimeError("stop_control_client service is unavailable.")

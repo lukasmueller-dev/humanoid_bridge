@@ -1410,7 +1410,7 @@ namespace sairol_bridge
         for (size_t i = 0; i < static_cast<size_t>(numJoint_); ++i)
         {
             const auto &joint_info = joints_[i];
-            // Strong joints are the legs and waist, and carry the wider gain range.
+            // if_strong_joint picks the lower_limbs gain range; the config names the joints (G1: hips, knees, waist).
             const bool strong = joint_info.if_strong_joint;
             if (!checkMotorCmd_(robotCommand->motor_cmd[i], joint_info,
                                 strong ? lower_limbs_kp_min_ : upper_limbs_kp_min_,

@@ -233,7 +233,7 @@ class RobotCmdClient:
         return self._call(self.start_control_client, request, timeout_sec)
 
     def stop_control(self, timeout_sec=5.0):
-        """Hold the pose and drop /robot_cmd until start_control. Blocks on the bridge."""
+        """G1, T1, Go2: hold the pose, drop /robot_cmd until start_control. Blocks on the bridge."""
         return self._call(self.stop_control_client, Trigger.Request(), timeout_sec)
 
     def ready_position_control(self, timeout_sec=5.0):
@@ -241,11 +241,11 @@ class RobotCmdClient:
         return self._call(self.ready_position_control_client, Trigger.Request(), timeout_sec)
 
     def estop_damp(self, timeout_sec=5.0):
-        """Latched e-stop, kp 0: arms sink slowly. Arming refused until estop_reset."""
+        """Latched e-stop; G1, T1, Go2: kp 0 (docs/estop.md). Arming refused until estop_reset."""
         return self._call(self.estop_damp_client, Trigger.Request(), timeout_sec)
 
     def estop_hold(self, timeout_sec=5.0):
-        """Latched e-stop, hold the measured pose. Arming refused until estop_reset."""
+        """Latched e-stop; G1, T1, Go2 hold the measured pose. Arming refused until estop_reset."""
         return self._call(self.estop_hold_client, Trigger.Request(), timeout_sec)
 
     def estop_reset(self, timeout_sec=5.0):

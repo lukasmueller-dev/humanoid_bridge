@@ -61,7 +61,7 @@ Forked from [DFKI-SAIROL/humanoid_bridge](https://github.com/DFKI-SAIROL/humanoi
 | `robot_stacks/g1/` (`g1_stack`, `g1_camera`, `g1_link_watch`) | fork | whether it stays here is DFKI's call |
 | `tools/` | fork | build, test and bring-up helpers |
 
-Details and done-when per item: `PROJECT_ROADMAP.md`.
+Upstream PRs in progress: `PROJECT_ROADMAP.md`, "Upstream fixes".
 
 ## Requirements
 
@@ -104,7 +104,7 @@ A `tools/build.sh` build that reaches `robot_bridge` also writes `install/bridge
 ## 2. Launch the bridge
 
 `BRIDGE_IFACE` is the NIC CycloneDDS binds, default `enp4s0`. Set it to match
-your cabling; a wrong one fails silently.
+your cabling. The header of `scripts/setup_unitree.sh` says what a wrong one does.
 
 ```bash
 BRIDGE_IFACE=<nic> source scripts/setup_unitree.sh   # G1, H1, H1_2, Go2
@@ -193,8 +193,8 @@ ros2 service call /stop_control std_srvs/srv/Trigger {}
 ros2 service call /ready_position_control std_srvs/srv/Trigger {}
 ros2 service call /zero_position_control std_srvs/srv/Trigger {}
 ros2 service call /limp_control std_srvs/srv/Trigger {}      # G1, T1, Go2: ARMED limp, kp kd tau 0, e-stop on
-ros2 service call /estop_damp std_srvs/srv/Trigger {}        # G1: latched, kp 0
-ros2 service call /estop_hold std_srvs/srv/Trigger {}        # G1: latched, holds the pose
+ros2 service call /estop_damp std_srvs/srv/Trigger {}        # G1, T1, Go2: latched, kp 0
+ros2 service call /estop_hold std_srvs/srv/Trigger {}        # G1, T1, Go2: latched, holds the pose
 ros2 service call /estop_reset std_srvs/srv/Trigger {}       # refused while the cause lasts
 ros2 topic echo /bridge_state                                # G1, T1, Go2
 ros2 topic echo /robot_link                                  # G1, T1, Go2: OK, LOST, BACK, RESTARTED (docs/estop.md)
@@ -256,9 +256,9 @@ tests that need `bridge_interface` skip. `tools/test.sh` prints what it ran.
   target at the gate-2 speed limit (G1: arms 3, rest 6 rad/s). Arm before the
   client streams.
 - **Control stops 200 ms after the last command's interpolation ends**, unless
-  `hold_position`. On the G1 that latches `hold` until `/estop_reset`. A chunked client must cover the gap with `duration`.
-- **G1: a fault latches the mode `estop:` names** (damp for IMU, state loss,
-  invalid state; hold for a command timeout). A killed or crashed bridge leaves `/lowcmd`
+  `hold_position`. On the G1, T1 and Go2 that latches `hold` until `/estop_reset`. A chunked client must cover the gap with `duration`.
+- **G1, T1, Go2: a fault latches the mode `estop:` names** (damp for IMU, state loss,
+  invalid state; hold for a command timeout). A killed or crashed G1 bridge leaves `/lowcmd`
   silent, and the motors go passive about 0.4 s later (`docs/estop.md`, G0).
   Ctrl-C or SIGTERM while sending damps for 1 s first.
 - **H1, H1_2: an abort does not release the joints.** `finishControl_` only

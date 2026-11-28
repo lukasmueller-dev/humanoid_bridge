@@ -23,7 +23,7 @@ from std_msgs.msg import Bool, Float32, UInt16
 from unitree_hg.msg import LowCmd, LowState
 
 NUM_JOINT = 29
-STATE_PERIOD = 0.002  # the bridge aborts on /lowstate older than 0.2 s
+STATE_PERIOD = 0.002  # the bridge latches state_loss on /lowstate older than 0.2 s
 MODE_MACHINE = 5  # G1 type; the bridge copies it into every /lowcmd
 # Values drive_robot_state.py finds again on /robot_state.
 GYRO = [0.1, 0.2, 0.3]

@@ -29,7 +29,7 @@ try
     {
         bridge = std::make_shared<sairol_bridge::Go2Bridge>(nh);
     }
-    catch (const sairol_bridge::ConfigError &)   // logged: "Failed to load parameters."
+    catch (const sairol_bridge::ConfigError &)   // logged: "Failed to load parameters." or the num_joint FATAL
     {
         rclcpp::shutdown();
         return 1;
