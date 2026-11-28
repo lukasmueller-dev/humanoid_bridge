@@ -61,7 +61,7 @@ Forked from [DFKI-SAIROL/humanoid_bridge](https://github.com/DFKI-SAIROL/humanoi
 | `robot_stacks/g1/` (`g1_stack`, `g1_camera`, `g1_link_watch`) | fork | whether it stays here is DFKI's call |
 | `tools/` | fork | build, test and bring-up helpers |
 
-Details and done-when per item: `PROJECT_ROADMAP.md`.
+Upstream PRs in progress: `PROJECT_ROADMAP.md`, "Upstream fixes".
 
 ## Requirements
 
