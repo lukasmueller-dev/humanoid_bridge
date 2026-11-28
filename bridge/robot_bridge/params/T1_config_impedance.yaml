@@ -29,8 +29,8 @@ robot_bridge:
     parallel_ankle_crank_sign: [1.0, 1.0]    # XML crank angle = sign * motor angle (crank a, crank b); floats
     parallel_ankle_crank_tau_limit: 43.0     # [Nm] per crank motor, motor-loop damping included (E4315 peak, forcerange in T1_23dof_parallel.xml)
     parallel_ankle_max_estimate_error: 0.05  # [rad] stop if f^-1(crank angles) and the firmware's serial ankle state disagree
-    # Law the bridge sends to the cranks when parallel_ankle_mapping is true: "torque" (T1_config.yaml: the torque law, at
-    # the control rate) or "impedance" (this file: Lutz et al. impedance transfer, keys below).
+    # Law the bridge sends to the cranks when parallel_ankle_mapping is true: "torque" (the torque law above, at
+    # the control rate; also the fallback) or "impedance" (Lutz et al. impedance transfer, keys below).
     parallel_ankle_law: impedance
     # Impedance law (t1_parallel_ankle.hpp impedanceLaw, port of loco-mujoco-t1 parallel_act impedance_transfer.py): the crank motors
     # get q_m*, kp = diag(Kp_m), kd = diag(Kd_m) and the off-diagonal terms as torque. Kp_m, Kd_m, q_m* are refreshed at
