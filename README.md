@@ -104,9 +104,7 @@ A `tools/build.sh` build that reaches `robot_bridge` also writes `install/bridge
 ## 2. Launch the bridge
 
 `BRIDGE_IFACE` is the NIC CycloneDDS binds, default `enp4s0`. Set it to match
-your cabling. With `ip` (iproute2) installed, a NIC that does not exist is
-refused. A wrong one that exists, or any one without `ip`, makes the bridge
-wait for `/lowstate` with no error.
+your cabling. The header of `scripts/setup_unitree.sh` says what a wrong one does.
 
 ```bash
 BRIDGE_IFACE=<nic> source scripts/setup_unitree.sh   # G1, H1, H1_2, Go2
