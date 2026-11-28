@@ -399,7 +399,8 @@ else
             echo "'Waiting for publisher on topic /lowstate': the robot is not publishing, or" >&2
             echo "CycloneDDS is on the wrong NIC: pass --iface." >&2
             echo "'Detected N publishers on /lowcmd': something still holds the topic." >&2
-            echo "Run without --no-release, or press L2 + R2 on the controller." >&2
+            echo "Run without --no-release, or press L2 + R2 on the controller (G1, H1, H1_2)." >&2
+            echo "Go2: run without --no-release; the release stands the sport service down." >&2
             echo "T1: the bridge waits for booster_rpc_service, then /low_state; the lines above do not apply." >&2
             exit 1
         fi
