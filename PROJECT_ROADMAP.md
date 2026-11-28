@@ -3,7 +3,7 @@
 > One per repo. Planned work only, one item per task. Finished items are
 > deleted; git history is the log.
 
-_Last updated: 2026-11-21 · codebase-health job_
+_Last updated: 2026-11-28 · codebase-health job_
 
 ## Items
 
@@ -79,3 +79,5 @@ Decided and fake-tested on `g1-web-interface` (`docs/psi0_gates.md`).
   **Done when:** `sim_harness.py` is gone, `grep -rn sim_harness .` prints nothing, `tools/test.sh --sim` passes sim, sim-t1 and sim-watch, and `robot_stacks/sim/robot_sim/tests/integration/run_sim_amo_test.sh` passes.
 - [ ] Delete the unused `FakeChannelSubscriber` (`robot_stacks/g1/g1_stack/g1_stack/joints/fake.py`) and `NUM_SLOTS` (`robot_stacks/sim/robot_sim/robot_sim/robots/go2.py`): no caller in the repo.
   **Done when:** `grep -rnE 'FakeChannelSubscriber|NUM_SLOTS' robot_stacks` prints nothing and `pytest` passes.
+- [ ] Dedup the wait for another `/lowcmd` sender: `G1_bridge.cpp`, `H1_bridge.cpp`, `H1_2_bridge.cpp` and `Go2_bridge.cpp` each repeat the 1 s settle sleep, the wait loop and their own `checkExternalPublisher_`; `X2_bridge.cpp` holds a fifth copy of the check. Only the log hint differs. Move the check and the loop into `BridgeCore`, with the hint as an argument.
+  **Done when:** `grep -l 'Bridge::checkExternalPublisher_' bridge/robot_bridge/src/*.cpp` prints nothing and `tools/test.sh --docker` passes.
