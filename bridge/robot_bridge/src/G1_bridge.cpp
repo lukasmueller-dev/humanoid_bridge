@@ -26,7 +26,7 @@ sairol_bridge::G1Bridge::G1Bridge(rclcpp::Node::SharedPtr node) : BridgeCore(nod
         return;
     }
 
-    lowCommandPublisher_ = nh->create_publisher<unitree_hg::msg::LowCmd>("/lowcmd", 10); // /joint_ctrl
+    lowCommandPublisher_ = nh->create_publisher<unitree_hg::msg::LowCmd>("/lowcmd", 10);
 
     // Waiting for publisher on topic lowstate
     RCLCPP_INFO(nh->get_logger(), "Waiting for publisher on topic /lowstate...");
