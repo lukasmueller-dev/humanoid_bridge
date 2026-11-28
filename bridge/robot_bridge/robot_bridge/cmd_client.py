@@ -241,10 +241,7 @@ class RobotCmdClient:
         return self._call(self.ready_position_control_client, Trigger.Request(), timeout_sec)
 
     def estop_damp(self, timeout_sec=5.0):
-        """Latched e-stop; G1, T1, Go2: kp 0, damping only. Arming refused until estop_reset.
-
-        A G1's arms sink slowly; a Go2 sinks to the floor (docs/estop.md).
-        """
+        """Latched e-stop; G1, T1, Go2: kp 0 (docs/estop.md). Arming refused until estop_reset."""
         return self._call(self.estop_damp_client, Trigger.Request(), timeout_sec)
 
     def estop_hold(self, timeout_sec=5.0):

@@ -356,8 +356,7 @@ class RobotClient:
                 buttons, [KeyMap.L2, KeyMap.up, KeyMap.left]
             ):
                 self.node.get_logger().info("Stopping control...")
-                # G1, H1: only the client stops. H1_2's bridge reads this combo from
-                # /wirelesscontroller, which may stay silent in debug mode (as on the G1).
+                # The client stops its own commands; the bridge side: stop_control's docstring.
                 # future = self.stop_control()
                 self.control_start_time = None
                 return
