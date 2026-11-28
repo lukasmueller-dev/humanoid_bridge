@@ -180,7 +180,7 @@ class RobotClient:
             print(
                 "Key mapping for Unitree H1 robot:"
                 "\n- Start control: L2 + START"
-                "\n- Stop control: L2 + UP + LEFT"
+                "\n- Stop control: L2 + UP + LEFT (this client's commands only)"
             )
 
         elif self.robot_type == "H1_2":
